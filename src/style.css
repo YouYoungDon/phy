@@ -325,10 +325,11 @@ legend {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 2 / 3;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  width: 100%;
 }
 
 .invitation-header .header-overlay {
