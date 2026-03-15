@@ -1,5 +1,11 @@
 import type { Invitation } from '../types'
 
+declare global {
+  interface Window {
+    naver: any
+  }
+}
+
 interface PreviewPageOptions {
   invitation: Invitation
   onBack: () => void
@@ -64,16 +70,19 @@ export class PreviewPage {
                   <p class="phone">${invitation.phone}</p>
                 </div>
                 <div class="location-map">
-                  <a href="https://map.naver.com/v5/search/${encodeURIComponent(invitation.address)}" 
-                     target="_blank" 
-                     class="map-link">
-                    📍 네이버 지도에서 위치 보기
-                  </a>
-                  <a href="https://map.naver.com/v5/directions/${encodeURIComponent(invitation.address)}" 
-                     target="_blank" 
-                     class="map-link map-link-secondary">
-                    🗺️ 길찾기
-                  </a>
+                  <div id="map-${invitation.id}" class="naver-map" style="width: 100%; height: 200px;"></div>
+                  <div class="map-buttons">
+                    <a href="https://map.naver.com/v5/search/${encodeURIComponent(invitation.address)}" 
+                       target="_blank" 
+                       class="map-link">
+                      📍 네이버 지도에서 위치 보기
+                    </a>
+                    <a href="https://map.naver.com/v5/directions/${encodeURIComponent(invitation.address)}" 
+                       target="_blank" 
+                       class="map-link map-link-secondary">
+                      🗺️ 길찾기
+                    </a>
+                  </div>
                 </div>
               </section>
 
@@ -110,6 +119,11 @@ export class PreviewPage {
 
     // ScrollReveal 애니메이션 초기화
     this.initScrollReveal(container)
+
+    // 네이버 지도 초기화
+    setTimeout(() => {
+      this.initNaverMap(invitation)
+    }, 100)
   }
 
   private initScrollReveal(container: HTMLElement): void {
@@ -180,5 +194,62 @@ export class PreviewPage {
     
     html += '</div>'
     return html
+  }
+
+  private initNaverMap(invitation: Invitation): void {
+    const mapElement = document.getElementById(`map-${invitation.id}`)
+    if (!mapElement || typeof window.naver === 'undefined') return
+
+    try {
+      // 기본 위치 설정 (서울 시청)
+      const defaultLat = 37.5665
+      const defaultLng = 126.9780
+
+      const mapOptions = {
+        center: new window.naver.maps.LatLng(defaultLat, defaultLng),
+        zoom: 15,
+        mapTypeControl: false,
+        mapTypeControlOptions: {
+          style: window.naver.maps.MapTypeControlStyle.BUTTON,
+          position: window.naver.maps.Position.TOP_RIGHT
+        },
+        zoomControl: true,
+        zoomControlOptions: {
+          style: window.naver.maps.ZoomControlStyle.SMALL,
+          position: window.naver.maps.Position.TOP_LEFT
+        }
+      }
+
+      const map = new window.naver.maps.Map(mapElement, mapOptions)
+
+      // 주소로 좌표 검색 (실제로는 Geocoding API 필요)
+      // 임시로 기본 위치에 마커 표시
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(defaultLat, defaultLng),
+        map: map,
+        title: invitation.location
+      })
+
+      // 정보창
+      const infoWindow = new window.naver.maps.InfoWindow({
+        content: `<div style="padding: 10px; font-size: 12px;">
+          <strong>${invitation.location}</strong><br>
+          ${invitation.address}
+        </div>`
+      })
+
+      window.naver.maps.Event.addListener(marker, 'click', () => {
+        if (infoWindow.getMap()) {
+          infoWindow.close()
+        } else {
+          infoWindow.open(map, marker)
+        }
+      })
+
+    } catch (error) {
+      console.warn('네이버 지도 초기화 실패:', error)
+      // 지도 초기화 실패 시 링크만 표시
+      mapElement.style.display = 'none'
+    }
   }
 }
