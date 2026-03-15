@@ -63,6 +63,18 @@ export class PreviewPage {
                   <p class="address">${invitation.address}</p>
                   <p class="phone">${invitation.phone}</p>
                 </div>
+                <div class="location-map">
+                  <a href="https://map.naver.com/v5/search/${encodeURIComponent(invitation.address)}" 
+                     target="_blank" 
+                     class="map-link">
+                    📍 네이버 지도에서 위치 보기
+                  </a>
+                  <a href="https://map.naver.com/v5/directions/${encodeURIComponent(invitation.address)}" 
+                     target="_blank" 
+                     class="map-link map-link-secondary">
+                    🗺️ 길찾기
+                  </a>
+                </div>
               </section>
 
               <!-- 메시지 -->
