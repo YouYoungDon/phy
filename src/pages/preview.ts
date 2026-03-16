@@ -239,24 +239,49 @@ export class PreviewPage {
       const author = authorInput.value.trim()
       const content = contentTextarea.value.trim()
 
-      if (!author || !content) {
-        alert('이름과 메시지를 모두 입력해주세요.')
+      // 입력 검증 강화
+      if (!author) {
+        alert('이름을 입력해주세요.')
+        authorInput.focus()
         return
       }
 
-      // 댓글 추가
-      StorageManager.addComment(invitation.id, { author: author, content: content })
+      if (!content) {
+        alert('축하 메시지를 입력해주세요.')
+        contentTextarea.focus()
+        return
+      }
 
-      // 입력 필드 초기화
-      authorInput.value = ''
-      contentTextarea.value = ''
+      if (author.length > 20) {
+        alert('이름은 20자 이하로 입력해주세요.')
+        authorInput.focus()
+        return
+      }
 
-      // 최신 데이터를 다시 가져와서 업데이트
-      const updatedInvitation = StorageManager.get(invitation.id)
-      if (updatedInvitation) {
-        // 마지막 페이지로 이동 (새 댓글이 보이도록)
-        this.currentPage = Math.ceil(updatedInvitation.comments.length / this.commentsPerPage)
-        this.updateCommentsList(container, updatedInvitation)
+      if (content.length > 500) {
+        alert('축하 메시지는 500자 이하로 입력해주세요.')
+        contentTextarea.focus()
+        return
+      }
+
+      try {
+        // 댓글 추가
+        StorageManager.addComment(invitation.id, { author: author, content: content })
+
+        // 입력 필드 초기화
+        authorInput.value = ''
+        contentTextarea.value = ''
+
+        // 최신 데이터를 다시 가져와서 업데이트
+        const updatedInvitation = StorageManager.get(invitation.id)
+        if (updatedInvitation) {
+          // 마지막 페이지로 이동 (새 댓글이 보이도록)
+          this.currentPage = Math.ceil(updatedInvitation.comments.length / this.commentsPerPage)
+          this.updateCommentsList(container, updatedInvitation)
+        }
+      } catch (error) {
+        console.error('댓글 추가 중 오류 발생:', error)
+        alert('댓글 추가 중 오류가 발생했습니다. 다시 시도해주세요.')
       }
     })
 
@@ -394,53 +419,67 @@ export class PreviewPage {
   }
 
   private initCommentActionEvents(container: HTMLElement, invitation: Invitation): void {
+    // 기존 이벤트 리스너 제거 - 메소드 참조로는 제거할 수 없으므로 요소를 새로 생성하는 방식으로 처리
+    // oldDeleteBtns.forEach(btn => btn.removeEventListener('click', this.handleDeleteClick))
+    // oldEditBtns.forEach(btn => btn.removeEventListener('click', this.handleEditClick))
+    // oldSaveBtns.forEach(btn => btn.removeEventListener('click', this.handleSaveClick))
+    // oldCancelBtns.forEach(btn => btn.removeEventListener('click', this.handleCancelClick))
+
     // 삭제 버튼 이벤트
     container.querySelectorAll('.comment-delete-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault()
-        const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
-        if (commentId && confirm('정말로 이 댓글을 삭제하시겠습니까?')) {
-          StorageManager.deleteComment(invitation.id, commentId)
-          const updatedInvitation = StorageManager.get(invitation.id)
-          if (updatedInvitation) {
-            this.updateCommentsList(container, updatedInvitation)
-          }
-        }
-      })
+      btn.addEventListener('click', (e) => this.handleDeleteClick(e, container, invitation))
     })
 
     // 수정 버튼 이벤트
     container.querySelectorAll('.comment-edit-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault()
-        const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
-        if (commentId) {
-          this.showEditForm(container, commentId)
-        }
-      })
+      btn.addEventListener('click', (e) => this.handleEditClick(e, container))
     })
 
     // 수정 저장 버튼 이벤트
     container.querySelectorAll('.comment-save-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault()
-        const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
-        if (commentId) {
-          this.saveCommentEdit(container, invitation, commentId)
-        }
-      })
+      btn.addEventListener('click', (e) => this.handleSaveClick(e, container, invitation))
     })
 
     // 수정 취소 버튼 이벤트
     container.querySelectorAll('.comment-cancel-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault()
-        const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
-        if (commentId) {
-          this.hideEditForm(container, commentId)
-        }
-      })
+      btn.addEventListener('click', (e) => this.handleCancelClick(e, container))
     })
+  }
+
+  private handleDeleteClick = (e: Event, container: HTMLElement, invitation: Invitation) => {
+    e.preventDefault()
+    const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
+    if (commentId && confirm('정말로 이 댓글을 삭제하시겠습니까?')) {
+      StorageManager.deleteComment(invitation.id, commentId)
+      const updatedInvitation = StorageManager.get(invitation.id)
+      if (updatedInvitation) {
+        this.updateCommentsList(container, updatedInvitation)
+      }
+    }
+  }
+
+  private handleEditClick = (e: Event, container: HTMLElement) => {
+    e.preventDefault()
+    const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
+    if (commentId) {
+      this.showEditForm(container, commentId)
+    }
+  }
+
+  private handleSaveClick = (e: Event, container: HTMLElement, invitation: Invitation) => {
+    e.preventDefault()
+    const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
+    if (commentId) {
+      this.saveCommentEdit(container, invitation, commentId)
+    }
+  }
+
+  private handleCancelClick = (e: Event, container: HTMLElement) => {
+    e.preventDefault()
+    const commentId = (e.target as HTMLElement).getAttribute('data-comment-id')
+    if (commentId) {
+      this.hideEditForm(container, commentId)
+    }
   }
 
   private showEditForm(container: HTMLElement, commentId: string): void {
@@ -544,5 +583,17 @@ export class PreviewPage {
       // 지도 초기화 실패 시 링크만 표시
       mapElement.style.display = 'none'
     }
+  }
+
+  private initPaginationEvents(container: HTMLElement, invitation: Invitation): void {
+    const paginationBtns = container.querySelectorAll(`#comments-pagination-${invitation.id} .pagination-btn`)
+
+    paginationBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const page = parseInt((e.target as HTMLElement).getAttribute('data-page') || '1')
+        this.currentPage = page
+        this.updateCommentsList(container, invitation)
+      })
+    })
   }
 }

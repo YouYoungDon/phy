@@ -137,7 +137,7 @@ export class EditorPage {
                   <div class="images-grid">
                     ${this.invitation.images
                       .filter(img => img !== this.invitation.mainImage)
-                      .map((img, idx) => {
+                      .map((img) => {
                         const originalIdx = this.invitation.images.indexOf(img)
                         return `
                           <div class="image-item">
@@ -341,6 +341,47 @@ export class EditorPage {
 
         form.addEventListener('submit', (e) => {
             e.preventDefault()
+            
+            // 입력 검증
+            const formData = new FormData(form)
+            const data = Object.fromEntries(formData)
+            
+            // 필수 필드 검증
+            if (!data.title || !data.groomName || !data.brideName || !data.date || !data.time) {
+                alert('필수 항목을 모두 입력해주세요.')
+                return
+            }
+            
+            // 이름 길이 검증
+            if ((data.groomName as string).length > 20 || (data.brideName as string).length > 20) {
+                alert('이름은 20자 이하로 입력해주세요.')
+                return
+            }
+            
+            // 제목 길이 검증
+            if ((data.title as string).length > 50) {
+                alert('제목은 50자 이하로 입력해주세요.')
+                return
+            }
+            
+            // 메시지 길이 검증
+            if ((data.message as string).length > 1000) {
+                alert('초대 메시지는 1000자 이하로 입력해주세요.')
+                return
+            }
+            
+            // 인용구 길이 검증
+            if (data.quote && (data.quote as string).length > 100) {
+                alert('인용구는 100자 이하로 입력해주세요.')
+                return
+            }
+            
+            // 전화번호 형식 검증 (선택)
+            if (data.phone && !(data.phone as string).match(/^[\d\-\+\(\)\s]+$/)) {
+                alert('올바른 전화번호 형식을 입력해주세요.')
+                return
+            }
+            
             this.updateInvitation(form)
             this.options.onSave(this.invitation)
         })
