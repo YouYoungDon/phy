@@ -33,8 +33,3 @@ export interface BankAccount {
   account: string
   relation: string
 }
-
-export interface InvitationStore {
-  current: Invitation | null
-  list: Invitation[]
-}
