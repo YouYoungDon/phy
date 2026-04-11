@@ -1,4 +1,4 @@
-import { fetchMarkets, fetchTickers, fetchDailyCandles } from './api'
+﻿import { fetchMarkets, fetchTickers, fetchDailyCandles } from './api'
 import type { Market, Ticker, Candle } from './types'
 
 const DEFAULT_MARKETS = ['KRW-BTC', 'KRW-ETH', 'KRW-SOL', 'KRW-ADA', 'KRW-XRP']
@@ -15,19 +15,16 @@ interface AnalysisResult {
   validation: string
 }
 
-interface MarketAnalysis {
-  ticker: Ticker
-  analysis: AnalysisResult
-}
-
 export class App {
   private root: HTMLElement
-  private marketSelect?: HTMLSelectElement
+  private marketList?: HTMLElement
   private statusElement?: HTMLElement
   private summaryElement?: HTMLElement
-  private tableBody?: HTMLElement
+  private chartContainer?: HTMLElement
   private indicatorCards?: HTMLElement
-  private selectedMarkets = [...DEFAULT_MARKETS]
+  private selectedMarketTitle?: HTMLElement
+  private selectedMarketSubtitle?: HTMLElement
+  private selectedMarket = DEFAULT_MARKETS[0]
   private markets: Market[] = []
 
   constructor() {
@@ -40,14 +37,15 @@ export class App {
 
   init(): void {
     this.root.innerHTML = this.getTemplate()
-    this.marketSelect = this.root.querySelector('#market-select') as HTMLSelectElement
+    this.marketList = this.root.querySelector('#market-list') as HTMLElement
     this.statusElement = this.root.querySelector('#status') as HTMLElement
     this.summaryElement = this.root.querySelector('#analysis-summary') as HTMLElement
+    this.chartContainer = this.root.querySelector('#chart-container') as HTMLElement
     this.indicatorCards = this.root.querySelector('#indicator-cards') as HTMLElement
-    this.tableBody = this.root.querySelector('#ticker-body') as HTMLElement
+    this.selectedMarketTitle = this.root.querySelector('#selected-market-title') as HTMLElement
+    this.selectedMarketSubtitle = this.root.querySelector('#selected-market-subtitle') as HTMLElement
     this.attachEvents()
     this.loadMarkets()
-    this.refreshTickers()
   }
 
   private getTemplate(): string {
@@ -55,45 +53,38 @@ export class App {
       <section class="dashboard-shell">
         <header>
           <h1>Upbit 투자 대시보드</h1>
-          <p>실시간 시장 정보를 조회하고 캔들 데이터를 기반으로 주요 차트 지표를 계산합니다.</p>
+          <p>좌측 시장 목록에서 종목을 선택하면 메인 화면에 차트와 지표 분석을 표시합니다.</p>
         </header>
 
-        <div class="controls">
-          <div class="control-group">
-            <label for="market-select">시장 선택</label>
-            <select id="market-select" aria-label="시장 선택"></select>
-          </div>
+        <div class="dashboard-layout">
+          <aside class="market-list-panel">
+            <div class="panel-header">
+              <h2>KRW 마켓 목록</h2>
+              <p>종목을 클릭하여 빠르게 이동합니다.</p>
+            </div>
+            <div id="market-list" class="market-list">로딩 중...</div>
+          </aside>
 
-          <div class="control-group buttons">
-            <button id="add-market-btn" type="button">추가</button>
-            <button id="refresh-btn" type="button">새로고침</button>
-            <button id="reset-btn" type="button">기본 마켓으로 초기화</button>
-          </div>
-        </div>
+          <main class="market-detail">
+            <div class="detail-header">
+              <div>
+                <p class="subtle">선택된 종목</p>
+                <h2 id="selected-market-title">로딩 중...</h2>
+                <p id="selected-market-subtitle">차트와 핵심 지표 분석을 제공합니다.</p>
+              </div>
+              <button id="refresh-btn" type="button">새로고침</button>
+            </div>
 
-        <div id="status" class="status">데이터를 불러오는 중입니다...</div>
-        <div id="analysis-summary" class="analysis-summary">캔들 데이터를 불러오면 차트 지표가 계산됩니다.</div>
-        <div id="indicator-cards" class="indicator-grid"></div>
+            <div id="status" class="status">데이터를 불러오는 중입니다...</div>
 
-        <div class="ticker-card">
-          <table>
-            <thead>
-              <tr>
-                <th>마켓</th>
-                <th>현재가</th>
-                <th>RSI(14)</th>
-                <th>SMA(20)</th>
-                <th>SMA(50)</th>
-                <th>MACD</th>
-                <th>BB 넓이</th>
-                <th>ATR(14)</th>
-                <th>거래량비</th>
-                <th>추세</th>
-                <th>검증</th>
-              </tr>
-            </thead>
-            <tbody id="ticker-body"></tbody>
-          </table>
+            <div id="chart-container" class="chart-card">
+              <div class="chart-header">일간 종가 차트</div>
+              <div id="market-chart" class="market-chart">차트를 불러오는 중입니다...</div>
+            </div>
+
+            <div id="indicator-cards" class="indicator-grid"></div>
+            <div id="analysis-summary" class="analysis-summary">선택된 종목의 지표 결과가 표시됩니다.</div>
+          </main>
         </div>
 
         <footer>
@@ -105,18 +96,18 @@ export class App {
 
   private attachEvents(): void {
     const refreshButton = this.root.querySelector('#refresh-btn') as HTMLButtonElement
-    const addButton = this.root.querySelector('#add-market-btn') as HTMLButtonElement
-    const resetButton = this.root.querySelector('#reset-btn') as HTMLButtonElement
-
-    refreshButton?.addEventListener('click', () => this.refreshTickers())
-    addButton?.addEventListener('click', () => this.addSelectedMarket())
-    resetButton?.addEventListener('click', () => this.resetMarkets())
+    refreshButton?.addEventListener('click', () => this.loadSelectedMarketAnalysis())
   }
 
   private async loadMarkets(): Promise<void> {
     try {
       this.markets = await fetchMarkets()
-      this.populateMarketOptions()
+      const krwMarkets = this.markets.filter((market) => market.market.startsWith('KRW-'))
+      if (!krwMarkets.some((market) => market.market === this.selectedMarket)) {
+        this.selectedMarket = krwMarkets[0]?.market ?? this.selectedMarket
+      }
+      this.renderMarketList(krwMarkets)
+      this.loadSelectedMarketAnalysis()
       this.setStatus('시장 목록이 준비되었습니다.')
     } catch (error) {
       this.setStatus('시장 목록을 불러오는 중 오류가 발생했습니다.')
@@ -124,116 +115,113 @@ export class App {
     }
   }
 
-  private populateMarketOptions(): void {
-    if (!this.marketSelect) return
+  private renderMarketList(markets: Market[]): void {
+    if (!this.marketList) return
 
-    const krwMarkets = this.markets.filter((market) => market.market.startsWith('KRW-'))
-    const options = krwMarkets
+    const items = markets
       .sort((a, b) => a.market.localeCompare(b.market))
-      .map((market) => `<option value="${market.market}">${market.market} · ${market.korean_name}</option>`)
+      .map((market) => {
+        const activeClass = market.market === this.selectedMarket ? 'active' : ''
+        return `<button type="button" class="market-item ${activeClass}" data-market="${market.market}">${market.market}<span>${market.korean_name}</span></button>`
+      })
       .join('')
 
-    this.marketSelect.innerHTML = options
+    this.marketList.innerHTML = items
+    this.marketList.querySelectorAll<HTMLButtonElement>('.market-item').forEach((button) => {
+      button.addEventListener('click', () => {
+        const market = button.dataset.market
+        if (market) {
+          this.selectedMarket = market
+          this.highlightSelectedMarket()
+          this.loadSelectedMarketAnalysis()
+        }
+      })
+    })
   }
 
-  private async refreshTickers(): Promise<void> {
-    if (!this.statusElement || !this.tableBody) return
+  private highlightSelectedMarket(): void {
+    if (!this.marketList) return
+    this.marketList.querySelectorAll<HTMLButtonElement>('.market-item').forEach((button) => {
+      button.classList.toggle('active', button.dataset.market === this.selectedMarket)
+    })
+  }
 
-    if (this.selectedMarkets.length === 0) {
-      this.setStatus('선택된 마켓이 없습니다. 마켓을 추가해 주세요.')
-      this.tableBody.innerHTML = ''
-      return
-    }
+  private async loadSelectedMarketAnalysis(): Promise<void> {
+    if (!this.statusElement || !this.selectedMarketTitle || !this.selectedMarketSubtitle) return
 
-    this.setStatus('Upbit 티커와 캔들 지표를 불러오는 중입니다...')
+    this.selectedMarketTitle.textContent = this.selectedMarket
+    this.selectedMarketSubtitle.textContent = '현재 선택된 종목의 캔들 차트와 지표 분석을 표시합니다.'
+    this.setStatus(`${this.selectedMarket} 데이터를 불러오는 중입니다...`)
 
     try {
-      const tickers = await fetchTickers(this.selectedMarkets)
-      const analyses = await Promise.all(tickers.map((ticker) => this.buildMarketAnalysis(ticker)))
-      this.renderTickers(analyses)
-      this.renderSummary(analyses)
-      this.renderIndicatorCards(analyses)
+      const [ticker] = await fetchTickers([this.selectedMarket])
+      const candles = await fetchDailyCandles(this.selectedMarket, 60)
+      const analysis = this.computeIndicators(candles, ticker)
+      this.renderChart(candles)
+      this.renderIndicatorCards(analysis)
+      this.renderSummary()
       this.setStatus(`마지막 업데이트: ${new Date().toLocaleTimeString()}`)
     } catch (error) {
-      this.setStatus('데이터를 불러오는 중 오류가 발생했습니다.')
+      this.setStatus('선택된 종목 데이터를 불러오는 중 오류가 발생했습니다.')
       console.error(error)
     }
   }
 
-  private async buildMarketAnalysis(ticker: Ticker): Promise<MarketAnalysis> {
-    try {
-      const candles = await fetchDailyCandles(ticker.market, 60)
-      const analysis = this.computeIndicators(candles, ticker)
-      return { ticker, analysis }
-    } catch (error) {
-      console.error(`지표 계산 실패: ${ticker.market}`, error)
-      return { ticker, analysis: this.computeFallbackAnalysis(ticker) }
-    }
-  }
+  private renderChart(candles: Candle[]): void {
+    if (!this.chartContainer) return
 
-  private renderTickers(analyses: MarketAnalysis[]): void {
-    if (!this.tableBody) return
+    const visibleCandles = candles.slice(-30)
+    const closes = visibleCandles.map((c) => c.trade_price)
+    const minPrice = Math.min(...closes)
+    const maxPrice = Math.max(...closes)
+    const range = Math.max(maxPrice - minPrice, 1)
 
-    const rows = analyses
-      .map(({ ticker, analysis }) => {
-        return `
-          <tr>
-            <td>${ticker.market}</td>
-            <td>${this.formatKRW(ticker.trade_price)}</td>
-            <td>${analysis.rsi14.toFixed(1)}</td>
-            <td>${this.formatKRW(analysis.sma20)}</td>
-            <td>${this.formatKRW(analysis.sma50)}</td>
-            <td>${analysis.macdHist.toFixed(2)}</td>
-            <td>${analysis.bollingerWidth.toFixed(1)}%</td>
-            <td>${analysis.atr14.toFixed(0)}</td>
-            <td>${analysis.volumeRatio.toFixed(2)}</td>
-            <td>${analysis.trendLabel}</td>
-            <td class="validation ${analysis.validation.replace(/\s+/g, '-').toLowerCase()}">${analysis.validation}</td>
-          </tr>
-        `
+    const points = visibleCandles
+      .map((candle, index) => {
+        const x = 24 + index * 23
+        const y = 152 - ((candle.trade_price - minPrice) / range) * 120
+        return `${x},${y}`
       })
-      .join('')
+      .join(' ')
 
-    this.tableBody.innerHTML = rows
-  }
-
-  private renderSummary(analyses: MarketAnalysis[]): void {
-    if (!this.summaryElement) return
-
-    const strongCount = analyses.filter((item) => item.analysis.validation === '적극 매수').length
-    const safeCount = analyses.filter((item) => item.analysis.validation === '주의 관찰').length
-    const cautionCount = analyses.filter((item) => item.analysis.validation === '보수 관망').length
-
-    this.summaryElement.innerHTML = `
-      <strong>종목 검증 요약</strong>
-      <p>적극 매수: ${strongCount}개 · 주의 관찰: ${safeCount}개 · 보수 관망: ${cautionCount}개</p>
+    this.chartContainer.innerHTML = `
+      <div class="chart-meta">
+        <span>최저 ${this.formatKRW(minPrice)}</span>
+        <span>최고 ${this.formatKRW(maxPrice)}</span>
+      </div>
+      <svg viewBox="0 0 760 180" class="chart-svg" aria-label="가격 차트">
+        <polyline fill="none" stroke="#38bdf8" stroke-width="3" points="${points}" />
+      </svg>
     `
   }
 
-  private renderIndicatorCards(analyses: MarketAnalysis[]): void {
+  private renderIndicatorCards(analysis: AnalysisResult): void {
     if (!this.indicatorCards) return
 
-    const cards = analyses
-      .map(({ ticker, analysis }) => {
-        return `
-          <article class="indicator-card">
-            <h3>${ticker.market}</h3>
-            <dl>
-              <div><dt>RSI(14)</dt><dd>${analysis.rsi14.toFixed(1)}</dd></div>
-              <div><dt>SMA(20)</dt><dd>${this.formatKRW(analysis.sma20)}</dd></div>
-              <div><dt>SMA(50)</dt><dd>${this.formatKRW(analysis.sma50)}</dd></div>
-              <div><dt>MACD</dt><dd>${analysis.macdHist.toFixed(2)}</dd></div>
-              <div><dt>BB 넓이</dt><dd>${analysis.bollingerWidth.toFixed(1)}%</dd></div>
-              <div><dt>ATR(14)</dt><dd>${analysis.atr14.toFixed(0)}</dd></div>
-              <div><dt>거래량비</dt><dd>${analysis.volumeRatio.toFixed(2)}</dd></div>
-              <div><dt>검증</dt><dd>${analysis.validation}</dd></div>
-            </dl>
-          </article>
-        `
-      })
-      .join('')
+    this.indicatorCards.innerHTML = `
+      <article class="indicator-card">
+        <h3>현재 지표 분석</h3>
+        <dl>
+          <div><dt>RSI(14)</dt><dd>${analysis.rsi14.toFixed(1)}</dd></div>
+          <div><dt>SMA(20)</dt><dd>${this.formatKRW(analysis.sma20)}</dd></div>
+          <div><dt>SMA(50)</dt><dd>${this.formatKRW(analysis.sma50)}</dd></div>
+          <div><dt>MACD 히스토그램</dt><dd>${analysis.macdHist.toFixed(2)}</dd></div>
+          <div><dt>볼린저 폭</dt><dd>${analysis.bollingerWidth.toFixed(1)}%</dd></div>
+          <div><dt>ATR(14)</dt><dd>${analysis.atr14.toFixed(0)}</dd></div>
+          <div><dt>거래량 비율</dt><dd>${analysis.volumeRatio.toFixed(2)}</dd></div>
+          <div><dt>추세</dt><dd>${analysis.trendLabel}</dd></div>
+          <div><dt>검증</dt><dd class="validation ${analysis.validation.replace(/\s+/g, '-').toLowerCase()}">${analysis.validation}</dd></div>
+        </dl>
+      </article>
+    `
+  }
 
-    this.indicatorCards.innerHTML = cards
+  private renderSummary(): void {
+    if (!this.summaryElement) return
+    this.summaryElement.innerHTML = `
+      <strong>지표 요약</strong>
+      <p>현재 선택된 종목의 주요 지표를 종합해 요약 정보를 제공합니다.</p>
+    `
   }
 
   private computeIndicators(candles: Candle[], ticker: Ticker): AnalysisResult {
@@ -259,34 +247,6 @@ export class App {
       bollingerWidth,
       atr14,
       volumeRatio,
-      trendLabel,
-      validation
-    }
-  }
-
-  private computeFallbackAnalysis(ticker: Ticker): AnalysisResult {
-    const price = ticker.trade_price
-    const trendLabel = this.getTrendLabelFromIndicators(price, price, price)
-    const validation = this.getValidationLabel({
-      rsi14: 50,
-      sma20: price,
-      sma50: price,
-      macdHist: 0,
-      bollingerWidth: 0,
-      atr14: 0,
-      volumeRatio: 1,
-      trendLabel,
-      price
-    })
-
-    return {
-      rsi14: 50,
-      sma20: price,
-      sma50: price,
-      macdHist: 0,
-      bollingerWidth: 0,
-      atr14: 0,
-      volumeRatio: 1,
       trendLabel,
       validation
     }
@@ -405,28 +365,6 @@ export class App {
       return '주의 관찰'
     }
     return '보수 관망'
-  }
-
-  private addSelectedMarket(): void {
-    if (!this.marketSelect) return
-
-    const marketCode = this.marketSelect.value
-    if (!marketCode) return
-
-    if (this.selectedMarkets.includes(marketCode)) {
-      this.setStatus(`${marketCode}는 이미 선택된 마켓입니다.`)
-      return
-    }
-
-    this.selectedMarkets.push(marketCode)
-    this.setStatus(`${marketCode}를 모니터링 목록에 추가했습니다.`)
-    this.refreshTickers()
-  }
-
-  private resetMarkets(): void {
-    this.selectedMarkets = [...DEFAULT_MARKETS]
-    this.setStatus('기본 마켓 목록으로 초기화했습니다.')
-    this.refreshTickers()
   }
 
   private setStatus(message: string): void {
