@@ -99,13 +99,71 @@ button:hover {
   border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
+.indicator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.indicator-card {
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(30, 41, 59, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.indicator-card h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.indicator-card dl {
+  display: grid;
+  gap: 10px;
+}
+
+.indicator-card dt {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.indicator-card dd {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 0.95rem;
+}
+
+.validation {
+  padding: 6px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+.validation.적극-매수 {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.validation.주의-관찰 {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fecaca;
+}
+
+.validation.보수-관망 {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
 }
 
 thead th,
- tbody td {
+tbody td {
   min-width: 120px;
 }
 

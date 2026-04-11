@@ -1,14 +1,23 @@
-import { fetchMarkets, fetchTickers } from './api'
-import type { Market, Ticker } from './types'
+import { fetchMarkets, fetchTickers, fetchDailyCandles } from './api'
+import type { Market, Ticker, Candle } from './types'
 
 const DEFAULT_MARKETS = ['KRW-BTC', 'KRW-ETH', 'KRW-SOL', 'KRW-ADA', 'KRW-XRP']
 
 interface AnalysisResult {
-  dailyRangeRate: number
-  volumeEfficiency: number
-  momentumScore: number
+  rsi14: number
+  sma20: number
+  sma50: number
+  macdHist: number
+  bollingerWidth: number
+  atr14: number
+  volumeRatio: number
   trendLabel: string
   validation: string
+}
+
+interface MarketAnalysis {
+  ticker: Ticker
+  analysis: AnalysisResult
 }
 
 export class App {
@@ -17,6 +26,7 @@ export class App {
   private statusElement?: HTMLElement
   private summaryElement?: HTMLElement
   private tableBody?: HTMLElement
+  private indicatorCards?: HTMLElement
   private selectedMarkets = [...DEFAULT_MARKETS]
   private markets: Market[] = []
 
@@ -33,6 +43,7 @@ export class App {
     this.marketSelect = this.root.querySelector('#market-select') as HTMLSelectElement
     this.statusElement = this.root.querySelector('#status') as HTMLElement
     this.summaryElement = this.root.querySelector('#analysis-summary') as HTMLElement
+    this.indicatorCards = this.root.querySelector('#indicator-cards') as HTMLElement
     this.tableBody = this.root.querySelector('#ticker-body') as HTMLElement
     this.attachEvents()
     this.loadMarkets()
@@ -44,7 +55,7 @@ export class App {
       <section class="dashboard-shell">
         <header>
           <h1>Upbit 투자 대시보드</h1>
-          <p>실시간 시장 정보를 조회하고 핵심 지표를 바탕으로 종목을 검증합니다.</p>
+          <p>실시간 시장 정보를 조회하고 캔들 데이터를 기반으로 주요 차트 지표를 계산합니다.</p>
         </header>
 
         <div class="controls">
@@ -61,7 +72,8 @@ export class App {
         </div>
 
         <div id="status" class="status">데이터를 불러오는 중입니다...</div>
-        <div id="analysis-summary" class="analysis-summary">핵심 지표가 준비되면 분석 결과가 표시됩니다.</div>
+        <div id="analysis-summary" class="analysis-summary">캔들 데이터를 불러오면 차트 지표가 계산됩니다.</div>
+        <div id="indicator-cards" class="indicator-grid"></div>
 
         <div class="ticker-card">
           <table>
@@ -69,11 +81,13 @@ export class App {
               <tr>
                 <th>마켓</th>
                 <th>현재가</th>
-                <th>변동률</th>
-                <th>24H 거래대금</th>
-                <th>당일 변동폭</th>
-                <th>거래 효율</th>
-                <th>모멘텀</th>
+                <th>RSI(14)</th>
+                <th>SMA(20)</th>
+                <th>SMA(50)</th>
+                <th>MACD</th>
+                <th>BB 넓이</th>
+                <th>ATR(14)</th>
+                <th>거래량비</th>
                 <th>추세</th>
                 <th>검증</th>
               </tr>
@@ -131,37 +145,50 @@ export class App {
       return
     }
 
-    this.setStatus('Upbit 티커를 불러오는 중입니다...')
+    this.setStatus('Upbit 티커와 캔들 지표를 불러오는 중입니다...')
 
     try {
       const tickers = await fetchTickers(this.selectedMarkets)
-      this.renderTickers(tickers)
-      this.renderSummary(tickers)
+      const analyses = await Promise.all(tickers.map((ticker) => this.buildMarketAnalysis(ticker)))
+      this.renderTickers(analyses)
+      this.renderSummary(analyses)
+      this.renderIndicatorCards(analyses)
       this.setStatus(`마지막 업데이트: ${new Date().toLocaleTimeString()}`)
     } catch (error) {
-      this.setStatus('티커 데이터를 불러오는 중 오류가 발생했습니다.')
+      this.setStatus('데이터를 불러오는 중 오류가 발생했습니다.')
       console.error(error)
     }
   }
 
-  private renderTickers(tickers: Ticker[]): void {
+  private async buildMarketAnalysis(ticker: Ticker): Promise<MarketAnalysis> {
+    try {
+      const candles = await fetchDailyCandles(ticker.market, 60)
+      const analysis = this.computeIndicators(candles, ticker)
+      return { ticker, analysis }
+    } catch (error) {
+      console.error(`지표 계산 실패: ${ticker.market}`, error)
+      return { ticker, analysis: this.computeFallbackAnalysis(ticker) }
+    }
+  }
+
+  private renderTickers(analyses: MarketAnalysis[]): void {
     if (!this.tableBody) return
 
-    const rows = tickers
-      .map((ticker) => {
-        const analysis = this.analyzeTicker(ticker)
-        const changeRate = (ticker.change_rate * 100).toFixed(2)
+    const rows = analyses
+      .map(({ ticker, analysis }) => {
         return `
           <tr>
             <td>${ticker.market}</td>
             <td>${this.formatKRW(ticker.trade_price)}</td>
-            <td>${changeRate}%</td>
-            <td>${this.formatKRW(ticker.acc_trade_price_24h)}</td>
-            <td>${analysis.dailyRangeRate.toFixed(2)}%</td>
-            <td>${analysis.volumeEfficiency.toFixed(2)}</td>
-            <td>${analysis.momentumScore.toFixed(2)}</td>
+            <td>${analysis.rsi14.toFixed(1)}</td>
+            <td>${this.formatKRW(analysis.sma20)}</td>
+            <td>${this.formatKRW(analysis.sma50)}</td>
+            <td>${analysis.macdHist.toFixed(2)}</td>
+            <td>${analysis.bollingerWidth.toFixed(1)}%</td>
+            <td>${analysis.atr14.toFixed(0)}</td>
+            <td>${analysis.volumeRatio.toFixed(2)}</td>
             <td>${analysis.trendLabel}</td>
-            <td class="validation ${analysis.validation.toLowerCase()}">${analysis.validation}</td>
+            <td class="validation ${analysis.validation.replace(/\s+/g, '-').toLowerCase()}">${analysis.validation}</td>
           </tr>
         `
       })
@@ -170,13 +197,12 @@ export class App {
     this.tableBody.innerHTML = rows
   }
 
-  private renderSummary(tickers: Ticker[]): void {
+  private renderSummary(analyses: MarketAnalysis[]): void {
     if (!this.summaryElement) return
 
-    const analyses = tickers.map((ticker) => this.analyzeTicker(ticker))
-    const strongCount = analyses.filter((item) => item.validation === '적극 매수').length
-    const safeCount = analyses.filter((item) => item.validation === '주의 관찰').length
-    const cautionCount = analyses.filter((item) => item.validation === '보수 관망').length
+    const strongCount = analyses.filter((item) => item.analysis.validation === '적극 매수').length
+    const safeCount = analyses.filter((item) => item.analysis.validation === '주의 관찰').length
+    const cautionCount = analyses.filter((item) => item.analysis.validation === '보수 관망').length
 
     this.summaryElement.innerHTML = `
       <strong>종목 검증 요약</strong>
@@ -184,44 +210,198 @@ export class App {
     `
   }
 
-  private analyzeTicker(ticker: Ticker): AnalysisResult {
-    const dailyRangeRate = ((ticker.high_price - ticker.low_price) / Math.max(ticker.prev_closing_price, 1)) * 100
-    const volumeEfficiency = ticker.acc_trade_price_24h / Math.max(ticker.trade_price, 1)
-    const momentumScore = (ticker.change_rate * 100) + (ticker.trade_price - ticker.prev_closing_price) / Math.max(ticker.prev_closing_price, 1) * 100
-    const trendLabel = this.getTrendLabel(ticker)
-    const validation = this.getValidationLabel({ dailyRangeRate, volumeEfficiency, momentumScore, trendLabel, changeRate: ticker.change_rate * 100 })
+  private renderIndicatorCards(analyses: MarketAnalysis[]): void {
+    if (!this.indicatorCards) return
+
+    const cards = analyses
+      .map(({ ticker, analysis }) => {
+        return `
+          <article class="indicator-card">
+            <h3>${ticker.market}</h3>
+            <dl>
+              <div><dt>RSI(14)</dt><dd>${analysis.rsi14.toFixed(1)}</dd></div>
+              <div><dt>SMA(20)</dt><dd>${this.formatKRW(analysis.sma20)}</dd></div>
+              <div><dt>SMA(50)</dt><dd>${this.formatKRW(analysis.sma50)}</dd></div>
+              <div><dt>MACD</dt><dd>${analysis.macdHist.toFixed(2)}</dd></div>
+              <div><dt>BB 넓이</dt><dd>${analysis.bollingerWidth.toFixed(1)}%</dd></div>
+              <div><dt>ATR(14)</dt><dd>${analysis.atr14.toFixed(0)}</dd></div>
+              <div><dt>거래량비</dt><dd>${analysis.volumeRatio.toFixed(2)}</dd></div>
+              <div><dt>검증</dt><dd>${analysis.validation}</dd></div>
+            </dl>
+          </article>
+        `
+      })
+      .join('')
+
+    this.indicatorCards.innerHTML = cards
+  }
+
+  private computeIndicators(candles: Candle[], ticker: Ticker): AnalysisResult {
+    const sorted = [...candles].reverse()
+    const closes = sorted.map((c) => c.trade_price)
+    const volumes = sorted.map((c) => c.candle_acc_trade_volume)
+
+    const sma20 = this.sma(closes, 20)
+    const sma50 = this.sma(closes, 50)
+    const rsi14 = this.rsi(closes, 14)
+    const macdHist = this.macdHistogram(closes, 12, 26, 9)
+    const bollingerWidth = this.bollingerWidth(closes, 20)
+    const atr14 = this.atr(sorted, 14)
+    const volumeRatio = Math.max(volumes[volumes.length - 1] / Math.max(this.sma(volumes, 20), 1), 0)
+    const trendLabel = this.getTrendLabelFromIndicators(ticker.trade_price, sma20, sma50)
+    const validation = this.getValidationLabel({ rsi14, sma20, sma50, macdHist, bollingerWidth, atr14, volumeRatio, trendLabel, price: ticker.trade_price })
 
     return {
-      dailyRangeRate,
-      volumeEfficiency,
-      momentumScore,
+      rsi14,
+      sma20,
+      sma50,
+      macdHist,
+      bollingerWidth,
+      atr14,
+      volumeRatio,
       trendLabel,
       validation
     }
   }
 
-  private getTrendLabel(ticker: Ticker): string {
-    const priceMid = (ticker.high_price + ticker.low_price) / 2
-    if (ticker.trade_price > priceMid && ticker.trade_price > ticker.prev_closing_price) {
-      return '상승 추세'
+  private computeFallbackAnalysis(ticker: Ticker): AnalysisResult {
+    const price = ticker.trade_price
+    const trendLabel = this.getTrendLabelFromIndicators(price, price, price)
+    const validation = this.getValidationLabel({
+      rsi14: 50,
+      sma20: price,
+      sma50: price,
+      macdHist: 0,
+      bollingerWidth: 0,
+      atr14: 0,
+      volumeRatio: 1,
+      trendLabel,
+      price
+    })
+
+    return {
+      rsi14: 50,
+      sma20: price,
+      sma50: price,
+      macdHist: 0,
+      bollingerWidth: 0,
+      atr14: 0,
+      volumeRatio: 1,
+      trendLabel,
+      validation
     }
-    if (ticker.trade_price < priceMid && ticker.trade_price < ticker.prev_closing_price) {
-      return '하락 추세'
-    }
-    return '횡보 추세'
   }
 
-  private getValidationLabel(result: Omit<AnalysisResult, 'validation'> & { changeRate: number }): string {
-    const score =
-      (result.changeRate > 2 ? 2 : result.changeRate > 0 ? 1 : 0) +
-      (result.dailyRangeRate < 8 ? 2 : result.dailyRangeRate < 15 ? 1 : 0) +
-      (result.volumeEfficiency > 3000 ? 2 : result.volumeEfficiency > 1000 ? 1 : 0) +
-      (result.momentumScore > 2 ? 2 : result.momentumScore > 0 ? 1 : 0)
+  private sma(values: number[], period: number): number {
+    if (values.length < period) {
+      return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length
+    }
+    const slice = values.slice(-period)
+    return slice.reduce((sum, value) => sum + value, 0) / period
+  }
 
-    if (score >= 6 && result.trendLabel === '상승 추세') {
+  private ema(values: number[], period: number): number[] {
+    if (values.length === 0) {
+      return []
+    }
+    const k = 2 / (period + 1)
+    return values.reduce<number[]>((result, value, index) => {
+      if (index === 0) {
+        result.push(value)
+      } else {
+        result.push(value * k + result[index - 1] * (1 - k))
+      }
+      return result
+    }, [])
+  }
+
+  private rsi(values: number[], period: number): number {
+    if (values.length <= period) {
+      return 50
+    }
+    let gains = 0
+    let losses = 0
+    for (let i = values.length - period; i < values.length; i++) {
+      const change = values[i] - values[i - 1]
+      if (change > 0) gains += change
+      else losses -= change
+    }
+    const avgGain = gains / period
+    const avgLoss = losses / period
+    if (avgLoss === 0) {
+      return 100
+    }
+    const rs = avgGain / avgLoss
+    return 100 - 100 / (1 + rs)
+  }
+
+  private macdHistogram(values: number[], shortPeriod: number, longPeriod: number, signalPeriod: number): number {
+    const shortEma = this.ema(values, shortPeriod)
+    const longEma = this.ema(values, longPeriod)
+    const macdLine = values.map((_, index) => {
+      if (index < longPeriod - 1) {
+        return 0
+      }
+      return shortEma[index] - longEma[index]
+    })
+    const signalLine = this.ema(macdLine.slice(longPeriod - 1), signalPeriod)
+    if (signalLine.length === 0) {
+      return 0
+    }
+    return macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1]
+  }
+
+  private bollingerWidth(values: number[], period: number): number {
+    if (values.length < period) {
+      return 0
+    }
+    const slice = values.slice(-period)
+    const mean = slice.reduce((sum, value) => sum + value, 0) / period
+    const variance = slice.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / period
+    const stdDev = Math.sqrt(variance)
+    return mean === 0 ? 0 : (stdDev * 2 / mean) * 100
+  }
+
+  private atr(candles: Candle[], period: number): number {
+    if (candles.length <= period) {
+      return 0
+    }
+    const trs: number[] = []
+    for (let i = 1; i < candles.length; i++) {
+      const current = candles[i]
+      const previous = candles[i - 1]
+      const highLow = current.high_price - current.low_price
+      const highClose = Math.abs(current.high_price - previous.trade_price)
+      const lowClose = Math.abs(current.low_price - previous.trade_price)
+      trs.push(Math.max(highLow, highClose, lowClose))
+    }
+    return this.sma(trs.slice(-period), period)
+  }
+
+  private getTrendLabelFromIndicators(price: number, sma20: number, sma50: number): string {
+    if (price > sma20 && price > sma50) {
+      return '상승 추세'
+    }
+    if (price < sma20 && price < sma50) {
+      return '하락 추세'
+    }
+    return '혼조 추세'
+  }
+
+  private getValidationLabel(result: Omit<AnalysisResult, 'validation'> & { price: number }): string {
+    let score = 0
+    score += result.rsi14 < 30 ? 2 : result.rsi14 < 50 ? 1 : 0
+    score += result.macdHist > 0 ? 2 : 0
+    score += result.bollingerWidth < 6 ? 2 : result.bollingerWidth < 12 ? 1 : 0
+    score += result.atr14 / Math.max(result.price, 1) < 0.03 ? 2 : 1
+    score += result.volumeRatio > 1.2 ? 2 : result.volumeRatio > 0.9 ? 1 : 0
+    score += result.price > result.sma20 ? 1 : 0
+    score += result.price > result.sma50 ? 1 : 0
+
+    if (score >= 8 && result.trendLabel === '상승 추세') {
       return '적극 매수'
     }
-    if (score >= 4) {
+    if (score >= 5) {
       return '주의 관찰'
     }
     return '보수 관망'
