@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "appsintos": {
+      "command": "ax",
+      "args": ["mcp", "start"]
+    }
+  }
+}
