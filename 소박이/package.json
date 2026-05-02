@@ -13,9 +13,11 @@
   "dependencies": {
     "@apps-in-toss/web-framework": "^2.4.7",
     "@emotion/react": "^11.14.0",
+    "@tanstack/react-query": "^5.0.0",
     "@toss/tds-colors": "^0.1.0",
     "@toss/tds-mobile": "^2.3.0",
     "@toss/tds-mobile-ait": "^2.3.0",
+    "lottie-react": "^2.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

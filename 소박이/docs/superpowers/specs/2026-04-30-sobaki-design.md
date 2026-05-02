@@ -183,7 +183,7 @@ CREATE TABLE daily_ledgers (
   id              BIGINT AUTO_INCREMENT PRIMARY KEY,
   user_id         BIGINT NOT NULL REFERENCES users(id),
   record_date     DATE NOT NULL,
-  sequence_no     INT NOT NULL DEFAULT 1,         -- 하루 복수 기록 지원
+  sequence_no     INT NOT NULL DEFAULT 1,         -- 하루 복수 기록 지원, 백엔드에서 (user_id, record_date)의 MAX+1로 자동 계산
   total_spent     BIGINT DEFAULT 0,
   total_saved     BIGINT DEFAULT 0,
   budget_amount   BIGINT,
