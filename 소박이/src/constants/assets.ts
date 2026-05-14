@@ -11,4 +11,5 @@ export const SOBAGI_IMAGE_URIS: Partial<Record<SobagiEmotion, string>> = {
   excited: 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@main/assets/sobaki_excited.png',
   surprised: 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@main/assets/sobaki_surprised.png',
   sleepy: 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@main/assets/sobaki_sleepy.png',
+  'soft-sad': 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@main/assets/sobaki_sad.png',
 };
