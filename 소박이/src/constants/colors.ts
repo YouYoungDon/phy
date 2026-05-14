@@ -1,0 +1,15 @@
+export const COLORS = {
+  cream: '#FAF6EE',
+  warmWhite: '#FFFDF8',
+  oliveGreen: '#6B7C4A',
+  oliveDark: '#4A5C2F',
+  oliveLight: '#8FA870',
+  wood: '#8B6F47',
+  woodLight: '#C4A882',
+  text: '#3D3020',
+  textMuted: '#8C7B6B',
+  textLight: '#B5A898',
+  surface: '#F2EBE0',
+  card: '#FFFCF5',
+  border: '#E8DDD0',
+} as const;
