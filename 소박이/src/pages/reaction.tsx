@@ -4,7 +4,7 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { SobagiReaction } from '../components/sobagi/SobagiReaction';
 import { useEmotionStore } from '../store/emotionStore';
 import { COLORS } from '../constants/colors';
-import { SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
@@ -58,7 +58,7 @@ function SobagiReactionScreen() {
         <FloatingHeart emoji="💛" delay={440} offset={0} />
       </View>
 
-      <SobagiReaction emotion={currentEmotion} message={currentMessage} imageUri={SOBAGI_IMAGE_URIS[currentEmotion]} />
+      <SobagiReaction emotion={currentEmotion} message={currentMessage} imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
 
       <Text style={styles.hint}>화면을 탭하면 홈으로</Text>
     </Pressable>

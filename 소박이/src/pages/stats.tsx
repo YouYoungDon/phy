@@ -10,7 +10,7 @@ import { ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString } from '../utils/date';
 import { BottomTabs } from '../components/common/BottomTabs';
-import { SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -61,7 +61,7 @@ function StatsScreen() {
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.sobagiRow}>
-          <SobagiCharacter emotion={currentEmotion} size="small" imageUri={SOBAGI_IMAGE_URIS[currentEmotion]} />
+          <SobagiCharacter emotion={currentEmotion} size="small" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
           <View style={styles.bubbleWrap}>
             <EmotionBubble message={statsComment} />
           </View>

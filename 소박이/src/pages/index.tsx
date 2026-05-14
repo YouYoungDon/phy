@@ -12,7 +12,7 @@ import { useUserStore } from '../store/userStore';
 import { useAppInit } from '../hooks/useAppInit';
 import { getLocalDateString } from '../utils/date';
 import { COLORS } from '../constants/colors';
-import { ROOM_BACKGROUND_URIS, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -50,7 +50,7 @@ function HomeScreen() {
         <View style={styles.characterArea}>
           <EmotionBubble message={currentMessage} />
           <View style={styles.charGap} />
-          <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion]} />
+          <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
         </View>
       </RoomBackground>
 
