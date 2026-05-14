@@ -3,18 +3,22 @@ import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { VALID_EMOTIONS, EMOTION_MESSAGES } from '../constants/emotion';
 import { useExpenseStore } from '../store/expenseStore';
-import { useUserStore } from '../store/userStore';
+import { useUserStore, getLevel, getRoomStage } from '../store/userStore';
 import { useEmotionStore } from '../store/emotionStore';
 import { Expense, UserState, SobagiEmotion } from '../types';
+import { getLocalDateString } from '../utils/date';
 
 let appInitialized = false;
+
+function computeRecordedDaysCount(expenses: Expense[]): number {
+  return new Set(expenses.map((e) => getLocalDateString(new Date(e.createdAt)))).size;
+}
 
 export function useAppInit(): boolean {
   useEffect(() => {
     if (appInitialized) return;
     appInitialized = true;
 
-    // Load stored data in background — does not block rendering
     async function loadStored() {
       try {
         const [userData, expenses, lastEmotionRaw] = await Promise.all([
@@ -23,8 +27,20 @@ export function useAppInit(): boolean {
           storageService.load<string>(STORAGE_KEYS.LAST_EMOTION),
         ]);
 
-        if (userData) useUserStore.getState().hydrate(userData);
         if (expenses) useExpenseStore.getState().hydrate(expenses);
+
+        if (userData) {
+          // Always recompute recordedDaysCount from expenses for correctness.
+          // This also handles users migrating from the old exp-based system.
+          const recomputedDays = expenses ? computeRecordedDaysCount(expenses) : 0;
+          useUserStore.getState().hydrate({
+            ...userData,
+            recordedDaysCount: recomputedDays,
+            level: getLevel(recomputedDays),
+            roomStage: getRoomStage(recomputedDays),
+            // exp was removed — strip it from any legacy stored object
+          });
+        }
 
         const emotion: SobagiEmotion =
           lastEmotionRaw != null && VALID_EMOTIONS.includes(lastEmotionRaw as SobagiEmotion)
@@ -43,6 +59,5 @@ export function useAppInit(): boolean {
     loadStored();
   }, []);
 
-  // Always ready immediately — no loading gate
   return true;
 }

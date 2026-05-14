@@ -13,7 +13,7 @@ interface SobagiReactionProps {
 export function SobagiReaction({ emotion, message, imageUri }: SobagiReactionProps) {
   return (
     <View style={styles.container}>
-      <EmotionBubble message={message} />
+      <EmotionBubble message={message} visible={true} />
       <View style={styles.gap} />
       <SobagiCharacter emotion={emotion} size="large" showOverlay imageUri={imageUri} />
     </View>

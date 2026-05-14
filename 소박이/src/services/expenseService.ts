@@ -9,11 +9,15 @@ export async function saveExpense(expense: Expense): Promise<void> {
   const expenseStore = useExpenseStore.getState();
   const userStore = useUserStore.getState();
 
-  // Streak logic: only update on first record of a new day
-  const yesterdayStr = getLocalDateString(new Date(Date.now() - 86400000));
-  const todayExpenses = expenseStore.getTodayExpenses();
+  const todayStr = getLocalDateString(new Date());
+  const expenseDateStr = getLocalDateString(new Date(expense.createdAt));
+  const isRealTimeRecord = expenseDateStr === todayStr;
 
-  if (todayExpenses.length === 0) {
+  // Streak: only the first real-time (today-dated) record of the day advances it.
+  // Past-date catch-up records are quiet — they never affect streak.
+  const todayExpenses = expenseStore.getTodayExpenses();
+  if (isRealTimeRecord && todayExpenses.length === 0) {
+    const yesterdayStr = getLocalDateString(new Date(Date.now() - 86400000));
     const yesterdayHadRecord = expenseStore.expenses.some(
       (e) => getLocalDateString(new Date(e.createdAt)) === yesterdayStr,
     );
@@ -21,17 +25,28 @@ export async function saveExpense(expense: Expense): Promise<void> {
     userStore.setStreak(newStreak);
   }
 
-  expenseStore.addExpense(expense);
-  userStore.processRecordReward();
+  // Check before adding: is this expense's local date a brand-new recorded day?
+  const isNewDay = !expenseStore.expenses.some(
+    (e) => getLocalDateString(new Date(e.createdAt)) === expenseDateStr,
+  );
 
-  // Persist to Storage (fire-and-forget — stores already updated in memory)
+  expenseStore.addExpense(expense);
+  userStore.incrementTotalRecordCount();
+
+  // Room/level progression is day-based, not transaction-based.
+  if (isNewDay) {
+    userStore.incrementRecordedDays();
+  }
+
+  // Persist to storage (fire-and-forget — stores already updated in memory)
   const updatedExpenses = useExpenseStore.getState().expenses;
+  const s = useUserStore.getState();
   const updatedUser: UserState = {
-    level: useUserStore.getState().level,
-    exp: useUserStore.getState().exp,
-    streak: useUserStore.getState().streak,
-    totalRecordCount: useUserStore.getState().totalRecordCount,
-    roomStage: useUserStore.getState().roomStage,
+    level: s.level,
+    streak: s.streak,
+    totalRecordCount: s.totalRecordCount,
+    recordedDaysCount: s.recordedDaysCount,
+    roomStage: s.roomStage,
   };
 
   void storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);

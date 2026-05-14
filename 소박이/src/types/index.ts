@@ -14,9 +14,9 @@ export interface Expense {
 
 export interface UserState {
   level: number;
-  exp: number;
   streak: number;
   totalRecordCount: number;
+  recordedDaysCount: number;
   roomStage: 1 | 2 | 3 | 4 | 5;
 }
 

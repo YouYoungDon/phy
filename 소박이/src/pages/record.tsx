@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -19,6 +20,8 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
 import { ExpenseCategory, EmotionContext } from '../types';
 import { COLORS } from '../constants/colors';
+import { BottomTabs } from '../components/common/BottomTabs';
+import { getLocalDateString, localDateToISOString } from '../utils/date';
 
 export const Route = createRoute('/record', {
   validateParams: (params) => params,
@@ -33,14 +36,58 @@ const USER_EMOTIONS = [
   { emoji: '🥰', label: '뿌듯' },
 ];
 
+const MAX_PAST_DAYS = 30;
+const DATE_OPTIONS: { dateStr: string; label: string }[] = Array.from(
+  { length: MAX_PAST_DAYS + 1 },
+  (_, i) => {
+    const daysAgo = MAX_PAST_DAYS - i;
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const dateStr = getLocalDateString(d);
+    const label =
+      daysAgo === 0 ? '오늘' :
+      daysAgo === 1 ? '어제' :
+      `${d.getMonth() + 1}/${d.getDate()}`;
+    return { dateStr, label };
+  },
+);
+
 function RecordScreen() {
   const navigation = useNavigation();
+  const todayStr = getLocalDateString(new Date());
   const [amountText, setAmountText] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('cafe');
   const [userEmotion, setUserEmotion] = useState<string | undefined>(undefined);
   const [memo, setMemo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const amountInputRef = useRef<TextInput>(null);
+  const dateScrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const focusedFieldRef = useRef<'amount' | 'memo' | null>(null);
+  const memoSectionYRef = useRef(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setTimeout(() => {
+        if (focusedFieldRef.current === 'amount') {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        } else if (focusedFieldRef.current === 'memo') {
+          scrollRef.current?.scrollTo({ y: memoSectionYRef.current - 16, animated: true });
+        }
+      }, 100);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+      focusedFieldRef.current = null;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const setEmotion = useEmotionStore((s) => s.setEmotion);
   const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
@@ -63,6 +110,10 @@ function RecordScreen() {
       ctx,
     );
 
+    const createdAt = selectedDate === todayStr
+      ? new Date().toISOString()
+      : localDateToISOString(selectedDate);
+
     const expense = {
       id: Date.now().toString(),
       amount,
@@ -70,7 +121,7 @@ function RecordScreen() {
       userEmotion,
       memo: memo.trim() || undefined,
       sobagiEmotion,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
 
     setEmotion(sobagiEmotion, EMOTION_MESSAGES[sobagiEmotion]);
@@ -79,25 +130,54 @@ function RecordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => navigation.navigate('/')}>
-          <Text style={styles.backIcon}>←</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>기록하기</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <View style={styles.outer}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => navigation.navigate('/')}>
+            <Text style={styles.backIcon}>←</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>기록하기</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scroll, { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 64 : 80 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
         <Text style={styles.pageSubtitle}>오늘의 소비를 기록해요 ✏️</Text>
+
+        {/* Date selector — horizontally scrollable, max 30 days back, auto-scrolled to today */}
+        <ScrollView
+          ref={dateScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.dateScroll}
+          contentContainerStyle={styles.dateRow}
+          onContentSizeChange={() => dateScrollRef.current?.scrollToEnd({ animated: false })}
+        >
+          {DATE_OPTIONS.map((opt) => {
+            const isSelected = opt.dateStr === selectedDate;
+            return (
+              <Pressable
+                key={opt.dateStr}
+                style={[styles.dateChip, isSelected && styles.dateChipSelected]}
+                onPress={() => setSelectedDate(opt.dateStr)}
+              >
+                <Text style={[styles.dateChipLabel, isSelected && styles.dateChipLabelSelected]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         {/* Amount hero */}
         <Pressable style={styles.amountCard} onPress={() => amountInputRef.current?.focus()}>
@@ -113,6 +193,7 @@ function RecordScreen() {
             placeholderTextColor={COLORS.textLight}
             keyboardType="numeric"
             maxLength={10}
+            onFocus={() => { focusedFieldRef.current = 'amount'; }}
           />
         </Pressable>
 
@@ -142,7 +223,10 @@ function RecordScreen() {
         </View>
 
         {/* Memo */}
-        <View style={styles.section}>
+        <View
+          style={styles.section}
+          onLayout={(e) => { memoSectionYRef.current = e.nativeEvent.layout.y; }}
+        >
           <Text style={styles.sectionLabel}>한마디 (선택)</Text>
           <TextInput
             style={styles.memoInput}
@@ -152,26 +236,33 @@ function RecordScreen() {
             placeholderTextColor={COLORS.textLight}
             maxLength={60}
             multiline
+            onFocus={() => { focusedFieldRef.current = 'memo'; }}
           />
         </View>
 
-        {/* Save */}
-        <Pressable
-          style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={!canSave}
-        >
-          <Text style={styles.saveButtonLabel}>저장하기</Text>
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* Save */}
+          <Pressable
+            style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={!canSave}
+          >
+            <Text style={styles.saveButtonLabel}>저장하기</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <BottomTabs activeRoute="/record" />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  outer: {
     flex: 1,
     backgroundColor: COLORS.cream,
+  },
+  container: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -201,16 +292,44 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 44,
   },
+  scrollView: {
+    flex: 1,
+  },
   scroll: {
     paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 48,
   },
   pageSubtitle: {
     fontSize: 14,
     color: COLORS.textMuted,
     textAlign: 'center',
+    marginBottom: 12,
+  },
+  dateScroll: {
     marginBottom: 20,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 0,
+  },
+  dateChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+  },
+  dateChipSelected: {
+    backgroundColor: COLORS.oliveGreen,
+  },
+  dateChipLabel: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  dateChipLabelSelected: {
+    color: '#fff',
+    fontWeight: '600',
   },
   amountCard: {
     backgroundColor: COLORS.card,

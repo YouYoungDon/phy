@@ -1,17 +1,28 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '../../constants/colors';
 
 interface EmotionBubbleProps {
   message: string;
+  visible: boolean;
 }
 
-export function EmotionBubble({ message }: EmotionBubbleProps) {
+export function EmotionBubble({ message, visible }: EmotionBubbleProps) {
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(opacity, {
+      toValue: visible ? 1 : 0,
+      duration: visible ? 220 : 400,
+      useNativeDriver: true,
+    }).start();
+  }, [visible]);
+
   return (
-    <View style={styles.bubble}>
+    <Animated.View style={[styles.bubble, { opacity }]} pointerEvents={visible ? 'auto' : 'none'}>
       <Text style={styles.text}>{message}</Text>
       <View style={styles.tail} />
-    </View>
+    </Animated.View>
   );
 }
 

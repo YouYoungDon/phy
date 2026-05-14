@@ -4,7 +4,7 @@ jest.mock('../src/services/storageService', () => ({
 
 import { useEmotionStore } from '../src/store/emotionStore';
 import { useExpenseStore } from '../src/store/expenseStore';
-import { useUserStore } from '../src/store/userStore';
+import { useUserStore, getLevel, getNextThreshold } from '../src/store/userStore';
 import { Expense } from '../src/types';
 
 const mockExpense = (overrides: Partial<Expense> = {}): Expense => ({
@@ -42,27 +42,65 @@ describe('expenseStore', () => {
   });
 });
 
-describe('userStore', () => {
+describe('userStore — level thresholds', () => {
+  it('getLevel returns 1 at 0 days', () => {
+    expect(getLevel(0)).toBe(1);
+  });
+
+  it('getLevel returns 1 at 6 days (below Lv.2 threshold)', () => {
+    expect(getLevel(6)).toBe(1);
+  });
+
+  it('getLevel returns 2 at exactly 7 days', () => {
+    expect(getLevel(7)).toBe(2);
+  });
+
+  it('getLevel returns 3 at exactly 20 days', () => {
+    expect(getLevel(20)).toBe(3);
+  });
+
+  it('getLevel returns 7 at 160+ days', () => {
+    expect(getLevel(160)).toBe(7);
+    expect(getLevel(999)).toBe(7);
+  });
+
+  it('getNextThreshold shows 7 when at 0 recorded days', () => {
+    expect(getNextThreshold(0)).toBe(7);
+  });
+
+  it('getNextThreshold shows 20 when at Lv.2 (7 days)', () => {
+    expect(getNextThreshold(7)).toBe(20);
+  });
+});
+
+describe('userStore — incrementRecordedDays', () => {
   beforeEach(() =>
     useUserStore.setState({
-      level: 1, exp: 0, streak: 0, totalRecordCount: 0, roomStage: 1,
+      level: 1, streak: 0, totalRecordCount: 0, recordedDaysCount: 0, roomStage: 1,
     })
   );
 
-  it('processRecordReward increments totalRecordCount', () => {
-    useUserStore.getState().processRecordReward();
-    expect(useUserStore.getState().totalRecordCount).toBe(1);
+  it('incrementRecordedDays increments recordedDaysCount', () => {
+    useUserStore.getState().incrementRecordedDays();
+    expect(useUserStore.getState().recordedDaysCount).toBe(1);
   });
 
-  it('processRecordReward advances roomStage at threshold 5', () => {
-    useUserStore.setState({ totalRecordCount: 4 });
-    useUserStore.getState().processRecordReward();
-    expect(useUserStore.getState().roomStage).toBe(2);
+  it('reaches Lv.2 at 7 recorded days', () => {
+    useUserStore.setState({ recordedDaysCount: 6 });
+    useUserStore.getState().incrementRecordedDays();
+    expect(useUserStore.getState().level).toBe(2);
   });
 
-  it('processRecordReward advances roomStage at threshold 15', () => {
-    useUserStore.setState({ totalRecordCount: 14 });
-    useUserStore.getState().processRecordReward();
-    expect(useUserStore.getState().roomStage).toBe(3);
+  it('reaches Lv.3 at 20 recorded days', () => {
+    useUserStore.setState({ recordedDaysCount: 19 });
+    useUserStore.getState().incrementRecordedDays();
+    expect(useUserStore.getState().level).toBe(3);
+  });
+
+  it('roomStage stays 1 regardless of level (no stage assets yet)', () => {
+    useUserStore.setState({ recordedDaysCount: 159 });
+    useUserStore.getState().incrementRecordedDays();
+    expect(useUserStore.getState().level).toBe(7);
+    expect(useUserStore.getState().roomStage).toBe(1);
   });
 });
