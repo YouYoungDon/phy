@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { Animated, Pressable, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
@@ -13,11 +13,63 @@ import { useAppInit } from '../hooks/useAppInit';
 import { getLocalDateString } from '../utils/date';
 import { COLORS } from '../constants/colors';
 import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import * as storageService from '../services/storageService';
+import { STORAGE_KEYS } from '../constants/storage';
+import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
   component: HomeScreen,
 });
+
+const LETTERS = [
+  {
+    id: '001',
+    date: '5월 초',
+    body: '오늘도 잘 지냈나요?\n\n작은 하루들이 쌓여\n이 방이 조금씩 달라지고 있어요 🌿',
+    sig: '— 소박이',
+  },
+  {
+    id: '002',
+    date: '5월 15일',
+    body: '요즘 어때요?\n\n밖에 바람이 살랑살랑하네요.\n창문 너머로 보이는 하늘이 예쁘더라고요 ☁️',
+    sig: '— 소박이',
+  },
+] as const;
+
+const ALL_LETTER_IDS = LETTERS.map((l) => l.id);
+
+type BagTab = '장신구' | '재료' | '간식' | '장난감';
+const BAG_TABS: BagTab[] = ['장신구', '재료', '간식', '장난감'];
+
+type BagItem = { id: string; emoji: string; name: string; desc: string; minDays: number };
+
+const BAG_ITEMS: Record<BagTab, BagItem[]> = {
+  장신구: [
+    { id: 'a1', emoji: '🌸', name: '꽃잎 핀',    desc: '봄날에 주운 꽃잎이에요. 아직 향이 남아있는 것 같아요.',        minDays: 0  },
+    { id: 'a2', emoji: '🌿', name: '잎새 브로치', desc: '창문에 기대다가 발견했어요. 잘 어울려요.',                    minDays: 5  },
+    { id: 'a3', emoji: '🌙', name: '달 반지',     desc: '밤에 살짝 반짝이는 작은 반지예요. 소박이가 아끼는 물건이에요.', minDays: 14 },
+    { id: 'a4', emoji: '🎀', name: '작은 리본',   desc: '소박이가 아끼는 작은 리본이에요 🌿',                         minDays: 25 },
+  ],
+  재료: [
+    { id: 'm1', emoji: '🍃', name: '찻잎',    desc: '은은한 향이 나요. 차 한 잔 마시면 마음이 편해져요.',  minDays: 0  },
+    { id: 'm2', emoji: '🌰', name: '도토리',   desc: '산책하다 주웠어요. 특별한 이유는 없어요.',            minDays: 7  },
+    { id: 'm3', emoji: '🍯', name: '꿀병',     desc: '달콤한 꿀이 가득 들어있어요. 가끔 한 숟갈씩 먹어요.', minDays: 18 },
+    { id: 'm4', emoji: '🪵', name: '나뭇조각', desc: '결이 부드럽고 따뜻한 나뭇조각이에요.',               minDays: 32 },
+  ],
+  간식: [
+    { id: 's1', emoji: '🍪', name: '버터 쿠키',   desc: '바삭하고 달콤해요. 소박이가 가장 좋아하는 간식이에요.', minDays: 0  },
+    { id: 's2', emoji: '🍡', name: '쑥 경단',     desc: '쑥향이 은은하게 나요. 봄에 만든 거예요.',             minDays: 10 },
+    { id: 's3', emoji: '☕', name: '따뜻한 커피', desc: '식기 전에 마셔요. 한 모금이면 마음이 따뜻해져요.',    minDays: 20 },
+    { id: 's4', emoji: '🍞', name: '작은 빵',     desc: '갓 구운 빵이에요. 아직 따뜻해요.',                   minDays: 35 },
+  ],
+  장난감: [
+    { id: 't1', emoji: '🪀', name: '요요',     desc: '잘 못 하는데 그냥 갖고 있어요.',                               minDays: 3  },
+    { id: 't2', emoji: '🎈', name: '작은 풍선', desc: '언제 들고 온 건지 모르겠지만, 아직 팡 안 터졌어요.',            minDays: 12 },
+    { id: 't3', emoji: '🌀', name: '팽이',     desc: '조용히 돌아가는 걸 보고 있으면 마음이 고요해져요.',              minDays: 22 },
+    { id: 't4', emoji: '🧸', name: '작은 곰',  desc: '오래된 곰 인형이에요. 낡았지만 소박이가 아껴요.',               minDays: 40 },
+  ],
+};
 
 const IDLE_MESSAGES = [
   '반가워요 🌿',
@@ -55,6 +107,80 @@ function HomeScreen() {
   const [bubbleMessage, setBubbleMessage] = useState('');
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastIndexRef = useRef(-1);
+
+  type SheetType = 'mailbox' | 'bag';
+  const [activeSheet, setActiveSheet] = useState<SheetType | null>(null);
+  const sheetAnim = useRef(new Animated.Value(400)).current;
+  const [bagTab, setBagTab] = useState<BagTab>('장신구');
+  const [selectedBagItem, setSelectedBagItem] = useState<BagItem | null>(null);
+  const [selectedFoundItem, setSelectedFoundItem] = useState<FindableItem | null>(null);
+  const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
+  const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
+  const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
+  const activeSheetRef = useRef<SheetType | null>(null);
+  const pendingRef = useRef<string | null>(null);
+  // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
+  const unreadAtOpenRef = useRef<ReadonlySet<string>>(new Set());
+
+  useEffect(() => {
+    Promise.all([
+      storageService.load<string[]>(STORAGE_KEYS.MAILBOX_READ_IDS),
+      storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS),
+      storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
+    ]).then(([readIdsRaw, foundIds, pending]) => {
+      if (readIdsRaw) setReadIds(new Set(readIdsRaw));
+      if (foundIds) setFoundItemIds(foundIds);
+      if (pending != null) {
+        pendingRef.current = pending;
+        setPendingNewItemId(pending);
+      }
+    });
+  }, []);
+
+  const mailboxUnread = LETTERS.some((l) => !readIds.has(l.id));
+
+  const openSheet = useCallback((type: SheetType) => {
+    activeSheetRef.current = type;
+    setActiveSheet(type);
+    if (type === 'bag') {
+      setBagTab('장신구');
+      setSelectedBagItem(null);
+      setSelectedFoundItem(null);
+      // Move pending item into the found collection
+      const pendingId = pendingRef.current;
+      if (pendingId !== null) {
+        setFoundItemIds((prev) => {
+          if (prev.includes(pendingId)) return prev;
+          const next = [...prev, pendingId];
+          storageService.save(STORAGE_KEYS.FOUND_ITEM_IDS, next);
+          return next;
+        });
+      }
+    }
+    if (type === 'mailbox') {
+      unreadAtOpenRef.current = new Set(LETTERS.filter((l) => !readIds.has(l.id)).map((l) => l.id));
+      if (unreadAtOpenRef.current.size > 0) {
+        setReadIds(new Set(ALL_LETTER_IDS));
+        storageService.save(STORAGE_KEYS.MAILBOX_READ_IDS, ALL_LETTER_IDS);
+      }
+    }
+    Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
+  }, [sheetAnim, readIds]);
+
+  const closeSheet = useCallback(() => {
+    const closingSheet = activeSheetRef.current;
+    Animated.timing(sheetAnim, { toValue: 400, duration: 210, useNativeDriver: true }).start(() => {
+      activeSheetRef.current = null;
+      setActiveSheet(null);
+      setSelectedBagItem(null);
+      setSelectedFoundItem(null);
+      if (closingSheet === 'bag' && pendingRef.current !== null) {
+        pendingRef.current = null;
+        setPendingNewItemId(null);
+        storageService.save(STORAGE_KEYS.PENDING_NEW_ITEM_ID, null);
+      }
+    });
+  }, [sheetAnim]);
 
   useEffect(() => {
     return () => {
@@ -96,6 +222,19 @@ function HomeScreen() {
           </View>
         </View>
 
+        <TouchableOpacity style={styles.propMailbox} onPress={() => openSheet('mailbox')} activeOpacity={0.7}>
+          <Text style={styles.propIcon}>📬</Text>
+          {mailboxUnread && (
+            <View style={styles.propBadge}>
+              <Text style={styles.propBadgeText}>!</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.propBag} onPress={() => openSheet('bag')} activeOpacity={0.7}>
+          <Text style={styles.propIcon}>🎒</Text>
+          {pendingNewItemId !== null && <View style={styles.bagDot} />}
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
           <View style={styles.bubbleContainer} pointerEvents="none">
             <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
@@ -109,6 +248,142 @@ function HomeScreen() {
       </View>
 
       <BottomTabs activeRoute="/" />
+
+      {activeSheet !== null && (
+        <Pressable style={styles.sheetBackdrop} onPress={closeSheet} />
+      )}
+      <Animated.View
+        style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}
+        pointerEvents={activeSheet !== null ? 'auto' : 'none'}
+      >
+        {activeSheet === 'mailbox' && (
+          <View>
+            <Text style={styles.sheetTitle}>편지함</Text>
+            {[...LETTERS].reverse().map((letter, idx) => {
+              const isNew = unreadAtOpenRef.current.has(letter.id);
+              return (
+                <View key={letter.id} style={[styles.letterCard, idx > 0 && styles.letterCardSpacing]}>
+                  <View style={styles.letterHeader}>
+                    <Text style={styles.letterDate}>{letter.date}</Text>
+                    {isNew && (
+                      <View style={styles.newBadge}>
+                        <Text style={styles.newBadgeText}>새 편지</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.letterText}>{letter.body}</Text>
+                  <Text style={styles.letterSig}>{letter.sig}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+        {activeSheet === 'bag' && (
+          <View>
+            <Text style={styles.sheetTitle}>소박이의 가방</Text>
+
+            {/* Tab bar */}
+            <View style={styles.bagTabBar}>
+              {BAG_TABS.map((tab) => (
+                <Pressable
+                  key={tab}
+                  style={[styles.bagTabBtn, bagTab === tab && styles.bagTabBtnActive]}
+                  onPress={() => { setBagTab(tab); setSelectedBagItem(null); setSelectedFoundItem(null); }}
+                >
+                  <Text style={[styles.bagTabLabel, bagTab === tab && styles.bagTabLabelActive]}>
+                    {tab}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Grid */}
+            {BAG_ITEMS[bagTab].length === 0 ? (
+              <View style={styles.bagEmptyState}>
+                <Text style={styles.bagEmptyText}>
+                  {'소박이가 아직 모으지 못했어요\n천천히 채워질 거예요 🌿'}
+                </Text>
+              </View>
+            ) : (
+              <View>
+                {Array.from({ length: 4 }, (_, row) => (
+                  <View key={row} style={styles.bagRow}>
+                    {Array.from({ length: 4 }, (_, col) => {
+                      const rawItem = BAG_ITEMS[bagTab][row * 4 + col] ?? null;
+                      const item = rawItem !== null && recordedDaysCount >= rawItem.minDays ? rawItem : null;
+                      const isSelected = item !== null && selectedBagItem?.id === item.id;
+                      return (
+                        <Pressable
+                          key={col}
+                          style={[
+                            styles.bagCell,
+                            item === null && styles.bagCellVacant,
+                            isSelected && styles.bagCellSelected,
+                          ]}
+                          onPress={() => {
+                            if (!item) return;
+                            setSelectedBagItem(isSelected ? null : item);
+                            setSelectedFoundItem(null);
+                          }}
+                          disabled={item === null}
+                        >
+                          {item !== null ? (
+                            <>
+                              <Text style={styles.bagCellEmoji}>{item.emoji}</Text>
+                              <Text style={styles.bagCellName}>{item.name}</Text>
+                            </>
+                          ) : (
+                            <View style={styles.bagCellDot} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Found items section — only when Sobagi has left something */}
+            {foundItemIds.length > 0 && (
+              <View style={styles.foundSection}>
+                <View style={styles.foundDivider} />
+                <Text style={styles.foundSectionTitle}>소박이가 두고 간 것</Text>
+                <View style={styles.foundChipsRow}>
+                  {foundItemIds.map((id) => {
+                    const item = FINDABLE_ITEMS.find((f) => f.id === id) ?? null;
+                    if (item === null) return null;
+                    const isSelected = selectedFoundItem?.id === id;
+                    return (
+                      <Pressable
+                        key={id}
+                        style={[styles.foundChip, isSelected && styles.foundChipSelected]}
+                        onPress={() => {
+                          setSelectedFoundItem(isSelected ? null : item);
+                          setSelectedBagItem(null);
+                        }}
+                      >
+                        <Text style={styles.foundChipEmoji}>{item.emoji}</Text>
+                        <Text style={styles.foundChipName}>{item.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Description area — shows desc for selected bag item or findLine for found item */}
+            <View style={styles.bagDescArea}>
+              {(selectedBagItem !== null || selectedFoundItem !== null) && (
+                <View style={styles.bagDescCard}>
+                  <Text style={styles.bagDescText}>
+                    {selectedBagItem?.desc ?? selectedFoundItem?.findLine ?? ''}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+      </Animated.View>
     </View>
   );
 }
@@ -178,5 +453,260 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  propMailbox: {
+    position: 'absolute',
+    top: '28%',
+    right: 20,
+    padding: 8,
+  },
+  propBag: {
+    position: 'absolute',
+    top: '58%',
+    left: 18,
+    padding: 8,
+  },
+  propIcon: {
+    fontSize: 28,
+    opacity: 0.82,
+  },
+  propBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#C96A45',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  propBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#fff',
+    lineHeight: 11,
+  },
+  sheetBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 28,
+    paddingTop: 28,
+    paddingBottom: 52,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 8,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 16,
+  },
+  sheetBody: {
+    fontSize: 14,
+    color: COLORS.text,
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  sheetMuted: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    lineHeight: 22,
+  },
+  bagTabBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  bagTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+  },
+  bagTabBtnActive: {
+    backgroundColor: COLORS.oliveGreen,
+  },
+  bagTabLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+  },
+  bagTabLabelActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  bagEmptyState: {
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bagEmptyText: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  bagRow: {
+    flexDirection: 'row',
+    gap: 7,
+    marginBottom: 7,
+  },
+  bagCell: {
+    flex: 1,
+    aspectRatio: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+  },
+  bagCellVacant: {
+    opacity: 0.38,
+  },
+  bagCellSelected: {
+    borderWidth: 1.5,
+    borderColor: COLORS.oliveGreen,
+    backgroundColor: 'rgba(107, 124, 74, 0.07)',
+  },
+  bagCellDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.textMuted,
+  },
+  bagCellEmoji: {
+    fontSize: 22,
+  },
+  bagCellName: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 3,
+  },
+  bagDescArea: {
+    height: 68,
+    marginTop: 10,
+    justifyContent: 'flex-end',
+  },
+  bagDescCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  bagDescText: {
+    fontSize: 13,
+    color: COLORS.text,
+    lineHeight: 20,
+  },
+  bagDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#C9A87C',
+  },
+  foundSection: {
+    marginTop: 14,
+  },
+  foundDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginBottom: 12,
+  },
+  foundSectionTitle: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    marginBottom: 10,
+  },
+  foundChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  foundChip: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    gap: 2,
+    minWidth: 52,
+  },
+  foundChipSelected: {
+    borderWidth: 1,
+    borderColor: COLORS.oliveGreen,
+    backgroundColor: 'rgba(107, 124, 74, 0.06)',
+  },
+  foundChipEmoji: {
+    fontSize: 18,
+  },
+  foundChipName: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+  },
+  letterCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    padding: 18,
+    gap: 12,
+  },
+  letterCardSpacing: {
+    marginTop: 12,
+  },
+  letterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  letterDate: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  newBadge: {
+    backgroundColor: '#C96A45',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  letterText: {
+    fontSize: 14,
+    color: COLORS.text,
+    lineHeight: 24,
+  },
+  letterSig: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'right',
   },
 });
