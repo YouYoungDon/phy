@@ -16,28 +16,23 @@ import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
+import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
   component: HomeScreen,
 });
 
-const LETTERS = [
-  {
-    id: '001',
-    date: '5월 초',
-    body: '오늘도 잘 지냈나요?\n\n작은 하루들이 쌓여\n이 방이 조금씩 달라지고 있어요 🌿',
-    sig: '— 소박이',
-  },
-  {
-    id: '002',
-    date: '5월 15일',
-    body: '요즘 어때요?\n\n밖에 바람이 살랑살랑하네요.\n창문 너머로 보이는 하늘이 예쁘더라고요 ☁️',
-    sig: '— 소박이',
-  },
-] as const;
+type MailboxLetter = { id: string; body: string; sig: string };
 
-const ALL_LETTER_IDS = LETTERS.map((l) => l.id);
+function buildLetterLookup(): Map<string, MailboxLetter> {
+  const map = new Map<string, MailboxLetter>();
+  for (const l of PERSONAL_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
+  for (const l of ALL_SEASONAL_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
+  return map;
+}
+
+const LETTER_LOOKUP = buildLetterLookup();
 
 type BagTab = '장신구' | '재료' | '간식' | '장난감';
 const BAG_TABS: BagTab[] = ['장신구', '재료', '간식', '장난감'];
@@ -115,6 +110,7 @@ function HomeScreen() {
   const [selectedBagItem, setSelectedBagItem] = useState<BagItem | null>(null);
   const [selectedFoundItem, setSelectedFoundItem] = useState<FindableItem | null>(null);
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
+  const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
   const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
   const activeSheetRef = useRef<SheetType | null>(null);
@@ -127,17 +123,19 @@ function HomeScreen() {
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_READ_IDS),
       storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS),
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
-    ]).then(([readIdsRaw, foundIds, pending]) => {
+      storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) {
         pendingRef.current = pending;
         setPendingNewItemId(pending);
       }
+      if (deliveredIds) setDeliveredLetterIds(deliveredIds);
     });
   }, []);
 
-  const mailboxUnread = LETTERS.some((l) => !readIds.has(l.id));
+  const mailboxUnread = deliveredLetterIds.some((id) => !readIds.has(id));
 
   const openSheet = useCallback((type: SheetType) => {
     activeSheetRef.current = type;
@@ -158,10 +156,10 @@ function HomeScreen() {
       }
     }
     if (type === 'mailbox') {
-      unreadAtOpenRef.current = new Set(LETTERS.filter((l) => !readIds.has(l.id)).map((l) => l.id));
+      unreadAtOpenRef.current = new Set(deliveredLetterIds.filter((id) => !readIds.has(id)));
       if (unreadAtOpenRef.current.size > 0) {
-        setReadIds(new Set(ALL_LETTER_IDS));
-        storageService.save(STORAGE_KEYS.MAILBOX_READ_IDS, ALL_LETTER_IDS);
+        setReadIds(new Set(deliveredLetterIds));
+        storageService.save(STORAGE_KEYS.MAILBOX_READ_IDS, deliveredLetterIds);
       }
     }
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
@@ -268,18 +266,19 @@ function HomeScreen() {
         {activeSheet === 'mailbox' && (
           <View>
             <Text style={styles.sheetTitle}>편지함</Text>
-            {[...LETTERS].reverse().map((letter, idx) => {
-              const isNew = unreadAtOpenRef.current.has(letter.id);
+            {[...deliveredLetterIds].reverse().map((id, idx) => {
+              const letter = LETTER_LOOKUP.get(id);
+              if (!letter) return null;
+              const isNew = unreadAtOpenRef.current.has(id);
               return (
-                <View key={letter.id} style={[styles.letterCard, idx > 0 && styles.letterCardSpacing]}>
-                  <View style={styles.letterHeader}>
-                    <Text style={styles.letterDate}>{letter.date}</Text>
-                    {isNew && (
+                <View key={id} style={[styles.letterCard, idx > 0 && styles.letterCardSpacing]}>
+                  {isNew && (
+                    <View style={styles.letterHeader}>
                       <View style={styles.newBadge}>
                         <Text style={styles.newBadgeText}>새 편지</Text>
                       </View>
-                    )}
-                  </View>
+                    </View>
+                  )}
                   <Text style={styles.letterText}>{letter.body}</Text>
                   <Text style={styles.letterSig}>{letter.sig}</Text>
                 </View>
