@@ -5,11 +5,43 @@ import { SobagiReaction } from '../components/sobagi/SobagiReaction';
 import { useEmotionStore } from '../store/emotionStore';
 import { COLORS } from '../constants/colors';
 import { SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { SobagiEmotion } from '../types';
+import { useUserStore } from '../store/userStore';
+import { getDialogueTier } from '../services/dialogueService';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
   component: SobagiReactionScreen,
 });
+
+function getReactionTitle(emotion: SobagiEmotion, tier: 1 | 2 | 3): string {
+  if (tier === 1) {
+    switch (emotion) {
+      case 'surprised': return '처음 들렀네요 ✨';
+      case 'excited':   return '조용히 이어지고 있네요 🌿';
+      case 'sleepy':    return '이 시간까지 기록했네요 🌙';
+      case 'soft-sad':  return '오늘은 좀 특별한 날이었네요';
+      case 'happy':     return '오늘도 다녀왔네요 🌿';
+    }
+  }
+  if (tier === 2) {
+    switch (emotion) {
+      case 'surprised': return '또 처음인 날이네요 ✨';
+      case 'excited':   return '이어지고 있네요 🌿';
+      case 'sleepy':    return '이 시간에도 들렀네요 🌙';
+      case 'soft-sad':  return '그런 날도 있어요';
+      case 'happy':     return '또 왔네요 🍃';
+    }
+  }
+  // tier 3
+  switch (emotion) {
+    case 'surprised': return '오늘 처음이네요 ✨';
+    case 'excited':   return '여전히 이어지고 있어요 🌿';
+    case 'sleepy':    return '이 시간에도 여기 있네요 🌙';
+    case 'soft-sad':  return '그런 날도 기억해둘게요';
+    case 'happy':     return '왔네요 🍃';
+  }
+}
 
 function FloatingHeart({ emoji, delay, offset }: { emoji: string; delay: number; offset: number }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -37,6 +69,8 @@ function SobagiReactionScreen() {
   const navigation = useNavigation();
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const currentMessage = useEmotionStore((s) => s.currentMessage);
+  const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
+  const tier = getDialogueTier(recordedDaysCount);
 
   const handleClose = useCallback(() => {
     navigation.reset({ index: 0, routes: [{ name: '/' }] });
@@ -49,8 +83,7 @@ function SobagiReactionScreen() {
 
   return (
     <Pressable style={styles.container} onPress={handleClose}>
-      <Text style={styles.title}>오늘도 잘했어요! 🌿</Text>
-      <Text style={styles.subtitle}>소박이가 기뻐해요</Text>
+      <Text style={styles.title}>{getReactionTitle(currentEmotion, tier)}</Text>
 
       <View style={styles.heartsRow}>
         <FloatingHeart emoji="❤️" delay={0} offset={0} />
@@ -77,12 +110,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   heartsRow: {
     flexDirection: 'row',
