@@ -16,6 +16,7 @@ import { saveExpense } from '../services/expenseService';
 import { evaluate } from '../services/emotionEngine';
 import { getDialogueTier, selectReactionMessage, detectObservationType, selectObservationMessage } from '../services/dialogueService';
 import * as storageService from '../services/storageService';
+import { getPrevVisitDate } from '../hooks/useAppInit';
 import { STORAGE_KEYS } from '../constants/storage';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
@@ -97,15 +98,11 @@ function RecordScreen() {
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
   const totalRecordCount = useUserStore((s) => s.totalRecordCount);
   const expenses = useExpenseStore((s) => s.expenses);
-  const [lastVisitDate, setLastVisitDate] = useState<string | null>(null);
+  const [lastVisitDate] = useState<string | null>(() => getPrevVisitDate());
   const [lastObservationSaveCount, setLastObservationSaveCount] = useState(0);
 
   useEffect(() => {
-    Promise.all([
-      storageService.load<string>(STORAGE_KEYS.LAST_VISIT_DATE),
-      storageService.load<number>(STORAGE_KEYS.OBSERVATION_SAVE_COUNT),
-    ]).then(([visitDate, obsSaveCount]) => {
-      if (visitDate !== null) setLastVisitDate(visitDate);
+    storageService.load<number>(STORAGE_KEYS.OBSERVATION_SAVE_COUNT).then((obsSaveCount) => {
       if (obsSaveCount !== null) setLastObservationSaveCount(obsSaveCount);
     });
   }, []);

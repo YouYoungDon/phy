@@ -11,6 +11,11 @@ import { Expense, UserState, SobagiEmotion } from '../types';
 import { getLocalDateString } from '../utils/date';
 
 let appInitialized = false;
+let prevVisitDate: string | null = null;
+
+export function getPrevVisitDate(): string | null {
+  return prevVisitDate;
+}
 
 function computeRecordedDaysCount(expenses: Expense[]): number {
   return new Set(expenses.map((e) => getLocalDateString(new Date(e.createdAt)))).size;
@@ -47,6 +52,8 @@ export function useAppInit(): boolean {
         await promoteStaged();
         await checkForFoundItem(expenses ?? [], recomputedDays);
 
+        const storedVisitDate = await storageService.load<string>(STORAGE_KEYS.LAST_VISIT_DATE);
+        prevVisitDate = storedVisitDate;
         const today = getLocalDateString(new Date());
         void storageService.save(STORAGE_KEYS.LAST_VISIT_DATE, today);
         await checkAndDeliverLetters(recomputedDays);
