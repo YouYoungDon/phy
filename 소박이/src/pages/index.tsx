@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     left: 16,
   },
   levelCard: {
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    backgroundColor: 'rgba(61,48,32,0.42)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   progressTrack: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(250,246,238,0.25)',
     overflow: 'hidden',
   },
   progressFill: {
