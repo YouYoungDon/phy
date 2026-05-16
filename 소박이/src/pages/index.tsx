@@ -223,7 +223,7 @@ function HomeScreen() {
         </View>
 
         <TouchableOpacity style={styles.propMailbox} onPress={() => openSheet('mailbox')} activeOpacity={0.7}>
-          <Text style={styles.propIcon}>📬</Text>
+          <Text style={styles.propIconMailbox}>📬</Text>
           {mailboxUnread && (
             <View style={styles.propBadge}>
               <Text style={styles.propBadgeText}>!</Text>
@@ -231,7 +231,8 @@ function HomeScreen() {
           )}
         </TouchableOpacity>
         <TouchableOpacity style={styles.propBag} onPress={() => openSheet('bag')} activeOpacity={0.7}>
-          <Text style={styles.propIcon}>🎒</Text>
+          <Text style={styles.propIconBag}>🎒</Text>
+          <View style={styles.propBagShadow} />
           {pendingNewItemId !== null && <View style={styles.bagDot} />}
         </TouchableOpacity>
 
@@ -474,9 +475,21 @@ const styles = StyleSheet.create({
     left: 18,
     padding: 8,
   },
-  propIcon: {
-    fontSize: 28,
-    opacity: 0.82,
+  propIconMailbox: {
+    fontSize: 26,
+    opacity: 0.76,
+  },
+  propIconBag: {
+    fontSize: 30,
+    opacity: 0.90,
+  },
+  propBagShadow: {
+    width: 20,
+    height: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(61,48,32,0.10)',
+    alignSelf: 'center',
+    marginTop: -2,
   },
   propBadge: {
     position: 'absolute',
