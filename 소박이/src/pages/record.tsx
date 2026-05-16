@@ -14,7 +14,9 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { CategorySelector } from '../components/expense/CategorySelector';
 import { saveExpense } from '../services/expenseService';
 import { evaluate } from '../services/emotionEngine';
-import { EMOTION_MESSAGES } from '../constants/emotion';
+import { getDialogueTier, selectReactionMessage, detectObservationType, selectObservationMessage } from '../services/dialogueService';
+import * as storageService from '../services/storageService';
+import { STORAGE_KEYS } from '../constants/storage';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
@@ -92,6 +94,21 @@ function RecordScreen() {
   const setEmotion = useEmotionStore((s) => s.setEmotion);
   const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
   const streak = useUserStore((s) => s.streak);
+  const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
+  const totalRecordCount = useUserStore((s) => s.totalRecordCount);
+  const expenses = useExpenseStore((s) => s.expenses);
+  const [lastVisitDate, setLastVisitDate] = useState<string | null>(null);
+  const [lastObservationSaveCount, setLastObservationSaveCount] = useState(0);
+
+  useEffect(() => {
+    Promise.all([
+      storageService.load<string>(STORAGE_KEYS.LAST_VISIT_DATE),
+      storageService.load<number>(STORAGE_KEYS.OBSERVATION_SAVE_COUNT),
+    ]).then(([visitDate, obsSaveCount]) => {
+      if (visitDate !== null) setLastVisitDate(visitDate);
+      if (obsSaveCount !== null) setLastObservationSaveCount(obsSaveCount);
+    });
+  }, []);
 
   const amount = parseInt(amountText.replace(/,/g, ''), 10) || 0;
   const canSave = amount > 0 && !isSaving;
@@ -124,7 +141,25 @@ function RecordScreen() {
       createdAt,
     };
 
-    setEmotion(sobagiEmotion, EMOTION_MESSAGES[sobagiEmotion]);
+    const tier = getDialogueTier(recordedDaysCount);
+    const savesSinceLastObservation = totalRecordCount - lastObservationSaveCount;
+    const observationType = detectObservationType({
+      expenses,
+      lastVisitDate,
+      recordedDaysCount,
+      savesSinceLastObservation,
+      currentHour: new Date().getHours(),
+    });
+
+    let reactionMessage: string;
+    if (observationType !== null) {
+      reactionMessage = selectObservationMessage(observationType);
+      void storageService.save(STORAGE_KEYS.OBSERVATION_SAVE_COUNT, totalRecordCount + 1);
+    } else {
+      reactionMessage = selectReactionMessage(sobagiEmotion, tier);
+    }
+
+    setEmotion(sobagiEmotion, reactionMessage);
     await saveExpense(expense);
     navigation.navigate('/reaction');
   };
