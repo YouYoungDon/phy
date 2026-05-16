@@ -7,4 +7,6 @@ export const STORAGE_KEYS = {
   PENDING_NEW_ITEM_ID: 'sobagi-pending-item-id',
   LAST_ITEM_DATE: 'sobagi-last-item-date',
   STAGED_ITEM_ID: 'sobagi-staged-item-id',
+  LAST_VISIT_DATE: 'sobagi-last-visit-date',
+  OBSERVATION_SAVE_COUNT: 'sobagi-observation-save-count',
 } as const;
