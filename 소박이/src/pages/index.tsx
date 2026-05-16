@@ -16,7 +16,6 @@ import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
-import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -94,8 +93,6 @@ function HomeScreen() {
   const roomStage = useUserStore((s) => s.roomStage);
   const level = useUserStore((s) => s.level);
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
-  const timeOfDayTint = getTimeOfDayTint(new Date().getHours());
-  const warmthOpacity = getWarmthOpacity(recordedDaysCount);
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
 
@@ -215,16 +212,6 @@ function HomeScreen() {
           <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
           <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
         </View>
-        {timeOfDayTint !== null && (
-          <View
-            style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
-            pointerEvents="none"
-          />
-        )}
-        <View
-          style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
-          pointerEvents="none"
-        />
         <View style={styles.header}>
           <View style={styles.levelCard}>
             <View style={styles.levelRow}>
@@ -414,13 +401,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: COLORS.cream,
-  },
-  atmosphereOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   header: {
     position: 'absolute',
