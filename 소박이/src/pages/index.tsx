@@ -17,6 +17,7 @@ import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
+import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -90,6 +91,8 @@ function HomeScreen() {
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
+  const timeOfDayTint = getTimeOfDayTint(new Date().getHours());
+  const warmthOpacity = getWarmthOpacity(recordedDaysCount);
 
   const todayExpenses = useMemo(() => {
     const todayStr = getLocalDateString(new Date());
@@ -203,6 +206,16 @@ function HomeScreen() {
   return (
     <View style={styles.root}>
       <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
+        {timeOfDayTint !== null && (
+          <View
+            style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
+            pointerEvents="none"
+          />
+        )}
+        <View
+          style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
+          pointerEvents="none"
+        />
         <View style={styles.bottomFade} pointerEvents="none">
           <View style={[styles.fadeSlice, { opacity: 0.06 }]} />
           <View style={[styles.fadeSlice, { opacity: 0.18 }]} />
@@ -466,6 +479,13 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     backgroundColor: COLORS.card,
+  },
+  atmosphereOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   bottomFade: {
     position: 'absolute',
