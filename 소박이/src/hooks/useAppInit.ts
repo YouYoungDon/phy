@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import * as storageService from '../services/storageService';
+import { promoteStaged, checkForFoundItem } from '../services/foundItemService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { VALID_EMOTIONS, EMOTION_MESSAGES } from '../constants/emotion';
 import { useExpenseStore } from '../store/expenseStore';
@@ -29,10 +30,10 @@ export function useAppInit(): boolean {
 
         if (expenses) useExpenseStore.getState().hydrate(expenses);
 
+        const recomputedDays = expenses ? computeRecordedDaysCount(expenses) : 0;
         if (userData) {
           // Always recompute recordedDaysCount from expenses for correctness.
           // This also handles users migrating from the old exp-based system.
-          const recomputedDays = expenses ? computeRecordedDaysCount(expenses) : 0;
           useUserStore.getState().hydrate({
             ...userData,
             recordedDaysCount: recomputedDays,
@@ -41,6 +42,9 @@ export function useAppInit(): boolean {
             // exp was removed — strip it from any legacy stored object
           });
         }
+
+        await promoteStaged();
+        await checkForFoundItem(expenses ?? [], recomputedDays);
 
         const emotion: SobagiEmotion =
           lastEmotionRaw != null && VALID_EMOTIONS.includes(lastEmotionRaw as SobagiEmotion)

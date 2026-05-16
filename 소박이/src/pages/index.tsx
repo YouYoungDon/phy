@@ -240,6 +240,7 @@ function HomeScreen() {
             <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
           </View>
           <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
+          <View style={styles.sobagiShadow} />
         </TouchableOpacity>
       </RoomBackground>
 
@@ -425,6 +426,13 @@ const styles = StyleSheet.create({
     height: 240,
     alignItems: 'center',
     justifyContent: 'flex-end',
+  },
+  sobagiShadow: {
+    width: 64,
+    height: 8,
+    borderRadius: 32,
+    backgroundColor: 'rgba(61,48,32,0.15)',
+    alignSelf: 'center',
   },
   bubbleContainer: {
     position: 'absolute',
