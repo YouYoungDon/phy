@@ -4,7 +4,7 @@ import { getLocalDateString } from '../utils/date';
 
 export type ObservationType = 'timeOfDay' | 'categoryWarm' | 'returnAfterGap' | 'quietDays';
 
-export { DialogueTier };
+export type { DialogueTier };
 
 export function getDialogueTier(recordedDaysCount: number): DialogueTier {
   if (recordedDaysCount >= 30) return 3;

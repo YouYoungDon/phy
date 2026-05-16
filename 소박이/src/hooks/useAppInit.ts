@@ -46,6 +46,9 @@ export function useAppInit(): boolean {
         await promoteStaged();
         await checkForFoundItem(expenses ?? [], recomputedDays);
 
+        const today = getLocalDateString(new Date());
+        void storageService.save(STORAGE_KEYS.LAST_VISIT_DATE, today);
+
         const emotion: SobagiEmotion =
           lastEmotionRaw != null && VALID_EMOTIONS.includes(lastEmotionRaw as SobagiEmotion)
             ? (lastEmotionRaw as SobagiEmotion)
