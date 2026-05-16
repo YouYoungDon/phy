@@ -554,17 +554,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 16,
   },
-  sheetBody: {
-    fontSize: 14,
-    color: COLORS.text,
-    marginBottom: 12,
-    lineHeight: 22,
-  },
-  sheetMuted: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    lineHeight: 22,
-  },
   bagTabBar: {
     flexDirection: 'row',
     gap: 8,
