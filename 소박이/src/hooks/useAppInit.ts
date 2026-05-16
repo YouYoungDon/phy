@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import * as storageService from '../services/storageService';
 import { promoteStaged, checkForFoundItem } from '../services/foundItemService';
+import { checkAndDeliverLetters } from '../services/letterService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { VALID_EMOTIONS, EMOTION_MESSAGES } from '../constants/emotion';
 import { useExpenseStore } from '../store/expenseStore';
@@ -48,6 +49,7 @@ export function useAppInit(): boolean {
 
         const today = getLocalDateString(new Date());
         void storageService.save(STORAGE_KEYS.LAST_VISIT_DATE, today);
+        await checkAndDeliverLetters(recomputedDays);
 
         const emotion: SobagiEmotion =
           lastEmotionRaw != null && VALID_EMOTIONS.includes(lastEmotionRaw as SobagiEmotion)
