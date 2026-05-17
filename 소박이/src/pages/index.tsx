@@ -253,19 +253,27 @@ function HomeScreen() {
           <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
           <View style={styles.sobagiShadow} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.propMailbox} onPress={() => openSheet('mailbox')} activeOpacity={0.7}>
-          <Text style={styles.propIconMailbox}>📬</Text>
-          {mailboxUnread && (
-            <View style={styles.propBadge}>
-              <Text style={styles.propBadgeText}>!</Text>
+        <View style={styles.utilityStack}>
+          <Pressable
+            style={({ pressed }) => [styles.utilityBtn, pressed && styles.utilityBtnPressed]}
+            onPress={() => openSheet('bag')}
+          >
+            <View style={styles.bagSilhouette}>
+              <View style={styles.bagHandle} />
+              <View style={styles.bagBody} />
+              {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
             </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.propBag} onPress={() => openSheet('bag')} activeOpacity={0.7}>
-          <Text style={styles.propIconBag}>🎒</Text>
-          <View style={styles.propBagShadow} />
-          {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.bagDot} />}
-        </TouchableOpacity>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.utilityBtn, pressed && styles.utilityBtnPressed]}
+            onPress={() => openSheet('mailbox')}
+          >
+            <View style={styles.mailboxSilhouette}>
+              <View style={styles.mailboxFold} />
+              {mailboxUnread && <View style={styles.utilityDot} />}
+            </View>
+          </Pressable>
+        </View>
       </RoomBackground>
 
       <View style={styles.summaryCard}>
@@ -522,51 +530,6 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: COLORS.card,
   },
-  propMailbox: {
-    position: 'absolute',
-    top: '28%',
-    right: 20,
-    padding: 8,
-  },
-  propBag: {
-    position: 'absolute',
-    top: '58%',
-    left: 18,
-    padding: 8,
-  },
-  propIconMailbox: {
-    fontSize: 26,
-    opacity: 0.76,
-  },
-  propIconBag: {
-    fontSize: 30,
-    opacity: 0.90,
-  },
-  propBagShadow: {
-    width: 20,
-    height: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(61,48,32,0.10)',
-    alignSelf: 'center',
-    marginTop: -2,
-  },
-  propBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#C96A45',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  propBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#fff',
-    lineHeight: 11,
-  },
   sheetBackdrop: {
     position: 'absolute',
     top: 0,
@@ -686,13 +649,65 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 20,
   },
-  bagDot: {
+  utilityStack: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 118,
+    left: 16,
+    gap: 14,
+  },
+  utilityBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.55,
+  },
+  utilityBtnPressed: {
+    opacity: 0.35,
+  },
+  bagSilhouette: {
+    width: 22,
+    height: 20,
+  },
+  bagHandle: {
+    position: 'absolute',
+    top: 0,
+    left: 5,
+    width: 12,
+    height: 6,
+    borderRadius: 6,
+    backgroundColor: '#B5A284',
+  },
+  bagBody: {
+    position: 'absolute',
+    bottom: 0,
+    left: 1,
+    width: 20,
+    height: 16,
+    borderRadius: 5,
+    backgroundColor: '#B5A284',
+  },
+  mailboxSilhouette: {
+    width: 22,
+    height: 14,
+    borderRadius: 3,
+    backgroundColor: '#B5A284',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mailboxFold: {
+    width: 22,
+    height: 1,
+    backgroundColor: '#B5A284',
+    opacity: 0.7,
+  },
+  utilityDot: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#C9A87C',
   },
   foundSection: {
