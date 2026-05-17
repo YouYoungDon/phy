@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { Animated, Pressable, ScrollView, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
@@ -119,6 +119,7 @@ function HomeScreen() {
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
   const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
   const [hasNewBagItem, setHasNewBagItem] = useState(false);
+  const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -178,6 +179,15 @@ function HomeScreen() {
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
   }, [sheetAnim, readIds, recordedDaysCount]);
 
+  const toggleLetterExpand = useCallback((id: string) => {
+    setExpandedReadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const closeSheet = useCallback(() => {
     const closingSheet = activeSheetRef.current;
     Animated.timing(sheetAnim, { toValue: 400, duration: 210, useNativeDriver: true }).start(() => {
@@ -185,6 +195,7 @@ function HomeScreen() {
       setActiveSheet(null);
       setSelectedBagItem(null);
       setSelectedFoundItem(null);
+      setExpandedReadIds(new Set());
       if (closingSheet === 'bag' && pendingRef.current !== null) {
         pendingRef.current = null;
         setPendingNewItemId(null);
@@ -250,6 +261,13 @@ function HomeScreen() {
           </View>
         </View>
 
+        <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
+          <View style={styles.bubbleContainer} pointerEvents="none">
+            <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
+          </View>
+          <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
+          <View style={styles.sobagiShadow} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.propMailbox} onPress={() => openSheet('mailbox')} activeOpacity={0.7}>
           <Text style={styles.propIconMailbox}>📬</Text>
           {mailboxUnread && (
@@ -262,14 +280,6 @@ function HomeScreen() {
           <Text style={styles.propIconBag}>🎒</Text>
           <View style={styles.propBagShadow} />
           {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.bagDot} />}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
-          <View style={styles.bubbleContainer} pointerEvents="none">
-            <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
-          </View>
-          <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
-          <View style={styles.sobagiShadow} />
         </TouchableOpacity>
       </RoomBackground>
 
@@ -289,24 +299,44 @@ function HomeScreen() {
         {activeSheet === 'mailbox' && (
           <View>
             <Text style={styles.sheetTitle}>편지함</Text>
-            {[...deliveredLetterIds].reverse().map((id, idx) => {
-              const letter = LETTER_LOOKUP.get(id);
-              if (!letter) return null;
-              const isNew = unreadAtOpenRef.current.has(id);
-              return (
-                <View key={id} style={[styles.letterCard, idx > 0 && styles.letterCardSpacing]}>
-                  {isNew && (
-                    <View style={styles.letterHeader}>
-                      <View style={styles.newBadge}>
-                        <Text style={styles.newBadgeText}>새 편지</Text>
-                      </View>
-                    </View>
-                  )}
-                  <Text style={styles.letterText}>{letter.body}</Text>
-                  <Text style={styles.letterSig}>{letter.sig}</Text>
-                </View>
-              );
-            })}
+            {deliveredLetterIds.length === 0 ? (
+              <Text style={styles.mailboxEmpty}>아직 도착한 편지가 없어요 🌿</Text>
+            ) : (
+              <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
+                {[...deliveredLetterIds].reverse().map((id, idx) => {
+                  const letter = LETTER_LOOKUP.get(id);
+                  if (!letter) return null;
+                  const isNew = unreadAtOpenRef.current.has(id);
+                  const isExpanded = isNew || expandedReadIds.has(id);
+                  const firstLine = letter.body.split('\n')[0] ?? letter.body;
+                  const preview = firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
+                  return (
+                    <Pressable
+                      key={id}
+                      style={[
+                        styles.letterCard,
+                        idx > 0 && styles.letterCardSpacing,
+                        isNew && styles.letterCardNew,
+                        !isExpanded && styles.letterCardCollapsed,
+                      ]}
+                      onPress={() => { if (!isNew) toggleLetterExpand(id); }}
+                    >
+                      {isExpanded ? (
+                        <>
+                          <Text style={styles.letterText}>{letter.body}</Text>
+                          <Text style={styles.letterSig}>{letter.sig}</Text>
+                        </>
+                      ) : (
+                        <View style={styles.letterFolded}>
+                          <Text style={styles.letterFoldedPreview} numberOfLines={1}>{preview}</Text>
+                          <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         )}
         {activeSheet === 'bag' && (
@@ -722,6 +752,15 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
   },
+  mailboxEmpty: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    paddingVertical: 20,
+    textAlign: 'center',
+  },
+  letterScroll: {
+    maxHeight: 420,
+  },
   letterCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,
@@ -729,28 +768,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   letterCardSpacing: {
-    marginTop: 12,
+    marginTop: 10,
   },
-  letterHeader: {
+  letterCardNew: {
+    backgroundColor: '#FAF0E2',
+  },
+  letterCardCollapsed: {
+    paddingVertical: 10,
+    opacity: 0.6,
+  },
+  letterFolded: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
-  letterDate: {
-    fontSize: 11,
+  letterFoldedPreview: {
+    flex: 1,
+    fontSize: 13,
     color: COLORS.textMuted,
-    fontWeight: '500',
+    fontStyle: 'italic',
   },
-  newBadge: {
-    backgroundColor: '#C96A45',
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  newBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#fff',
+  letterFoldedSig: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    fontStyle: 'italic',
+    flexShrink: 0,
   },
   letterText: {
     fontSize: 14,
