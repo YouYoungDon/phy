@@ -11,4 +11,6 @@ export const STORAGE_KEYS = {
   OBSERVATION_SAVE_COUNT: 'sobagi-observation-save-count',
   MAILBOX_DELIVERED_IDS: 'sobagi-mailbox-delivered-ids',
   LAST_BAG_OPEN_DAYS: 'sobagi-last-bag-open-days',
+  ROOM_PLACEMENTS: 'sobagi-room-placements',
+  PENDING_PLACEMENT: 'sobagi-pending-placement',
 } as const;
