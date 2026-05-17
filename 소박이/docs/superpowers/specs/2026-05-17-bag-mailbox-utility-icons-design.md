@@ -117,3 +117,22 @@ During on-device QA, briefly compare:
 - Symmetrical vertical stacking on different screen heights — may risk slight "menu" reading on shorter devices
 
 Neither is a spec blocker; resolve during the polish pass if observed.
+
+## Update 2026-05-17 (post-implementation): switched to PNG assets
+
+After the initial View-composed silhouette implementation landed, the user uploaded real PNG icon assets to the CDN. The geometric silhouettes were replaced with `Image` components rendering those assets.
+
+### What changed
+- CDN commit hash bumped to `ea4588591cc38baaf26e71b76cad2211f05c463f`
+- New `UTILITY_ICON_URIS = { bag, mailbox }` export in `src/constants/assets.ts` (`sobaki_bag.png`, `sobaki_post.png`)
+- View-composed silhouettes (`bagSilhouette`, `bagHandle`, `bagBody`, `mailboxSilhouette`, `mailboxFold`) replaced with `Image` inside a sized 28×28 wrap (icon rendered at 26×26 with `resizeMode="contain"`)
+- Resting opacity on the Pressable removed — the artwork carries its own visual restraint
+- Pressed feedback changed from opacity-based (`0.55 → 0.35`) to a soft white outline on the icon wrap: 1pt `rgba(255,255,255,0.35)`, `borderRadius: 6`; permanent `borderWidth: 1` with transparent color resting so there's no layout shift on press
+- No scale, no glow, no haptic, no mount animation (unchanged)
+
+### Hard constraints preserved
+- `utilityStack` layout (`top: 118, left: 16, gap: 14`)
+- 44×44 touch targets
+- Indicator dot behavior (`utilityDot`, both conditions unchanged)
+- JSX render order (stack after `characterArea`)
+- All `openSheet` handler wiring unchanged

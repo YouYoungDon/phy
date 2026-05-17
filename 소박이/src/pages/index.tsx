@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
@@ -12,7 +12,7 @@ import { useUserStore, getNextThreshold } from '../store/userStore';
 import { useAppInit } from '../hooks/useAppInit';
 import { getLocalDateString } from '../utils/date';
 import { COLORS } from '../constants/colors';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS } from '../constants/assets';
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
@@ -254,24 +254,29 @@ function HomeScreen() {
           <View style={styles.sobagiShadow} />
         </TouchableOpacity>
         <View style={styles.utilityStack}>
-          <Pressable
-            style={({ pressed }) => [styles.utilityBtn, pressed && styles.utilityBtnPressed]}
-            onPress={() => openSheet('bag')}
-          >
-            <View style={styles.bagSilhouette}>
-              <View style={styles.bagHandle} />
-              <View style={styles.bagBody} />
-              {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
-            </View>
+          <Pressable style={styles.utilityBtn} onPress={() => openSheet('bag')}>
+            {({ pressed }) => (
+              <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                <Image
+                  source={{ uri: UTILITY_ICON_URIS.bag }}
+                  style={styles.iconImage}
+                  resizeMode="contain"
+                />
+                {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
+              </View>
+            )}
           </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.utilityBtn, pressed && styles.utilityBtnPressed]}
-            onPress={() => openSheet('mailbox')}
-          >
-            <View style={styles.mailboxSilhouette}>
-              <View style={styles.mailboxFold} />
-              {mailboxUnread && <View style={styles.utilityDot} />}
-            </View>
+          <Pressable style={styles.utilityBtn} onPress={() => openSheet('mailbox')}>
+            {({ pressed }) => (
+              <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                <Image
+                  source={{ uri: UTILITY_ICON_URIS.mailbox }}
+                  style={styles.iconImage}
+                  resizeMode="contain"
+                />
+                {mailboxUnread && <View style={styles.utilityDot} />}
+              </View>
+            )}
           </Pressable>
         </View>
       </RoomBackground>
@@ -660,48 +665,22 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    opacity: 0.55,
   },
-  utilityBtnPressed: {
-    opacity: 0.35,
-  },
-  bagSilhouette: {
-    width: 22,
-    height: 20,
-  },
-  bagHandle: {
-    position: 'absolute',
-    top: 0,
-    left: 5,
-    width: 12,
-    height: 6,
-    borderRadius: 6,
-    backgroundColor: '#B5A284',
-    zIndex: 0,
-  },
-  bagBody: {
-    position: 'absolute',
-    bottom: 0,
-    left: 1,
-    width: 20,
-    height: 16,
-    borderRadius: 5,
-    backgroundColor: '#B5A284',
-    zIndex: 1,
-  },
-  mailboxSilhouette: {
-    width: 22,
-    height: 14,
-    borderRadius: 3,
-    backgroundColor: '#B5A284',
-    justifyContent: 'center',
+  iconWrap: {
+    width: 28,
+    height: 28,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  mailboxFold: {
-    alignSelf: 'stretch',
-    height: 1,
-    backgroundColor: '#B5A284',
-    opacity: 0.7,
+  iconWrapPressed: {
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  iconImage: {
+    width: 26,
+    height: 26,
   },
   utilityDot: {
     position: 'absolute',
