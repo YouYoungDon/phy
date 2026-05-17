@@ -11,6 +11,9 @@ import { SobagiEmotion } from '../types';
 import { useUserStore } from '../store/userStore';
 import { getDialogueTier } from '../services/dialogueService';
 import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
+import * as storageService from '../services/storageService';
+import { STORAGE_KEYS } from '../constants/storage';
+import { RoomPlacement } from '../constants/bagItems';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
@@ -92,6 +95,7 @@ function SobagiReactionScreen() {
   const [photocardBtnVisible, setPhotocardBtnVisible] = useState(false);
   const [showPhotocardModal, setShowPhotocardModal] = useState(false);
   const [isRevealing, setIsRevealing] = useState(false);
+  const [roomPlacements, setRoomPlacements] = useState<RoomPlacement[]>([]);
   const photocardBtnAnim = useRef(new Animated.Value(0)).current;
   const revealAnim = useRef(new Animated.Value(1)).current;
   const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,6 +128,12 @@ function SobagiReactionScreen() {
 
   const closePhotocard = useCallback(() => {
     setShowPhotocardModal(false);
+  }, []);
+
+  useEffect(() => {
+    storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS).then((placements) => {
+      if (placements) setRoomPlacements(placements);
+    });
   }, []);
 
   useEffect(() => {
@@ -198,6 +208,8 @@ function SobagiReactionScreen() {
               sobagiImageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
               atmosphereTint={getTimeOfDayTint(currentHour)}
               warmthOpacity={getWarmthOpacity(recordedDaysCount)}
+              placedItems={roomPlacements}
+              currentEmotion={currentEmotion}
               quoteAnimated
             />
             {/* White overlay fades out as the card develops */}

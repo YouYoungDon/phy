@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, Animated } from 'react-native';
 import { RoomBackground } from '../room/RoomBackground';
 import { TimeOfDayTint } from '../../services/atmosphereService';
+import { ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../../constants/bagItems';
+import { SobagiEmotion } from '../../types';
 
 interface PhotocardViewProps {
   quote: string;
@@ -14,6 +16,8 @@ interface PhotocardViewProps {
   atmosphereTint: TimeOfDayTint | null;
   warmthOpacity: number;
   quoteAnimated?: boolean;
+  placedItems?: RoomPlacement[];
+  currentEmotion?: SobagiEmotion;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -37,6 +41,8 @@ export function PhotocardView({
   atmosphereTint,
   warmthOpacity,
   quoteAnimated = false,
+  placedItems,
+  currentEmotion,
 }: PhotocardViewProps) {
   const quoteOpacity = useRef(new Animated.Value(quoteAnimated ? 0 : 1)).current;
 
@@ -76,6 +82,25 @@ export function PhotocardView({
           pointerEvents="none"
         />
       )}
+
+      {/* Room item overlay — placed items whose emotion affinity matches this moment.
+          Subtler than the home render: smaller, lower opacity, no labels. The items
+          sit inside the photographed room, behind Sobagi and the memory strip. */}
+      {placedItems && currentEmotion && placedItems.map((placement) => {
+        const item = ALL_BAG_ITEMS.find((i) => i.id === placement.itemId);
+        if (!item?.photocardAffinity?.includes(currentEmotion)) return null;
+        const slot = ZONE_SLOTS[placement.zone]?.[0];
+        if (!slot) return null;
+        return (
+          <View
+            key={placement.itemId}
+            pointerEvents="none"
+            style={{ position: 'absolute', left: slot.x * CARD_WIDTH, top: slot.y * CARD_HEIGHT }}
+          >
+            <Text style={styles.photocardRoomItemEmoji}>{item.emoji}</Text>
+          </View>
+        );
+      })}
 
       {/* Composition: Sobagi left + memory strip right */}
       <View style={styles.composition} pointerEvents="none">
@@ -164,6 +189,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 253, 248, 0.84)',
     lineHeight: 15,
     ...SOFT_SHADOW,
+  },
+
+  // Room item overlay — emoji-only, no label, no animation, sits inside the room
+  photocardRoomItemEmoji: {
+    fontSize: 13,
+    opacity: 0.45,
   },
 
   // Date signature — bottom-right, barely visible
