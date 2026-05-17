@@ -82,8 +82,10 @@ export function shouldAutoSettle(
 // ─── I/O entry points (called from useAppInit) ───────────────────────────────
 
 /**
- * Called on every app open. Promotes a 나중에 item if its settle window has passed,
- * then checks for new placement triggers.
+ * Called on every app open. Auto-settles any pending item whose window has
+ * passed (silent — no UI), otherwise checks for new placement triggers.
+ * `promptOnPlace: true` items are routed through pending → auto-settle so
+ * they appear between sessions, not during the one that triggered them.
  */
 export async function checkForPlacement(
   lastEmotion: SobagiEmotion,
@@ -113,7 +115,7 @@ export async function checkForPlacement(
     return; // one action per session
   }
 
-  // Step 2: skip if already has a pending prompt
+  // Step 2: skip if a placement is already pending — wait for its settle window
   if (pending != null) return;
 
   // Step 3: check for new placement
@@ -150,45 +152,3 @@ export async function checkForPlacement(
   }
 }
 
-/**
- * Called when user taps "응, 좋아".
- * Immediately places the pending item and clears the pending key.
- */
-export async function confirmPlacement(
-  pendingItemId: string,
-  placements: RoomPlacement[],
-): Promise<RoomPlacement[]> {
-  const today = getLocalDateString(new Date());
-  const item = ALL_BAG_ITEMS.find((i) => i.id === pendingItemId);
-  const zone = item?.roomPresence?.zones[0];
-  if (!zone) return placements;
-
-  const newPlacement: RoomPlacement = {
-    itemId: pendingItemId,
-    zone,
-    placedAt: today,
-    placementPath: 'B',
-  };
-  const updated = [...placements, newPlacement];
-  await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, updated);
-  await storageService.save(STORAGE_KEYS.PENDING_PLACEMENT, null);
-  return updated;
-}
-
-/**
- * Called when user taps "나중에".
- * Records pendingFrom + jittered settleAfter. Sobagi does not ask again.
- */
-export async function deferPlacement(
-  pendingItemId: string,
-  existingPending: PendingPlacement | null,
-): Promise<void> {
-  if (existingPending) return; // already deferred — no-op
-  const today = getLocalDateString(new Date());
-  const deferred: PendingPlacement = {
-    itemId: pendingItemId,
-    pendingFrom: today,
-    settleAfter: randomSettleAfter(),
-  };
-  await storageService.save(STORAGE_KEYS.PENDING_PLACEMENT, deferred);
-}

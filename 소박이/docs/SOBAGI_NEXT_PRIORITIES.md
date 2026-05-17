@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-17 (QA pass — Group F)
+**Last updated:** 2026-05-17 (Engineering — room presence reshape)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -9,7 +9,10 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ## Currently in progress
 
-*(Nothing claimed — backlog copy reviews are next.)*
+- **Room presence — Stage 5: photocard emoji overlay** (Engineering)
+  - `src/components/photocard/PhotocardView.tsx` — accept optional `placedItems: RoomPlacement[]` and `currentEmotion: SobagiEmotion`; pick one placed item whose `photocardAffinity` matches current emotion; render its emoji at the zone-mapped position with opacity ~0.52, fontSize 16, no label, no border, no animation
+  - `src/pages/reaction.tsx` — load `ROOM_PLACEMENTS` on mount; pass `placedItems` + `currentEmotion` to `PhotocardView`
+  - Rule: photocard overlay must be subtler than the home-screen room render. The item is part of the memory, not the subject of the memory.
 
 ---
 
@@ -73,6 +76,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Room presence — Stages 1–4 (silent reshape)** — `bagItems.ts` (extended BagItem type, 4 new items, ZONE_SLOTS), `roomPresenceService.ts` (B/A/C path selection, drift, eligibility, auto-settle), `useAppInit.ts` wired, `index.tsx` renders placed items as subtle ambient emoji. Original Stage 4 placement prompt removed mid-stream — surfaced as Discovery Principle violation, replaced with silent between-session placement. `confirmPlacement`/`deferPlacement` removed from service. Spec/plan files are stale on the prompt point — CURRENT_STATE wins. (2026-05-17)
 - [x] **Group F — Photocard** — `PhotocardView.tsx`; reaction.tsx modal overlay; 1.8s white-reveal + quote fade-in; auto-dismiss paused at 1000ms; Tier 2 baseline (no capture/save/share); empty-quote fallback (2026-05-17)
 - [x] **Group E — Bag new-item dot** — `LAST_BAG_OPEN_DAYS` storage key; `hasNewBagItem` computed on init from flat BAG_ITEMS; cleared + persisted on `openSheet('bag')`; dot shows on either pending found item or newly unlocked bag item (2026-05-17)
 - [x] **Group D — Dynamic mailbox** — `letters.ts` (personal + seasonal letter content), `letterService.ts` (delivery by threshold + calendar window), `useAppInit.ts` wired, `index.tsx` dynamic rendering via `LETTER_LOOKUP`; `MAILBOX_DELIVERED_IDS` persists delivery state (2026-05-16)

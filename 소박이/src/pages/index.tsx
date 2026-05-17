@@ -18,8 +18,7 @@ import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
-import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, PendingPlacement, ZONE_SLOTS } from '../constants/bagItems';
-import { confirmPlacement, deferPlacement } from '../services/roomPresenceService';
+import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -52,18 +51,6 @@ const IDLE_MESSAGES = [
   '바람이 살랑이네요 🌸',
   '오늘 기분은 어때요?',
 ];
-
-const PLACEMENT_LINES: Record<string, string> = {
-  m5: '담요, 침대 옆에 놔둘까요? 차가워지는 날에 있으면 좋을 것 같아요 🌙',
-  m6: '이 식물, 창가에 어울릴 것 같아요. 빛이 잘 드는 곳이에요 🪴',
-  s5: '머그컵 책상 위에 두면 좋을 것 같아요 🫖',
-  t4: '작은 곰, 선반에 놔둬도 괜찮을까요? 🧸',
-};
-
-const ZONE_LABELS: Record<string, string> = {
-  창가: '창가', 책상: '책상 위', 침대옆: '침대 옆',
-  방구석: '방 구석', 벽걸이: '벽에', 차코너: '차 코너', 작은선반: '작은 선반',
-};
 
 function HomeScreen() {
   useAppInit();
@@ -102,7 +89,6 @@ function HomeScreen() {
   const [hasNewBagItem, setHasNewBagItem] = useState(false);
   const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
   const [roomPlacements, setRoomPlacements] = useState<RoomPlacement[]>([]);
-  const [pendingPlacement, setPendingPlacement] = useState<PendingPlacement | null>(null);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -116,8 +102,7 @@ function HomeScreen() {
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
       storageService.load<number>(STORAGE_KEYS.LAST_BAG_OPEN_DAYS),
       storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS),
-      storageService.load<PendingPlacement>(STORAGE_KEYS.PENDING_PLACEMENT),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays, placements, pendingPlace]) => {
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays, placements]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) {
@@ -130,7 +115,6 @@ function HomeScreen() {
         setHasNewBagItem(true);
       }
       if (placements) setRoomPlacements(placements);
-      if (pendingPlace != null) setPendingPlacement(pendingPlace);
     });
   }, []);
 
@@ -174,19 +158,6 @@ function HomeScreen() {
       return next;
     });
   }, []);
-
-  const handlePlacementConfirm = useCallback(async () => {
-    if (!pendingPlacement) return;
-    const updated = await confirmPlacement(pendingPlacement.itemId, roomPlacements);
-    setRoomPlacements(updated);
-    setPendingPlacement(null);
-  }, [pendingPlacement, roomPlacements]);
-
-  const handlePlacementDefer = useCallback(async () => {
-    if (!pendingPlacement) return;
-    await deferPlacement(pendingPlacement.itemId, pendingPlacement);
-    setPendingPlacement(null);
-  }, [pendingPlacement]);
 
   const closeSheet = useCallback(() => {
     const closingSheet = activeSheetRef.current;
@@ -282,27 +253,6 @@ function HomeScreen() {
           <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
           <View style={styles.sobagiShadow} />
         </TouchableOpacity>
-        {pendingPlacement !== null && !bubbleVisible && (() => {
-          const item = ALL_BAG_ITEMS.find((i) => i.id === pendingPlacement.itemId);
-          if (!item?.roomPresence) return null;
-          const zoneName = item.roomPresence.zones[0]!;
-          const line = PLACEMENT_LINES[item.id] ?? `${item.name}, ${ZONE_LABELS[zoneName] ?? '어딘가'}에 놔둬도 될까요?`;
-          return (
-            <View style={styles.placementPrompt} pointerEvents="box-none">
-              <View style={styles.placementBubble}>
-                <Text style={styles.placementText}>{line}</Text>
-                <View style={styles.placementActions}>
-                  <Pressable style={styles.placementBtnYes} onPress={handlePlacementConfirm}>
-                    <Text style={styles.placementBtnYesText}>응, 좋아</Text>
-                  </Pressable>
-                  <Pressable style={styles.placementBtnLater} onPress={handlePlacementDefer}>
-                    <Text style={styles.placementBtnLaterText}>나중에</Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          );
-        })()}
         <TouchableOpacity style={styles.propMailbox} onPress={() => openSheet('mailbox')} activeOpacity={0.7}>
           <Text style={styles.propIconMailbox}>📬</Text>
           {mailboxUnread && (
@@ -844,58 +794,5 @@ const styles = StyleSheet.create({
   roomItemEmoji: {
     fontSize: 16,
     opacity: 0.60,
-  },
-  placementPrompt: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: '28%',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  placementBubble: {
-    backgroundColor: 'rgba(250, 240, 226, 0.92)',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    width: '100%',
-    maxWidth: 320,
-    shadowColor: '#3D3020',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  placementText: {
-    fontSize: 14,
-    color: '#3D3020',
-    lineHeight: 21,
-    marginBottom: 12,
-  },
-  placementActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  placementBtnYes: {
-    flex: 1,
-    backgroundColor: 'rgba(61, 48, 32, 0.12)',
-    borderRadius: 10,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
-  placementBtnYesText: {
-    fontSize: 13,
-    color: '#3D3020',
-    fontWeight: '500',
-  },
-  placementBtnLater: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
-  placementBtnLaterText: {
-    fontSize: 13,
-    color: 'rgba(61, 48, 32, 0.4)',
   },
 });
