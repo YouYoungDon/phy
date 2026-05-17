@@ -677,6 +677,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 6,
     backgroundColor: '#B5A284',
+    zIndex: 0,
   },
   bagBody: {
     position: 'absolute',
@@ -686,6 +687,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 5,
     backgroundColor: '#B5A284',
+    zIndex: 1,
   },
   mailboxSilhouette: {
     width: 22,
@@ -696,7 +698,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mailboxFold: {
-    width: 22,
+    alignSelf: 'stretch',
     height: 1,
     backgroundColor: '#B5A284',
     opacity: 0.7,
