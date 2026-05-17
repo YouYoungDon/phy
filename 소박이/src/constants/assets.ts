@@ -16,7 +16,7 @@ export const SOBAGI_IMAGE_URIS: Partial<Record<SobagiEmotion, string>> = {
   'soft-sad': `${CDN}/sobaki_sad.png`,
 };
 
-export const UTILITY_ICON_URIS = {
+export const UTILITY_ICON_URIS: Record<'bag' | 'mailbox', string> = {
   bag: `${CDN}/sobaki_bag.png`,
   mailbox: `${CDN}/sobaki_post.png`,
 };

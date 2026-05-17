@@ -672,6 +672,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 6,
+    // permanent borderWidth with transparent color — pressed state toggles color only, no layout shift
     borderWidth: 1,
     borderColor: 'transparent',
   },
