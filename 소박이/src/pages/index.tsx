@@ -18,6 +18,8 @@ import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
+import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, PendingPlacement, ZONE_SLOTS } from '../constants/bagItems';
+import { confirmPlacement, deferPlacement } from '../services/roomPresenceService';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -35,39 +37,6 @@ function buildLetterLookup(): Map<string, MailboxLetter> {
 
 const LETTER_LOOKUP = buildLetterLookup();
 
-type BagTab = '장신구' | '재료' | '간식' | '장난감';
-const BAG_TABS: BagTab[] = ['장신구', '재료', '간식', '장난감'];
-
-type BagItem = { id: string; emoji: string; name: string; desc: string; minDays: number };
-
-const BAG_ITEMS: Record<BagTab, BagItem[]> = {
-  장신구: [
-    { id: 'a1', emoji: '🌸', name: '꽃잎 핀',    desc: '봄날에 주운 꽃잎이에요. 아직 향이 남아있는 것 같아요.',        minDays: 0  },
-    { id: 'a2', emoji: '🌿', name: '잎새 브로치', desc: '창문에 기대다가 발견했어요. 잘 어울려요.',                    minDays: 5  },
-    { id: 'a3', emoji: '🌙', name: '달 반지',     desc: '밤에 살짝 반짝이는 작은 반지예요. 소박이가 아끼는 물건이에요.', minDays: 14 },
-    { id: 'a4', emoji: '🎀', name: '작은 리본',   desc: '소박이가 아끼는 작은 리본이에요 🌿',                         minDays: 25 },
-  ],
-  재료: [
-    { id: 'm1', emoji: '🍃', name: '찻잎',    desc: '은은한 향이 나요. 차 한 잔 마시면 마음이 편해져요.',  minDays: 0  },
-    { id: 'm2', emoji: '🌰', name: '도토리',   desc: '산책하다 주웠어요. 특별한 이유는 없어요.',            minDays: 7  },
-    { id: 'm3', emoji: '🍯', name: '꿀병',     desc: '달콤한 꿀이 가득 들어있어요. 가끔 한 숟갈씩 먹어요.', minDays: 18 },
-    { id: 'm4', emoji: '🪵', name: '나뭇조각', desc: '결이 부드럽고 따뜻한 나뭇조각이에요.',               minDays: 32 },
-  ],
-  간식: [
-    { id: 's1', emoji: '🍪', name: '버터 쿠키',   desc: '바삭하고 달콤해요. 소박이가 가장 좋아하는 간식이에요.', minDays: 0  },
-    { id: 's2', emoji: '🍡', name: '쑥 경단',     desc: '쑥향이 은은하게 나요. 봄에 만든 거예요.',             minDays: 10 },
-    { id: 's3', emoji: '☕', name: '따뜻한 커피', desc: '식기 전에 마셔요. 한 모금이면 마음이 따뜻해져요.',    minDays: 20 },
-    { id: 's4', emoji: '🍞', name: '작은 빵',     desc: '갓 구운 빵이에요. 아직 따뜻해요.',                   minDays: 35 },
-  ],
-  장난감: [
-    { id: 't1', emoji: '🪀', name: '요요',     desc: '잘 못 하는데 그냥 갖고 있어요.',                               minDays: 3  },
-    { id: 't2', emoji: '🎈', name: '작은 풍선', desc: '언제 들고 온 건지 모르겠지만, 아직 팡 안 터졌어요.',            minDays: 12 },
-    { id: 't3', emoji: '🌀', name: '팽이',     desc: '조용히 돌아가는 걸 보고 있으면 마음이 고요해져요.',              minDays: 22 },
-    { id: 't4', emoji: '🧸', name: '작은 곰',  desc: '오래된 곰 인형이에요. 낡았지만 소박이가 아껴요.',               minDays: 40 },
-  ],
-};
-
-const ALL_BAG_ITEMS = Object.values(BAG_ITEMS).flat();
 
 const IDLE_MESSAGES = [
   '반가워요 🌿',
@@ -83,6 +52,18 @@ const IDLE_MESSAGES = [
   '바람이 살랑이네요 🌸',
   '오늘 기분은 어때요?',
 ];
+
+const PLACEMENT_LINES: Record<string, string> = {
+  m5: '담요, 침대 옆에 놔둘까요? 차가워지는 날에 있으면 좋을 것 같아요 🌙',
+  m6: '이 식물, 창가에 어울릴 것 같아요. 빛이 잘 드는 곳이에요 🪴',
+  s5: '머그컵 책상 위에 두면 좋을 것 같아요 🫖',
+  t4: '작은 곰, 선반에 놔둬도 괜찮을까요? 🧸',
+};
+
+const ZONE_LABELS: Record<string, string> = {
+  창가: '창가', 책상: '책상 위', 침대옆: '침대 옆',
+  방구석: '방 구석', 벽걸이: '벽에', 차코너: '차 코너', 작은선반: '작은 선반',
+};
 
 function HomeScreen() {
   useAppInit();
@@ -120,6 +101,8 @@ function HomeScreen() {
   const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
   const [hasNewBagItem, setHasNewBagItem] = useState(false);
   const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
+  const [roomPlacements, setRoomPlacements] = useState<RoomPlacement[]>([]);
+  const [pendingPlacement, setPendingPlacement] = useState<PendingPlacement | null>(null);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -132,7 +115,9 @@ function HomeScreen() {
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
       storageService.load<number>(STORAGE_KEYS.LAST_BAG_OPEN_DAYS),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays]) => {
+      storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS),
+      storageService.load<PendingPlacement>(STORAGE_KEYS.PENDING_PLACEMENT),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays, placements, pendingPlace]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) {
@@ -144,6 +129,8 @@ function HomeScreen() {
       if (ALL_BAG_ITEMS.some((item) => item.minDays > days && item.minDays <= recordedDaysCount)) {
         setHasNewBagItem(true);
       }
+      if (placements) setRoomPlacements(placements);
+      if (pendingPlace != null) setPendingPlacement(pendingPlace);
     });
   }, []);
 
@@ -187,6 +174,19 @@ function HomeScreen() {
       return next;
     });
   }, []);
+
+  const handlePlacementConfirm = useCallback(async () => {
+    if (!pendingPlacement) return;
+    const updated = await confirmPlacement(pendingPlacement.itemId, roomPlacements);
+    setRoomPlacements(updated);
+    setPendingPlacement(null);
+  }, [pendingPlacement, roomPlacements]);
+
+  const handlePlacementDefer = useCallback(async () => {
+    if (!pendingPlacement) return;
+    await deferPlacement(pendingPlacement.itemId, pendingPlacement);
+    setPendingPlacement(null);
+  }, [pendingPlacement]);
 
   const closeSheet = useCallback(() => {
     const closingSheet = activeSheetRef.current;
@@ -244,6 +244,20 @@ function HomeScreen() {
           <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
           <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
         </View>
+        {roomPlacements.map((placement) => {
+          const item = ALL_BAG_ITEMS.find((i) => i.id === placement.itemId);
+          const slot = ZONE_SLOTS[placement.zone]?.[0];
+          if (!item || !slot) return null;
+          return (
+            <View
+              key={placement.itemId}
+              pointerEvents="none"
+              style={{ position: 'absolute', left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
+            >
+              <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
+            </View>
+          );
+        })}
         <View style={styles.header}>
           <View style={styles.levelCard}>
             <View style={styles.levelRow}>
@@ -268,6 +282,27 @@ function HomeScreen() {
           <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
           <View style={styles.sobagiShadow} />
         </TouchableOpacity>
+        {pendingPlacement !== null && !bubbleVisible && (() => {
+          const item = ALL_BAG_ITEMS.find((i) => i.id === pendingPlacement.itemId);
+          if (!item?.roomPresence) return null;
+          const zoneName = item.roomPresence.zones[0]!;
+          const line = PLACEMENT_LINES[item.id] ?? `${item.name}, ${ZONE_LABELS[zoneName] ?? '어딘가'}에 놔둬도 될까요?`;
+          return (
+            <View style={styles.placementPrompt} pointerEvents="box-none">
+              <View style={styles.placementBubble}>
+                <Text style={styles.placementText}>{line}</Text>
+                <View style={styles.placementActions}>
+                  <Pressable style={styles.placementBtnYes} onPress={handlePlacementConfirm}>
+                    <Text style={styles.placementBtnYesText}>응, 좋아</Text>
+                  </Pressable>
+                  <Pressable style={styles.placementBtnLater} onPress={handlePlacementDefer}>
+                    <Text style={styles.placementBtnLaterText}>나중에</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          );
+        })()}
         <TouchableOpacity style={styles.propMailbox} onPress={() => openSheet('mailbox')} activeOpacity={0.7}>
           <Text style={styles.propIconMailbox}>📬</Text>
           {mailboxUnread && (
@@ -805,5 +840,62 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontStyle: 'italic',
     textAlign: 'right',
+  },
+  roomItemEmoji: {
+    fontSize: 16,
+    opacity: 0.60,
+  },
+  placementPrompt: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '28%',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  placementBubble: {
+    backgroundColor: 'rgba(250, 240, 226, 0.92)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    width: '100%',
+    maxWidth: 320,
+    shadowColor: '#3D3020',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  placementText: {
+    fontSize: 14,
+    color: '#3D3020',
+    lineHeight: 21,
+    marginBottom: 12,
+  },
+  placementActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  placementBtnYes: {
+    flex: 1,
+    backgroundColor: 'rgba(61, 48, 32, 0.12)',
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  placementBtnYesText: {
+    fontSize: 13,
+    color: '#3D3020',
+    fontWeight: '500',
+  },
+  placementBtnLater: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  placementBtnLaterText: {
+    fontSize: 13,
+    color: 'rgba(61, 48, 32, 0.4)',
   },
 });
