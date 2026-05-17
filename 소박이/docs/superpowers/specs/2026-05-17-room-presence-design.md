@@ -120,14 +120,16 @@ These items are natively room-capable. They join the existing BAG_ITEMS array an
 | Item | Tab | minDays | zones | emotionAffinity | promptOnPlace | minDaysInBag |
 |------|-----|---------|-------|-----------------|---------------|--------------|
 | 담요 🧣 | 재료 | 28 | 침대옆 | sad, soft-sad, anxious | **true** | 7 |
-| 우산 ☂ | 재료 | 35 | 벽걸이 | — (A-path) | false | 10 |
 | 작은 식물 🪴 | 재료 | 45 | 창가, 방구석 | — (A-path, gradual) | **true** | 14 |
 | 엽서 📮 | 장신구 | 50 | 작은선반, 책상 | — (letter-linked, see §4) | false | 5 |
 | 머그컵 🫖 | 간식 | 55 | 책상, 차코너 | happy, neutral | **true** | 10 |
 
+**우산 ☂ — deferred.** Joins the bag at day 35, but its room behavior is `temporaryAmbient` (appears under certain conditions, not permanently placed). Implementation deferred to the temporaryAmbient system. It enters the bag ecosystem now; its room presence logic ships later.
+
 **담요 🧣** photocardAffinity: sad, soft-sad, anxious
 **작은 식물 🪴** photocardAffinity: happy, neutral
 **머그컵 🫖** photocardAffinity: happy, neutral
+**엽서 📮** photocardAffinity: any (postcard works across emotional contexts — let it appear broadly)
 
 **Note on 작은 식물:** The plant's appearance should feel gradual — Sobagi places it, and it is simply there the next time the user returns. No growth animation. The "gradual" quality comes from the user's memory of not having seen it before, not from an animation.
 
@@ -220,9 +222,11 @@ Copy style: Sobagi describes the place, not the item's value.
 - `응, 좋아` — places item immediately; clears pending-placement
 - `나중에` — sets `pendingFrom: today`; does NOT place immediately
 
-**나중에 behavior:** After 3 calendar days, on the next app open, the item is placed silently with no notification. Internal copy: "방이 자리를 찾았어요" — but this is never shown to the user. The room simply has the item.
+**나중에 behavior:** After 3–5 calendar days (jittered — pick randomly at the time 나중에 is tapped), on the next app open after that window, the item is placed silently with no notification. Sobagi does not ask again. There is one invitation; after that, the room finds its own place for the item.
 
-This is not auto-placement framing. It is "the room found a place for it." The difference matters in how the service is written: there is no "auto-place" log line or console message. The item is just placed.
+Internal framing: "방이 자리를 찾았어요" — never shown to the user. The room simply has the item.
+
+This is not auto-placement framing. It is "the room found a place for it." The service writes no log line, no event, no console message about this. The item is placed; that is all.
 
 ### B→A drift
 
