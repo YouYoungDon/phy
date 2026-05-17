@@ -1,18 +1,33 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { SobagiReaction } from '../components/sobagi/SobagiReaction';
+import { PhotocardView } from '../components/photocard/PhotocardView';
 import { useEmotionStore } from '../store/emotionStore';
+import { useExpenseStore } from '../store/expenseStore';
 import { COLORS } from '../constants/colors';
-import { SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 import { SobagiEmotion } from '../types';
 import { useUserStore } from '../store/userStore';
 import { getDialogueTier } from '../services/dialogueService';
+import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
   component: SobagiReactionScreen,
 });
+
+const CATEGORY_LABELS: Record<string, string> = {
+  cafe: '카페',
+  food: '식비',
+  transport: '교통',
+  shopping: '쇼핑',
+  other: '기타',
+};
+
+function formatKoreanDate(date: Date): string {
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
 
 function getReactionTitle(emotion: SobagiEmotion, tier: 1 | 2 | 3): string {
   if (tier === 1) {
@@ -70,15 +85,69 @@ function SobagiReactionScreen() {
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const currentMessage = useEmotionStore((s) => s.currentMessage);
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
+  const roomStage = useUserStore((s) => s.roomStage);
+  const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
   const tier = getDialogueTier(recordedDaysCount);
+
+  const [photocardBtnVisible, setPhotocardBtnVisible] = useState(false);
+  const [showPhotocardModal, setShowPhotocardModal] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
+  const photocardBtnAnim = useRef(new Animated.Value(0)).current;
+  const revealAnim = useRef(new Animated.Value(1)).current;
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hintOpacity = photocardBtnAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+
+  // Computed once at mount — expenses are already loaded when reaction screen renders
+  const todayExpenses = getTodayExpenses();
+  const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const todayCategories = [...new Set(todayExpenses.map((e) => CATEGORY_LABELS[e.category] ?? e.category))];
+  const dateStr = formatKoreanDate(new Date());
+  const currentHour = new Date().getHours();
 
   const handleClose = useCallback(() => {
     navigation.reset({ index: 0, routes: [{ name: '/' }] });
   }, [navigation]);
 
+  const openPhotocard = useCallback(() => {
+    revealAnim.setValue(1);
+    setIsRevealing(true);
+    setShowPhotocardModal(true);
+    requestAnimationFrame(() => {
+      Animated.timing(revealAnim, {
+        toValue: 0,
+        duration: 1800,
+        useNativeDriver: true,
+      }).start(() => setIsRevealing(false));
+    });
+  }, [revealAnim]);
+
+  const closePhotocard = useCallback(() => {
+    setShowPhotocardModal(false);
+  }, []);
+
   useEffect(() => {
-    const timer = setTimeout(handleClose, 3500);
-    return () => clearTimeout(timer);
+    // Auto-dismiss at 3500ms — cancelled when photocard button appears
+    autoTimerRef.current = setTimeout(handleClose, 3500);
+
+    // Show photocard button at 1000ms and cancel the auto-dismiss
+    const btnTimer = setTimeout(() => {
+      if (autoTimerRef.current) {
+        clearTimeout(autoTimerRef.current);
+        autoTimerRef.current = null;
+      }
+      setPhotocardBtnVisible(true);
+      Animated.timing(photocardBtnAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }, 1000);
+
+    return () => {
+      if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+      clearTimeout(btnTimer);
+    };
   }, [handleClose]);
 
   return (
@@ -91,9 +160,59 @@ function SobagiReactionScreen() {
         <FloatingHeart emoji="💛" delay={440} offset={0} />
       </View>
 
-      <SobagiReaction emotion={currentEmotion} message={currentMessage} imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
+      <SobagiReaction
+        emotion={currentEmotion}
+        message={currentMessage}
+        imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
+      />
 
-      <Text style={styles.hint}>화면을 탭하면 홈으로</Text>
+      {/* Hint — fades out as photocard button fades in */}
+      <Animated.View style={[styles.hintWrapper, { opacity: hintOpacity }]} pointerEvents="none">
+        <Text style={styles.hint}>화면을 탭하면 홈으로</Text>
+      </Animated.View>
+
+      {/* Photocard button section — fades in after 1000ms */}
+      <Animated.View
+        style={[styles.photocardSection, { opacity: photocardBtnAnim }]}
+        pointerEvents={photocardBtnVisible ? 'auto' : 'none'}
+      >
+        <Pressable style={styles.photocardBtn} onPress={openPhotocard}>
+          <Text style={styles.photocardBtnText}>포토카드 생성</Text>
+        </Pressable>
+        <Pressable onPress={handleClose}>
+          <Text style={styles.dismissLink}>나중에 할게요</Text>
+        </Pressable>
+      </Animated.View>
+
+      {/* Photocard modal — full-screen dark overlay */}
+      {showPhotocardModal && (
+        <Pressable style={styles.photocardModal} onPress={isRevealing ? undefined : closePhotocard}>
+          <View style={styles.cardArea}>
+            <PhotocardView
+              quote={currentMessage}
+              dateStr={dateStr}
+              categories={todayCategories}
+              amount={todayTotal}
+              roomStage={roomStage}
+              backgroundUri={ROOM_BACKGROUND_URIS[roomStage]}
+              sobagiImageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
+              atmosphereTint={getTimeOfDayTint(currentHour)}
+              warmthOpacity={getWarmthOpacity(recordedDaysCount)}
+              quoteAnimated
+            />
+            {/* White overlay fades out as the card develops */}
+            <Animated.View
+              style={[StyleSheet.absoluteFillObject, styles.revealOverlay, { opacity: revealAnim }]}
+              pointerEvents="none"
+            />
+          </View>
+
+          {/* Visual close affordance — tapping anywhere on modal also closes */}
+          <View style={styles.closeHint} pointerEvents="none">
+            <Text style={styles.closeHintText}>✕</Text>
+          </View>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -122,9 +241,70 @@ const styles = StyleSheet.create({
   heart: {
     fontSize: 20,
   },
+  hintWrapper: {
+    position: 'absolute',
+    bottom: 48,
+  },
   hint: {
-    marginTop: 20,
     fontSize: 12,
     color: COLORS.textLight,
+  },
+  photocardSection: {
+    position: 'absolute',
+    bottom: 32,
+    left: 32,
+    right: 32,
+    alignItems: 'center',
+    gap: 10,
+  },
+  photocardBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  photocardBtnText: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  dismissLink: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    paddingVertical: 4,
+  },
+  photocardModal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#1A1410',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardArea: {
+    // PhotocardView provides its own fixed dimensions
+  },
+  revealOverlay: {
+    borderRadius: 12,
+    backgroundColor: '#FAF6EE',
+  },
+  closeHint: {
+    position: 'absolute',
+    top: 52,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeHintText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
 });

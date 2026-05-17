@@ -67,6 +67,8 @@ const BAG_ITEMS: Record<BagTab, BagItem[]> = {
   ],
 };
 
+const ALL_BAG_ITEMS = Object.values(BAG_ITEMS).flat();
+
 const IDLE_MESSAGES = [
   '반가워요 🌿',
   '오늘 하루는 어땠어요?',
@@ -116,6 +118,7 @@ function HomeScreen() {
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
   const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
+  const [hasNewBagItem, setHasNewBagItem] = useState(false);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -127,7 +130,8 @@ function HomeScreen() {
       storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS),
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds]) => {
+      storageService.load<number>(STORAGE_KEYS.LAST_BAG_OPEN_DAYS),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) {
@@ -135,6 +139,10 @@ function HomeScreen() {
         setPendingNewItemId(pending);
       }
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
+      const days = lastBagDays ?? 0;
+      if (ALL_BAG_ITEMS.some((item) => item.minDays > days && item.minDays <= recordedDaysCount)) {
+        setHasNewBagItem(true);
+      }
     });
   }, []);
 
@@ -147,6 +155,8 @@ function HomeScreen() {
       setBagTab('장신구');
       setSelectedBagItem(null);
       setSelectedFoundItem(null);
+      void storageService.save(STORAGE_KEYS.LAST_BAG_OPEN_DAYS, recordedDaysCount);
+      setHasNewBagItem(false);
       // Move pending item into the found collection
       const pendingId = pendingRef.current;
       if (pendingId !== null) {
@@ -166,7 +176,7 @@ function HomeScreen() {
       }
     }
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
-  }, [sheetAnim, readIds]);
+  }, [sheetAnim, readIds, recordedDaysCount]);
 
   const closeSheet = useCallback(() => {
     const closingSheet = activeSheetRef.current;
@@ -251,7 +261,7 @@ function HomeScreen() {
         <TouchableOpacity style={styles.propBag} onPress={() => openSheet('bag')} activeOpacity={0.7}>
           <Text style={styles.propIconBag}>🎒</Text>
           <View style={styles.propBagShadow} />
-          {pendingNewItemId !== null && <View style={styles.bagDot} />}
+          {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.bagDot} />}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>

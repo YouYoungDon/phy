@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
@@ -7,6 +7,10 @@ import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString } from '../utils/date';
 import { BottomTabs } from '../components/common/BottomTabs';
+import { PhotocardView } from '../components/photocard/PhotocardView';
+import { getDayFeeling } from '../services/dayFeelingService';
+import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
+import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -19,6 +23,14 @@ const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   transport: '교통 🚌',
   shopping: '쇼핑 🛍️',
   other: '기타 📦',
+};
+
+const PHOTOCARD_CATEGORY_LABELS: Record<string, string> = {
+  cafe: '카페',
+  food: '식비',
+  transport: '교통',
+  shopping: '쇼핑',
+  other: '기타',
 };
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -69,23 +81,18 @@ function MonthTrendGraph({ viewYear, viewMonth, daysInMonth, expensesByDate }: T
     <View style={trendStyles.card}>
       <Text style={trendStyles.title}>이달의 흐름</Text>
       <View style={trendStyles.wrapper}>
-        {/* Y-axis labels */}
         <View style={trendStyles.yAxis}>
           <Text style={trendStyles.yLabel}>{fmtAmt(maxTotal)}</Text>
           <Text style={trendStyles.yLabel}>{fmtAmt(midTotal)}</Text>
           <Text style={trendStyles.yLabel}>0</Text>
         </View>
 
-        {/* Chart area */}
         <View style={{ flex: 1 }}>
-          {/* Bar area with guide lines */}
           <View style={trendStyles.barArea}>
-            {/* Guide lines at 100%, 50%, 0% */}
             <View style={[trendStyles.guideLine, { top: 0 }]} />
             <View style={[trendStyles.guideLine, { top: TREND_BAR_MAX / 2 }]} />
             <View style={[trendStyles.guideLine, { bottom: 0 }]} />
 
-            {/* Bars */}
             <View style={trendStyles.barsRow}>
               {days.map(({ day, total }) => {
                 const hasData = total > 0;
@@ -107,7 +114,6 @@ function MonthTrendGraph({ viewYear, viewMonth, daysInMonth, expensesByDate }: T
             </View>
           </View>
 
-          {/* X-axis labels */}
           <View style={trendStyles.xRow}>
             {days.map(({ day }) => (
               <View key={day} style={trendStyles.xCell}>
@@ -155,13 +161,19 @@ function ExpenseList({ expenses }: { expenses: Expense[] }) {
 function StatsScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
   const streak = useUserStore((s) => s.streak);
+  const roomStage = useUserStore((s) => s.roomStage);
+  const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
 
   const today = new Date();
   const todayStr = getLocalDateString(today);
+  const currentHour = today.getHours();
 
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
+  const [showDayPhotocard, setShowDayPhotocard] = useState(false);
+
+  const dayRevealAnim = useRef(new Animated.Value(1)).current;
 
   const expensesByDate = useMemo(() => {
     const map: Record<string, { total: number; count: number; categories: ExpenseCategory[] }> = {};
@@ -211,14 +223,6 @@ function StatsScreen() {
   const selectedDt = new Date(selectedDay + 'T00:00:00');
   const selectedLabel = `${selectedDt.getMonth() + 1}월 ${selectedDt.getDate()}일`;
 
-  const dayComment = selectedData
-    ? selectedData.total >= 50000
-      ? '오늘은 꽤 많이 썼네요. 그래도 기록한 게 대단해요 💪'
-      : selectedData.count >= 3
-        ? '여러 번 기록했군요, 꼼꼼한 하루였어요 🌿'
-        : '소박한 하루를 보냈네요 🍃'
-    : '이날은 조용히 지나갔어요 🌿';
-
   const weeklyTotal = useMemo(() => {
     const d = new Date(today);
     const dow = d.getDay();
@@ -253,6 +257,38 @@ function StatsScreen() {
     return (Object.entries(counts) as [ExpenseCategory, number][])
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
   }, [expenses, viewYear, viewMonth]);
+
+  // Photocard data — derived from the selected day's records
+  const dayFeeling = useMemo(
+    () => selectedExpenses.length > 0 ? getDayFeeling(selectedExpenses, selectedDay) : null,
+    [selectedExpenses, selectedDay],
+  );
+
+  const photocardCategories = useMemo(
+    () => [...new Set(selectedExpenses.map((e) => PHOTOCARD_CATEGORY_LABELS[e.category] ?? e.category))],
+    [selectedExpenses],
+  );
+
+  const photocardDateStr = useMemo(() => {
+    const d = new Date(selectedDay + 'T00:00:00');
+    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+  }, [selectedDay]);
+
+  const openDayPhotocard = useCallback(() => {
+    dayRevealAnim.setValue(1);
+    setShowDayPhotocard(true);
+    requestAnimationFrame(() => {
+      Animated.timing(dayRevealAnim, {
+        toValue: 0,
+        duration: 1800,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [dayRevealAnim]);
+
+  const closeDayPhotocard = useCallback(() => {
+    setShowDayPhotocard(false);
+  }, []);
 
   return (
     <View style={styles.screen}>
@@ -323,24 +359,23 @@ function StatsScreen() {
           </View>
         </View>
 
-        {/* Selected day card */}
-        <View style={styles.dayCard}>
-          <View style={styles.dayCardHeader}>
-            <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
-            {selectedData && (
-              <Text style={styles.dayCardTotal}>{selectedData.total.toLocaleString()}원</Text>
-            )}
+        {/* Selected day expense list */}
+        {selectedExpenses.length > 0 && (
+          <View style={styles.dayCard}>
+            <View style={styles.dayCardHeader}>
+              <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
+              <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
+            </View>
+            <ExpenseList expenses={selectedExpenses} />
           </View>
+        )}
 
-          {selectedExpenses.length > 0 ? (
-            <>
-              <Text style={styles.dayCardComment}>{dayComment}</Text>
-              <ExpenseList expenses={selectedExpenses} />
-            </>
-          ) : (
-            <Text style={styles.dayCardEmpty}>{dayComment}</Text>
-          )}
-        </View>
+        {/* Photocard entry — replaces DayFeelingCard, shown when selected day has records */}
+        {selectedExpenses.length > 0 && (
+          <Pressable style={styles.photocardEntryBtn} onPress={openDayPhotocard}>
+            <Text style={styles.photocardEntryText}>포토카드 생성</Text>
+          </Pressable>
+        )}
 
         {/* Settlement */}
         <View style={styles.settlementSection}>
@@ -368,10 +403,10 @@ function StatsScreen() {
           <View style={styles.streakRow}>
             <Text style={styles.streakText}>
               {streak >= 3
-                ? `소박이를 ${streak}일 연속으로 만나러 왔어요 🌿`
-                : streak === 1
-                  ? '오늘도 소박이를 찾아줬어요 🍃'
-                  : '소박이가 기다리고 있어요 🌱'}
+                ? '요즘 자주 들르고 있네요 🌿'
+                : streak >= 1
+                  ? '오늘도 잠깐 들렀네요 🍃'
+                  : '가끔씩 들러도 괜찮아요 🌿'}
             </Text>
           </View>
         </View>
@@ -386,6 +421,33 @@ function StatsScreen() {
       </ScrollView>
 
       <BottomTabs activeRoute="/stats" />
+
+      {/* Photocard modal — full-screen dark overlay */}
+      {showDayPhotocard && dayFeeling && (
+        <Pressable style={styles.photocardModal} onPress={closeDayPhotocard}>
+          <View style={styles.cardArea}>
+            <PhotocardView
+              quote={dayFeeling.mainLine}
+              dateStr={photocardDateStr}
+              categories={photocardCategories}
+              amount={selectedData?.total ?? 0}
+              roomStage={roomStage}
+              backgroundUri={ROOM_BACKGROUND_URIS[roomStage]}
+              sobagiImageUri={SOBAGI_IMAGE_URIS[dayFeeling.sobagiEmotion] ?? SOBAGI_DEFAULT_URI}
+              atmosphereTint={getTimeOfDayTint(currentHour)}
+              warmthOpacity={getWarmthOpacity(recordedDaysCount)}
+              quoteAnimated
+            />
+            <Animated.View
+              style={[styles.revealOverlay, { opacity: dayRevealAnim }]}
+              pointerEvents="none"
+            />
+          </View>
+          <View style={styles.closeHint} pointerEvents="none">
+            <Text style={styles.closeHintText}>✕</Text>
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -457,8 +519,6 @@ const styles = StyleSheet.create({
   },
   dayCardTitle: { fontSize: 13, color: COLORS.textMuted },
   dayCardTotal: { fontSize: 20, fontWeight: '700', color: COLORS.text },
-  dayCardComment: { fontSize: 13, color: COLORS.oliveGreen, lineHeight: 18 },
-  dayCardEmpty: { fontSize: 14, color: COLORS.textMuted, lineHeight: 20 },
 
   // Expense list
   expenseList: {
@@ -503,6 +563,22 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
+  // Photocard entry button
+  photocardEntryBtn: {
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderRadius: 20,
+    backgroundColor: COLORS.warmWhite,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  photocardEntryText: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+
   // Settlement
   settlementSection: {
     backgroundColor: COLORS.warmWhite,
@@ -530,6 +606,43 @@ const styles = StyleSheet.create({
   settlementChipText: { fontSize: 12, color: COLORS.textMuted, lineHeight: 16 },
   streakRow: { marginTop: 2 },
   streakText: { fontSize: 13, color: COLORS.oliveGreen, lineHeight: 18 },
+
+  // Photocard modal
+  photocardModal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#1A1410',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardArea: {},
+  revealOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+    backgroundColor: '#FAF6EE',
+  },
+  closeHint: {
+    position: 'absolute',
+    top: 52,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeHintText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
 });
 
 const trendStyles = StyleSheet.create({

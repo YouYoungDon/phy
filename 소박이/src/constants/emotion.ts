@@ -1,11 +1,11 @@
 import { SobagiEmotion } from '../types';
 
 export const EMOTION_MESSAGES: Record<SobagiEmotion, string> = {
-  surprised: '오늘 첫 기록이에요! 소박이가 깜짝 놀랐어요 ✨',
-  excited: '연속 기록 중이에요! 소박이도 신나요 🌟',
+  surprised: '오늘 처음 들렀네요 ✨',
+  excited: '따뜻한 하루 같았어요 🌿',
   sleepy: '이 시간에도 기록하다니... 소박이도 졸려요 zzz',
-  'soft-sad': '많이 썼네요... 소박이도 살짝 마음이 쓰여요 🌧️',
-  happy: '오늘도 잘 기록했어요! 💚',
+  'soft-sad': '오늘은 꽤 큰 날이었네요 🌿',
+  happy: '조용히 기록해뒀어요 🌿',
 };
 
 export const VALID_EMOTIONS: SobagiEmotion[] = [

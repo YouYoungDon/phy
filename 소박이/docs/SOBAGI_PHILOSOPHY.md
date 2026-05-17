@@ -134,5 +134,46 @@ Systems that are not gamified in isolation (level chip, progress bar, streak cou
 
 ---
 
-*Last reviewed: 2026-05-16*
+## The Photocard
+
+A photocard is an emotional snapshot of a day — not a report, not a summary, not an achievement.
+
+The photocard exists because some moments feel worth keeping. It is always optional, never prompted, and never counted.
+
+**What the photocard is:**
+- A memory from today's room, captured at the moment of generation
+- An emotional reflection in Sobagi's voice — the same voice the user already knows from the reaction screen
+- A quiet keepsake that can be shared if it feels right
+
+**What the photocard is not:**
+- A reward for recording
+- A daily completion badge or streak artifact
+- A spending summary with emotional decoration
+- A gamified collectible with rarity tiers, completion grids, or card counts
+
+**The generation moment:**
+Should feel like a photograph slowly developing — gradual, quiet, unhurried. Not a loading screen. Not an unlock animation. Not a celebration. The card comes into focus; it does not burst into existence. No spinner, no progress bar, no fanfare.
+
+**Card composition rule:**
+The Sobagi image and the emotional quote are the card. Everything else — date, amount, categories — lives softly below them. If a user screenshots only the top 65% of the card, it should feel complete and emotionally whole. The data is context. The atmosphere is the point.
+
+**The card is the product:**
+The card appearing is the complete experience. Saving and sharing are optional enhancements. A user who generates a card and closes the modal without saving has still had the full experience — the moment of seeing it is the thing. The app should behave as though this is the intended path, not a fallback.
+
+If image capture fails, if sharing APIs are unavailable, if the device is old or the platform behaves differently — the card still appears, the animation still plays, and the experience remains emotionally calm. No error states on the card. No apology copy. Unavailable features are simply absent.
+
+**Sharing rule:**
+Sharing is an option, never a prompt. The share surface appears below the card, not over it. There is no encouragement copy: no "공유해서 자랑해봐요", no "오늘을 기록했어요". The card shares itself.
+
+**Anti-patterns for photocard:**
+- "오늘도 포토카드를 만들어봐요!" — daily pressure framing
+- "포토카드 N번째" — turns it into a collection counter
+- "기록 완료 보상" — frames it as a reward for performance
+- Amount displayed prominently — turns it into a finance summary
+- Time distribution percentages or category analytics grids — dashboard feel
+- "포토카드 모으기" with a completion-state grid — pure gamification
+
+---
+
+*Last reviewed: 2026-05-17*
 *If you are an agent reading this: read the whole document before touching any dialogue, UX, or content work.*
