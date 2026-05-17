@@ -136,3 +136,23 @@ After the initial View-composed silhouette implementation landed, the user uploa
 - Indicator dot behavior (`utilityDot`, both conditions unchanged)
 - JSX render order (stack after `characterArea`)
 - All `openSheet` handler wiring unchanged
+
+## QA Pass — 2026-05-17
+
+On-device walkthrough completed. All sections pass with no tweaks applied.
+
+- Implementation passed the full QA checklist
+- Utility icons read as quiet room objects, not UI controls
+- No menu/HUD/feature-navigation energy observed
+- Touch reliability confirmed across all paths
+- Indicator dots position and clear correctly on both icons
+
+### Intentional restraint — sunset + compounded warmth
+
+The single observed marginal case is icon readability under sunset tint combined with high-`recordedDaysCount` warmth overlay. Icons remain visible but sit right at the edge of "too quiet."
+
+**Intentionally left as-is.** Raising opacity would solve the visibility concern but risks pushing the icons back toward feature-button energy — the exact failure mode this redesign exists to avoid.
+
+> "Slightly quieter than optimal" is preferable to "slightly more visible but feature-like."
+
+If longer-term testing reveals real usability impact (not just marginal visibility), the documented fallbacks remain available — bump resting opacity to `0.65`, or shift the press outline to a warmer ivory. Until then, preserve restraint.
