@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-18 (Engineering — night-activity → 따뜻한 램프 trigger landed)
+**Last updated:** 2026-05-18 (Engineering — calm-day atmosphere brightening landed)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -53,9 +53,8 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ## Future implicit-accumulation triggers
 
-Order TBD; each follows the same pattern: extend `roomPresenceService` with a new pure path, no UI changes. Stabilize each on-device before adding the next.
+Each follows the same pattern: pure functions first, safety tests, then minimal integration. Stabilize each on-device before adding the next.
 
-- Calm low-spending days → brighter room atmosphere
 - Weekend leisure spending → cozy floor items
 
 ---
@@ -82,6 +81,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Implicit accumulation — 차분한 저소비 일 → 분위기 밝아짐 (calm atmosphere)** — `atmosphereService` extended with `computeCalmDayCount` and `getCalmAtmosphereOpacity`. Calm day = recorded daily total < 10,000 KRW (strict, days with no records don't count). Graduated opacity per calm day (0.005 step, capped at 0.04). Warm-white overlay `#FFF5E6` rendered in `index.tsx` between warmth and bottom-fade. Pure-function, no UI surface, no metrics shown, no storage state. 13 new tests. (2026-05-18)
 - [x] **Implicit accumulation — 야간 활동 → 따뜻한 램프 (L-path)** — `BagItem.nightAffinity: boolean`; new item `a6` 따뜻한 램프 in 장신구. `isNightHour` (midnight-wrapping), `hasNightPattern` (3 records / 3 distinct nights / 14 days, recurrence-gated, daytime records ignored), `pickNightEligibleItems`, `selectNightCandidate`. Global `NIGHT_TRIGGER` (19–04). L-path slotted in `checkForPlacement` between S and B/A. 22 new tests including startHour/endHour boundary, midnight wrap, daytime mix. (2026-05-18)
 - [x] **Paused `roomDecorationService` removed** — Files (`roomDecorationService.ts` + test) deleted; `PLACED_ITEMS` storage key reverted; `index.tsx` integration (import, state, mount-effect load, parallel render block) reverted. PHILOSOPHY gets a historical note explaining the removal. Single source of truth for placement is now `roomPresenceService` (zones B/A/C/P/S). (2026-05-18)
 - [x] **Implicit accumulation — streak → 작은 식물 (S-path)** — `BagItem.streakAffinity: { minStreak }`; m6 식물 tagged at 7. `computeRecordingStreak` (forgiving: today or yesterday, 2-day gap collapses). `pickStreakEligibleItems`, `selectStreakCandidate`. S-path slotted into `checkForPlacement` between P-path and B/A. 17 new tests, including grace-day and gap-collapse. Per-item threshold so future streak items settle at their own pace. (2026-05-18)

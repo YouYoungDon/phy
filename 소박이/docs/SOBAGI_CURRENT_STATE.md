@@ -62,31 +62,33 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-18
-**Group completed:** Implicit accumulation — 야간 활동 → 따뜻한 램프 (L-path)
+**Group completed:** Implicit accumulation — 차분한 저소비 일 → 분위기 밝아짐 (calm atmosphere)
 
 ### What changed
-- `src/constants/bagItems.ts` — BagItem gains optional `nightAffinity: boolean`. New item `a6` 따뜻한 램프 (🪔) in 장신구, day 30, zones `[침대옆, 책상]`, `emotionAffinity: [sleepy, soft-sad]`, `photocardAffinity: [sleepy, soft-sad]`, `nightAffinity: true`. `RoomPlacement.placementPath` extended to include `'L'`.
-- `src/services/roomPresenceService.ts` — new pure functions `isNightHour`, `hasNightPattern`, `pickNightEligibleItems`, `selectNightCandidate`, `NightPatternOpts` type. Global `NIGHT_TRIGGER` config (19:00–04:00, 3 records / 3 distinct days / 14 days). `checkForPlacement` evaluates the L-path after the S-path and before B/A.
-- `src/services/__tests__/roomPresenceService.test.ts` — 22 new test cases. 5-item safety checklist 1:1 mapped (3+ night records across 3+ nights triggers, single-night spree doesn't, already-placed excluded, daytime records don't trigger, old records outside window don't trigger) plus boundary checks (inclusive `startHour`, exclusive `endHour`, midnight-wrapping window, daytime-mixed records).
+- `src/services/atmosphereService.ts` — new pure functions `computeCalmDayCount` and `getCalmAtmosphereOpacity`. Constants `CALM_DAILY_THRESHOLD` (10,000 KRW), `CALM_WINDOW_DAYS` (14), `CALM_PER_DAY_OPACITY` (0.005), `CALM_MAX_OPACITY` (0.04), `CALM_OVERLAY_COLOR` (`#FFF5E6` warm white).
+- `src/pages/index.tsx` — computes `calmOpacity` from current expenses snapshot; renders a third atmosphere overlay (`CALM_OVERLAY_COLOR` × `calmOpacity`) between the warmth overlay and the bottom fade. `pointerEvents="none"`. Not rendered when `calmOpacity === 0`.
+- `__tests__/atmosphereService.test.ts` — 13 new test cases covering the calm checklist (low-spend days count, high-spend days don't, no-record days don't, old records outside window don't, exact-threshold doesn't qualify, opacity caps).
 
 ### What's now working
-- Recording during night hours (19:00–04:00) across at least 3 distinct nights within 14 days silently brings the warm lamp into the room. Same direct-placement model as P/S — no UI, no prompt, no announcement.
-- Trigger ordering inside `checkForPlacement`: auto-settle → pending-skip → P (cafe pattern) → S (streak) → L (night activity) → B/A. Each path fires at most once per session.
-- Three implicit triggers now live: cafe → 머그컵, streak → 작은 식물, night → 따뜻한 램프.
+- Days where the user recorded but the daily total stayed strictly below 10,000 KRW silently lighten the room. Graduated: each calm day adds 0.005 opacity to a warm-white overlay, capped at 0.04 (strictly less than the warmth ceiling of 0.06). The lift becomes perceptible around 4–8 calm days within a fortnight.
+- Three implicit object triggers (cafe → 머그컵, streak → 작은 식물, night → 따뜻한 램프) plus one implicit atmosphere trigger (calm-days → brighter room).
+- Pure functions live in `atmosphereService` (not `roomPresenceService`) because this trigger isn't a placement — it's atmosphere. Single source of truth for atmosphere: `getTimeOfDayTint(hour)` × `getWarmthOpacity(recordedDaysCount)` × `getCalmAtmosphereOpacity(expenses, today)`.
 
 ### Fragile / surprising
-- The night window wraps midnight (`startHour > endHour`). `isNightHour` handles this explicitly; tests cover the boundary cases (`19:00` inclusive, `04:00` exclusive, `02:00` counted as night).
-- Calendar-day distinctness is used for the "different nights" gate. A hangout that crosses midnight (23:00 → 02:00) shows up as 2 distinct days, which is the honest reading (the user opened the app on two local dates). If a future spec wants "logical nights" treated as one, that's a separate refactor.
-- The lamp shares `침대옆` zone with `달 반지` (a3). Both placed at the same coords if both fire. Acceptable for proof-of-feel; if visual collisions become a concern, build zone-aware fallback (skip occupied zone) on `roomPresenceService`, not at item-declaration time.
-- `nightAffinity` is a boolean (item declares "I respond to night signal"); the window/threshold is global in the service. Mirrors cafe's design (global config, item flags). Streak uses per-item threshold instead — divergence is intentional (streak items may want different floors; night items currently share a window).
+- Calm definition is *recorded but low*, not *no records*. Days with zero records are neutral, not calm. Matches Sobagi's "absence is never failure" tone — silence doesn't punish OR reward.
+- Threshold is strict less-than (`total < CALM_DAILY_THRESHOLD`). A day at exactly 10,000 KRW is not calm. Tests pin this.
+- Calm opacity is computed every render from `expenses` (same pattern as `warmthOpacity` from `recordedDaysCount`). A mid-session record that pushes a previously-calm day over the threshold can dim the calm overlay by 0.005 in real time. The change is barely perceptible at this opacity scale; if it ever feels intrusive, swap to a session-start snapshot in `index.tsx`.
+- No storage state added. The trigger is fully derived from `expenses`. No new STORAGE_KEYS, no migration concerns.
+- The lamp at `침대옆` still shares its zone slot with `달 반지` — known overlap, deferred per the proof-of-feel scope.
 
 ### What the next agent must NOT do
-- Don't recreate the slot-based decoration shape. Build any new placement enrichment on `roomPresenceService` zones (the path letter is whatever fits the signal).
-- Don't expose `placementPath` ('P' / 'S' / 'L' etc.) in any UI — it's internal-only.
-- Don't add another trigger in the same commit. Stabilize each before extending.
+- Don't expose calm-day count, threshold, or opacity in any UI — it's an atmosphere, not a metric.
+- Don't add a "you've had N calm days" message or any kind of calm-mode badge. The room reads lighter; that's the whole signal.
+- Don't widen the calm overlay color toward cool / blue. Warm white only — the room's emotional palette never goes cool.
+- Don't add another trigger in the same commit.
 
 ### Next
-Either: (a) stabilize the L-path on-device, observe for a session, then move to the next trigger (calm low-spending days → brighter atmosphere, or weekend leisure → cozy floor items); or (b) revisit zone-collision behaviour now that three items can land in the room (mug at 책상, plant at 창가, lamp at 침대옆 — currently safe, but 달 반지 + lamp both want 침대옆).
+NEXT_PRIORITIES has 주말 여가 → 바닥 아이템 queued as the next implicit trigger candidate. Could also revisit the lamp/달 반지 zone overlap if visible collisions are reported on-device.
 
 ---
 

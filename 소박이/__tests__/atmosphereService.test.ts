@@ -1,4 +1,13 @@
-import { getTimeOfDayTint, getWarmthOpacity } from '../src/services/atmosphereService';
+import {
+  getTimeOfDayTint,
+  getWarmthOpacity,
+  computeCalmDayCount,
+  getCalmAtmosphereOpacity,
+  CALM_DAILY_THRESHOLD,
+  CALM_MAX_OPACITY,
+  CALM_PER_DAY_OPACITY,
+} from '../src/services/atmosphereService';
+import { Expense } from '../src/types';
 
 describe('getTimeOfDayTint', () => {
   it('returns null for morning hours (baseline)', () => {
@@ -75,5 +84,139 @@ describe('getWarmthOpacity', () => {
   it('is monotonically increasing', () => {
     expect(getWarmthOpacity(30)).toBeGreaterThan(getWarmthOpacity(7));
     expect(getWarmthOpacity(90)).toBeGreaterThan(getWarmthOpacity(30));
+  });
+});
+
+// ─── Calm-day atmosphere brightening ────────────────────────────────────────
+//
+// Safety checks (1:1 with the implicit-trigger family):
+//   1. Several low-spend days within window → opacity > 0
+//   2. High-spend days → do NOT count
+//   3. Days with no records → do NOT count (absence is neutral)
+//   4. Old low-spend records outside windowDays → do NOT count
+//   5. Opacity caps at CALM_MAX_OPACITY
+//
+
+const makeExpense = (overrides: Partial<Expense> & Pick<Expense, 'id' | 'createdAt' | 'amount'>): Expense => ({
+  category: 'cafe',
+  sobagiEmotion: 'happy',
+  ...overrides,
+});
+
+describe('computeCalmDayCount', () => {
+  it('returns 0 on empty expenses', () => {
+    expect(computeCalmDayCount([], '2026-05-18')).toBe(0);
+  });
+
+  // Safety check #1
+  it('counts days within the window whose total is below the threshold', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: 3000, createdAt: '2026-05-12T10:00:00' }),
+      makeExpense({ id: '2', amount: 5000, createdAt: '2026-05-14T10:00:00' }),
+      makeExpense({ id: '3', amount: 4500, createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(3);
+  });
+
+  // Safety check #2
+  it('does NOT count days where the total is at or above the threshold', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: CALM_DAILY_THRESHOLD,     createdAt: '2026-05-12T10:00:00' }), // exactly threshold → not calm
+      makeExpense({ id: '2', amount: CALM_DAILY_THRESHOLD + 1, createdAt: '2026-05-14T10:00:00' }), // above
+      makeExpense({ id: '3', amount: 25000,                    createdAt: '2026-05-17T10:00:00' }), // way above
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(0);
+  });
+
+  it('sums multiple records on the same day before comparing to threshold', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: 4000, createdAt: '2026-05-17T08:00:00' }),
+      makeExpense({ id: '2', amount: 7000, createdAt: '2026-05-17T18:00:00' }),
+      // 11,000 total → above threshold → not calm
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(0);
+  });
+
+  it('counts a day if the summed total stays below threshold', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: 4000, createdAt: '2026-05-17T08:00:00' }),
+      makeExpense({ id: '2', amount: 4500, createdAt: '2026-05-17T18:00:00' }),
+      // 8,500 total → still calm
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(1);
+  });
+
+  // Safety check #3: implicit — empty days never appear in the map
+  it('treats days with no records as neutral (does NOT count as calm)', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: 5000, createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(1);
+  });
+
+  // Safety check #4
+  it('ignores records older than windowDays', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: 3000, createdAt: '2026-04-15T10:00:00' }), // > 14 days
+      makeExpense({ id: '2', amount: 3000, createdAt: '2026-05-01T10:00:00' }), // > 14 days
+      makeExpense({ id: '3', amount: 3000, createdAt: '2026-05-17T10:00:00' }), // in window
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(1);
+  });
+
+  it('exact-threshold record does NOT make a day calm (strict less-than)', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: CALM_DAILY_THRESHOLD, createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(0);
+  });
+});
+
+describe('getCalmAtmosphereOpacity', () => {
+  it('returns 0 when no calm days exist', () => {
+    expect(getCalmAtmosphereOpacity([], '2026-05-18')).toBe(0);
+  });
+
+  it('graduates with calm day count', () => {
+    const oneCalmDay: Expense[] = [
+      makeExpense({ id: '1', amount: 3000, createdAt: '2026-05-17T10:00:00' }),
+    ];
+    const twoCalmDays: Expense[] = [
+      ...oneCalmDay,
+      makeExpense({ id: '2', amount: 3000, createdAt: '2026-05-16T10:00:00' }),
+    ];
+    expect(getCalmAtmosphereOpacity(oneCalmDay, '2026-05-18'))
+      .toBeLessThan(getCalmAtmosphereOpacity(twoCalmDays, '2026-05-18'));
+  });
+
+  it('opacity per calm day equals CALM_PER_DAY_OPACITY (below cap)', () => {
+    const expenses = [
+      makeExpense({ id: '1', amount: 3000, createdAt: '2026-05-16T10:00:00' }),
+      makeExpense({ id: '2', amount: 3000, createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(getCalmAtmosphereOpacity(expenses, '2026-05-18'))
+      .toBeCloseTo(2 * CALM_PER_DAY_OPACITY, 5);
+  });
+
+  // Safety check #5: opacity caps at CALM_MAX_OPACITY
+  it('caps opacity at CALM_MAX_OPACITY regardless of how many calm days', () => {
+    // 14 calm days within the 14-day window
+    const expenses = Array.from({ length: 14 }, (_, i) => {
+      const day = String(4 + i).padStart(2, '0');
+      return makeExpense({ id: String(i), amount: 3000, createdAt: `2026-05-${day}T10:00:00` });
+    });
+    const opacity = getCalmAtmosphereOpacity(expenses, '2026-05-18');
+    expect(opacity).toBeLessThanOrEqual(CALM_MAX_OPACITY);
+    expect(opacity).toBe(CALM_MAX_OPACITY);
+  });
+
+  it('never exceeds CALM_MAX_OPACITY even at extreme inputs', () => {
+    // 100 calm days, only those in window count, but still — opacity must cap
+    const expenses = Array.from({ length: 100 }, (_, i) => {
+      const d = new Date('2026-05-18T10:00:00');
+      d.setDate(d.getDate() - i);
+      return makeExpense({ id: String(i), amount: 3000, createdAt: d.toISOString() });
+    });
+    expect(getCalmAtmosphereOpacity(expenses, '2026-05-18')).toBe(CALM_MAX_OPACITY);
   });
 });
