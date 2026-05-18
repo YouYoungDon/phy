@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Pressable, ScrollView, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { Animated, Dimensions, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { setIosSwipeGestureEnabled } from '@apps-in-toss/native-modules';
+
+const SCREEN_W = Dimensions.get('window').width;
 import { createRoute } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
@@ -91,6 +94,13 @@ function HomeScreen() {
   const [roomPlacements, setRoomPlacements] = useState<RoomPlacement[]>([]);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
+  const roomScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    setIosSwipeGestureEnabled({ isEnabled: false });
+    return () => { setIosSwipeGestureEnabled({ isEnabled: true }); };
+  }, []);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
   const unreadAtOpenRef = useRef<ReadonlySet<string>>(new Set());
 
@@ -197,89 +207,137 @@ function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
-        {timeOfDayTint !== null && (
-          <View
-            style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
-            pointerEvents="none"
+      <ScrollView
+        ref={roomScrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        bounces={false}
+        overScrollMode="never"
+        scrollEnabled={activeSheet === null}
+        contentOffset={{ x: SCREEN_W, y: 0 }}
+        style={styles.roomScroll}
+        contentContainerStyle={styles.roomScrollContent}
+      >
+        {/* Left panel — same room atmosphere, empty */}
+        <View style={styles.sidePanel}>
+          <Image
+            source={{ uri: ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1] }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            resizeMode="cover"
           />
-        )}
-        <View
-          style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
-          pointerEvents="none"
-        />
-        <View style={styles.bottomFade} pointerEvents="none">
-          <View style={[styles.fadeSlice, { opacity: 0.06 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.18 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.38 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
-        </View>
-        {roomPlacements.map((placement) => {
-          const item = ALL_BAG_ITEMS.find((i) => i.id === placement.itemId);
-          const slot = ZONE_SLOTS[placement.zone]?.[0];
-          if (!item || !slot) return null;
-          return (
-            <View
-              key={placement.itemId}
-              pointerEvents="none"
-              style={{ position: 'absolute', left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
-            >
-              <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
-            </View>
-          );
-        })}
-        <View style={styles.header}>
-          <View style={styles.levelCard}>
-            <View style={styles.levelRow}>
-              <Text style={styles.levelText}>Lv.{level} 소박이</Text>
-              <Text style={styles.progressLabel}>함께한 날 {recordedDaysCount} / {nextThreshold}</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.min(Math.round((recordedDaysCount / nextThreshold) * 100), 100)}%` },
-                ]}
-              />
-            </View>
-          </View>
+          {timeOfDayTint !== null && (
+            <View style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]} pointerEvents="none" />
+          )}
+          <View style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]} pointerEvents="none" />
         </View>
 
-        <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
-          <View style={styles.bubbleContainer} pointerEvents="none">
-            <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
-          </View>
-          <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
-          <View style={styles.sobagiShadow} />
-        </TouchableOpacity>
-        <View style={styles.utilityStack}>
-          <Pressable style={styles.utilityBtn} onPress={() => openSheet('bag')}>
-            {({ pressed }) => (
-              <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
-                <Image
-                  source={{ uri: UTILITY_ICON_URIS.bag }}
-                  style={styles.iconImage}
-                  resizeMode="contain"
-                />
-                {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
-              </View>
+        {/* Center panel — current room, fully unchanged */}
+        <View style={styles.centerPanel}>
+          <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
+            {timeOfDayTint !== null && (
+              <View
+                style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
+                pointerEvents="none"
+              />
             )}
-          </Pressable>
-          <Pressable style={styles.utilityBtn} onPress={() => openSheet('mailbox')}>
-            {({ pressed }) => (
-              <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
-                <Image
-                  source={{ uri: UTILITY_ICON_URIS.mailbox }}
-                  style={styles.iconImage}
-                  resizeMode="contain"
-                />
-                {mailboxUnread && <View style={styles.utilityDot} />}
+            <View
+              style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
+              pointerEvents="none"
+            />
+            <View style={styles.bottomFade} pointerEvents="none">
+              <View style={[styles.fadeSlice, { opacity: 0.06 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.18 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.38 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
+            </View>
+            {roomPlacements.map((placement) => {
+              const item = ALL_BAG_ITEMS.find((i) => i.id === placement.itemId);
+              const slot = ZONE_SLOTS[placement.zone]?.[0];
+              if (!item || !slot) return null;
+              return (
+                <View
+                  key={placement.itemId}
+                  pointerEvents="none"
+                  style={{ position: 'absolute', left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
+                >
+                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
+                </View>
+              );
+            })}
+            <View style={styles.header}>
+              <View style={styles.levelCard}>
+                <View style={styles.levelRow}>
+                  <Text style={styles.levelText}>Lv.{level} 소박이</Text>
+                  <Text style={styles.progressLabel}>함께한 날 {recordedDaysCount} / {nextThreshold}</Text>
+                </View>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.min(Math.round((recordedDaysCount / nextThreshold) * 100), 100)}%` },
+                    ]}
+                  />
+                </View>
               </View>
-            )}
-          </Pressable>
+            </View>
+
+            <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
+              <View style={styles.bubbleContainer} pointerEvents="none">
+                <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
+              </View>
+              <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
+              <View style={styles.sobagiShadow} />
+            </TouchableOpacity>
+            <View style={styles.utilityStack}>
+              <View style={styles.utilityItem}>
+                <Pressable style={styles.utilityBtn} onPress={() => openSheet('bag')}>
+                  {({ pressed }) => (
+                    <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                      <Image
+                        source={{ uri: UTILITY_ICON_URIS.bag }}
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                      {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
+                    </View>
+                  )}
+                </Pressable>
+                <Text style={styles.utilityLabel}>가방</Text>
+              </View>
+              <View style={styles.utilityItem}>
+                <Pressable style={styles.utilityBtn} onPress={() => openSheet('mailbox')}>
+                  {({ pressed }) => (
+                    <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                      <Image
+                        source={{ uri: UTILITY_ICON_URIS.mailbox }}
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                      {mailboxUnread && <View style={styles.utilityDot} />}
+                    </View>
+                  )}
+                </Pressable>
+                <Text style={styles.utilityLabel}>우편함</Text>
+              </View>
+            </View>
+          </RoomBackground>
         </View>
-      </RoomBackground>
+
+        {/* Right panel — same room atmosphere, empty */}
+        <View style={styles.sidePanel}>
+          <Image
+            source={{ uri: ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1] }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            resizeMode="cover"
+          />
+          {timeOfDayTint !== null && (
+            <View style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]} pointerEvents="none" />
+          )}
+          <View style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]} pointerEvents="none" />
+        </View>
+      </ScrollView>
 
       <View style={styles.summaryCard}>
         <DailySummary totalAmount={todayTotal} recordCount={todayExpenses.length} />
@@ -451,6 +509,19 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: COLORS.cream,
+  },
+  roomScroll: {
+    flex: 1,
+  },
+  roomScrollContent: {
+    alignItems: 'stretch',
+  },
+  centerPanel: {
+    width: SCREEN_W,
+  },
+  sidePanel: {
+    width: SCREEN_W,
+    overflow: 'hidden',
   },
   header: {
     position: 'absolute',
@@ -658,20 +729,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 118,
     left: 16,
-    gap: 14,
+    gap: 0,
+  },
+  utilityItem: {
+    alignItems: 'center',
+  },
+  utilityLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: -5,
+    lineHeight: 14,
   },
   utilityBtn: {
-    width: 44,
-    height: 44,
+    width: 60,
+    height: 60,
     justifyContent: 'center',
     alignItems: 'center',
   },
   iconWrap: {
-    width: 28,
-    height: 28,
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 6,
+    borderRadius: 12,
     // permanent borderWidth with transparent color — pressed state toggles color only, no layout shift
     borderWidth: 1,
     borderColor: 'transparent',
@@ -680,17 +760,17 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.35)',
   },
   iconImage: {
-    width: 26,
-    height: 26,
+    width: 60,
+    height: 60,
   },
   utilityDot: {
     position: 'absolute',
-    top: -1,
-    right: -1,
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#C9A87C',
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF3B30',
   },
   foundSection: {
     marginTop: 14,
