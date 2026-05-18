@@ -133,6 +133,14 @@ describe('shouldAutoSettle', () => {
 });
 
 // ─── Category-pattern path (P) ──────────────────────────────────────────────
+//
+// Safety checks (1:1 with the polish task on 2026-05-18):
+//   1. cafe records across 3+ different days triggers mug
+//   2. cafe records all on one day does NOT trigger mug
+//   3. already placed mug does NOT re-trigger
+//   4. non-cafe categories do NOT trigger mug
+//   5. old cafe records outside 14 days do NOT trigger mug
+//
 
 const makeExpense = (overrides: Partial<Expense> & Pick<Expense, 'id' | 'createdAt'>): Expense => ({
   amount: 5000,
@@ -156,17 +164,18 @@ describe('hasCategoryPattern', () => {
     expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
   });
 
-  it('returns false when records spread across too few distinct days (single-day spree)', () => {
+  // Safety check #2: cafe records all on one day does NOT trigger mug
+  it('returns false when records all fall on one day (single-day spree)', () => {
     const expenses = [
       makeExpense({ id: '1', createdAt: '2026-05-18T08:00:00' }),
       makeExpense({ id: '2', createdAt: '2026-05-18T12:00:00' }),
       makeExpense({ id: '3', createdAt: '2026-05-18T18:00:00' }),
     ];
-    // 3 records, 1 distinct day — minDistinctDays is 3, so no pattern.
     expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
   });
 
-  it('returns true when records spread across enough distinct days', () => {
+  // Safety check #1: cafe records across 3+ different days triggers mug
+  it('returns true when records span at least minDistinctDays distinct days', () => {
     const expenses = [
       makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00' }),
       makeExpense({ id: '2', createdAt: '2026-05-14T10:00:00' }),
@@ -175,7 +184,18 @@ describe('hasCategoryPattern', () => {
     expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(true);
   });
 
-  it('ignores records outside the look-back window', () => {
+  // Boundary: exactly meeting the minimum on both axes still fires.
+  it('returns true at exact minimum (minCount records / minDistinctDays days)', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-16T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-17T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(true);
+  });
+
+  // Safety check #5: old cafe records outside 14 days do NOT trigger mug
+  it('ignores records older than windowDays', () => {
     const expenses = [
       makeExpense({ id: '1', createdAt: '2026-04-01T10:00:00' }), // > 14 days ago
       makeExpense({ id: '2', createdAt: '2026-04-15T10:00:00' }), // > 14 days ago
@@ -184,6 +204,17 @@ describe('hasCategoryPattern', () => {
     expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
   });
 
+  // Boundary: a record landing inside the window edge still counts.
+  it('counts a record landing at the inner edge of the look-back window', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-05T12:00:00' }), // 13 days before today
+      makeExpense({ id: '2', createdAt: '2026-05-11T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(true);
+  });
+
+  // Safety check #4: non-cafe categories do NOT trigger mug
   it('ignores records of other categories', () => {
     const expenses = [
       makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00', category: 'food' }),
@@ -209,6 +240,7 @@ describe('pickCategoryEligibleItems', () => {
     expect(pickCategoryEligibleItems([cafeItem, otherItem], new Set(), 'cafe')).toEqual([cafeItem]);
   });
 
+  // Safety check #3: already placed mug does NOT re-trigger
   it('excludes already-placed items', () => {
     expect(pickCategoryEligibleItems([cafeItem], new Set(['mug']), 'cafe')).toHaveLength(0);
   });
@@ -258,6 +290,7 @@ describe('selectCategoryCandidate', () => {
     expect(result).toBeNull();
   });
 
+  // Safety check #3 (reinforced at the composition layer)
   it('returns null when the item is already placed even if the pattern fires', () => {
     const expenses = [
       makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00' }),

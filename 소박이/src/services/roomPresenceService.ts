@@ -80,6 +80,32 @@ export function shouldAutoSettle(
 }
 
 // ─── Implicit accumulation: category-pattern path ────────────────────────────
+//
+// Pattern-triggered presences are not rewards.
+// They are quiet traces of repeated behaviour.
+//
+// The user does not earn these by hitting a number. The mug doesn't say
+// "you reached 3 cafes!" — it just shows up in the room one day, after a
+// habit has already formed. The signal must require recurrence (not a one-day
+// burst) so that the trace honestly reflects "this is something you do",
+// not "this is something you did once".
+//
+// Gates we deliberately keep:
+//   - Recurrence (minDistinctDays) prevents single-day spending sprees from
+//     triggering. "Three cafes in one day" is data, not a habit.
+//   - Look-back window (windowDays) keeps the trace recent — a long-dormant
+//     habit shouldn't surface a presence today.
+//   - Already-placed exclusion ensures each pattern only deposits its trace
+//     once. The room absorbs the habit; it doesn't keep announcing it.
+//   - One-action-per-session (enforced in checkForPlacement) keeps the room
+//     from filling on any single app open.
+//
+// Gates we deliberately don't apply:
+//   - minDays / minDaysInBag: the behavioural pattern IS the eligibility gate.
+//     A daily cafe-goer earns the mug on day 9, not day 55.
+//   - Drift relabelling: P-path placements are already silent and don't go
+//     through pending, so the C-relabel that drift applies to B/A is moot.
+//
 
 export interface CategoryPatternOpts {
   minCount: number;        // total matching records within the window
@@ -150,6 +176,13 @@ export function selectCategoryCandidate(
 
 // Triggers config. Keep this small — one trigger at a time as a proof-of-feel
 // until the implicit-accumulation pattern is proven across multiple categories.
+//
+// Cafe → 머그컵: 3 records across 3 distinct days within 14 days.
+//   - 3 records: enough to suggest preference, not enough to feel arbitrary
+//   - 3 distinct days: recurrence — rules out a single-day spree
+//   - 14 days: recent enough that "this is something you do *now*"
+// Adjusting these later is fine; the test suite asserts the relationship
+// (recurrence beats raw count), not the specific numbers.
 const CATEGORY_TRIGGERS: ReadonlyArray<{
   category: ExpenseCategory;
   opts: CategoryPatternOpts;
