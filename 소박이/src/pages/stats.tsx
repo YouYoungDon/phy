@@ -7,11 +7,9 @@ import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString } from '../utils/date';
 import { BottomTabs } from '../components/common/BottomTabs';
-import { PhotocardView } from '../components/photocard/PhotocardView';
+import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
-import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -35,6 +33,7 @@ const PHOTOCARD_CATEGORY_LABELS: Record<string, string> = {
 };
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -163,12 +162,9 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
 function StatsScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
   const streak = useUserStore((s) => s.streak);
-  const roomStage = useUserStore((s) => s.roomStage);
-  const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
 
   const today = new Date();
   const todayStr = getLocalDateString(today);
-  const currentHour = today.getHours();
 
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -266,14 +262,28 @@ function StatsScreen() {
     [selectedExpenses, selectedDay],
   );
 
-  const photocardCategories = useMemo(
-    () => [...new Set(selectedExpenses.map((e) => PHOTOCARD_CATEGORY_LABELS[e.category] ?? e.category))],
+  const photocardRecords: PhotocardRecord[] = useMemo(
+    () => selectedExpenses.map((e) => ({
+      id: e.id,
+      category: e.category,
+      categoryLabel: PHOTOCARD_CATEGORY_LABELS[e.category] ?? e.category,
+      amount: e.amount,
+      memo: e.memo,
+    })),
     [selectedExpenses],
   );
 
   const photocardDateStr = useMemo(() => {
     const d = new Date(selectedDay + 'T00:00:00');
-    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}.${m}.${day}`;
+  }, [selectedDay]);
+
+  const photocardWeekday = useMemo(() => {
+    const d = new Date(selectedDay + 'T00:00:00');
+    return WEEKDAY_LABELS[d.getDay()];
   }, [selectedDay]);
 
   const openDayPhotocard = useCallback(() => {
@@ -565,13 +575,10 @@ function StatsScreen() {
             <PhotocardView
               quote={dayFeeling.mainLine}
               dateStr={photocardDateStr}
-              categories={photocardCategories}
+              weekdayLabel={photocardWeekday}
               amount={selectedData?.total ?? 0}
-              roomStage={roomStage}
-              backgroundUri={ROOM_BACKGROUND_URIS[roomStage]}
-              sobagiImageUri={SOBAGI_IMAGE_URIS[dayFeeling.sobagiEmotion] ?? SOBAGI_DEFAULT_URI}
-              atmosphereTint={getTimeOfDayTint(currentHour)}
-              warmthOpacity={getWarmthOpacity(recordedDaysCount)}
+              records={photocardRecords}
+              currentEmotion={dayFeeling.sobagiEmotion}
               quoteAnimated
             />
             <Animated.View

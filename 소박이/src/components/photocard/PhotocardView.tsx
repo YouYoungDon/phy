@@ -1,48 +1,80 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, Animated } from 'react-native';
-import { RoomBackground } from '../room/RoomBackground';
 import { TimeOfDayTint } from '../../services/atmosphereService';
-import { ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../../constants/bagItems';
 import { SobagiEmotion } from '../../types';
+import {
+  PhotocardMoodAsset,
+  PHOTOCARD_MOOD_URIS,
+} from '../../constants/assets';
+import {
+  getPhotocardMoodAsset,
+  PhotocardSpendingLevel,
+  PhotocardWeather,
+} from '../../services/photocardMoodService';
+
+// Public types — exported for callers
+export type PhotocardRecord = {
+  id?: string;
+  category?: string;
+  categoryLabel?: string;
+  amount: number;
+  memo?: string;
+};
+
+const CATEGORY_ICON: Record<string, string> = {
+  cafe: '☕',
+  food: '🍴',
+  transport: '🚌',
+  shopping: '🛍️',
+  other: '📦',
+};
 
 interface PhotocardViewProps {
+  // Content
   quote: string;
   dateStr: string;
-  categories: string[];
   amount: number;
-  roomStage: 1 | 2 | 3 | 4 | 5;
-  backgroundUri?: string;
-  sobagiImageUri: string;
-  atmosphereTint: TimeOfDayTint | null;
-  warmthOpacity: number;
-  quoteAnimated?: boolean;
-  placedItems?: RoomPlacement[];
+  records?: PhotocardRecord[];
+  weekdayLabel?: string;
+  timeLabel?: string;
+
+  // Mood asset — explicit override, else resolved from currentEmotion + current hour
+  moodAsset?: PhotocardMoodAsset;
   currentEmotion?: SobagiEmotion;
+  weather?: PhotocardWeather;
+  spendingLevel?: PhotocardSpendingLevel;
+
+  // Animation
+  quoteAnimated?: boolean;
+
+  // Legacy props — accepted for backward compatibility, no longer rendered in
+  // the split layout (the dynamic room scene has been replaced by mood assets).
+  categories?: string[];
+  roomStage?: 1 | 2 | 3 | 4 | 5;
+  backgroundUri?: string;
+  sobagiImageUri?: string;
+  atmosphereTint?: TimeOfDayTint | null;
+  warmthOpacity?: number;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export const CARD_WIDTH = SCREEN_WIDTH - 48;
 export const CARD_HEIGHT = Math.round(CARD_WIDTH * (16 / 9));
 
-const SOFT_SHADOW = {
-  textShadowColor: 'rgba(26, 20, 16, 0.45)',
-  textShadowOffset: { width: 0, height: 1 },
-  textShadowRadius: 4,
-};
+const VISIBLE_RECORDS = 3;
 
 export function PhotocardView({
   quote,
   dateStr,
-  categories,
   amount,
-  roomStage,
-  backgroundUri,
-  sobagiImageUri,
-  atmosphereTint,
-  warmthOpacity,
-  quoteAnimated = false,
-  placedItems,
+  records,
+  weekdayLabel,
+  timeLabel,
+  moodAsset,
   currentEmotion,
+  weather,
+  spendingLevel,
+  quoteAnimated = false,
 }: PhotocardViewProps) {
   const quoteOpacity = useRef(new Animated.Value(quoteAnimated ? 0 : 1)).current;
 
@@ -58,158 +90,254 @@ export function PhotocardView({
     return () => clearTimeout(timer);
   }, []);
 
+  const resolvedAsset: PhotocardMoodAsset =
+    moodAsset ??
+    getPhotocardMoodAsset({
+      hour: new Date().getHours(),
+      emotion: currentEmotion,
+      weather,
+      spendingLevel,
+    });
+  const assetUri = PHOTOCARD_MOOD_URIS[resolvedAsset];
+
+  const visibleRecords = (records ?? []).slice(0, VISIBLE_RECORDS);
+  const overflowCount = Math.max(0, (records?.length ?? 0) - VISIBLE_RECORDS);
+
   const displayQuote = quote.trim() || '오늘의 기록이 조용히 남았어요.';
 
   return (
     <View style={styles.card}>
-      {/* Room background */}
-      <View style={StyleSheet.absoluteFillObject}>
-        <RoomBackground stage={roomStage} backgroundUri={backgroundUri} />
-      </View>
+      <View style={styles.row}>
+        {/* LEFT — emotional visual panel (mood asset). Image fills the panel via cover;
+            tiny time badge sits top-right if provided. */}
+        <View style={styles.leftPanel}>
+          <Image source={{ uri: assetUri }} style={styles.leftImage} resizeMode="cover" />
+          {timeLabel ? (
+            <View style={styles.timeBadge} pointerEvents="none">
+              <Text style={styles.timeBadgeText}>{timeLabel}</Text>
+            </View>
+          ) : null}
+        </View>
 
-      {/* Atmosphere tint */}
-      {atmosphereTint && (
-        <View
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: atmosphereTint.color, opacity: atmosphereTint.opacity }]}
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Warmth overlay */}
-      {warmthOpacity > 0 && (
-        <View
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Room item overlay — placed items whose emotion affinity matches this moment.
-          Subtler than the home render: smaller, lower opacity, no labels. The items
-          sit inside the photographed room, behind Sobagi and the memory strip. */}
-      {placedItems && currentEmotion && placedItems.map((placement) => {
-        const item = ALL_BAG_ITEMS.find((i) => i.id === placement.itemId);
-        if (!item?.photocardAffinity?.includes(currentEmotion)) return null;
-        const slot = ZONE_SLOTS[placement.zone]?.[0];
-        if (!slot) return null;
-        return (
-          <View
-            key={placement.itemId}
-            pointerEvents="none"
-            style={{ position: 'absolute', left: slot.x * CARD_WIDTH, top: slot.y * CARD_HEIGHT }}
-          >
-            <Text style={styles.photocardRoomItemEmoji}>{item.emoji}</Text>
+        {/* RIGHT — structured spending summary on cream paper. */}
+        <View style={styles.rightPanel}>
+          <View style={styles.headerBlock}>
+            <Text style={styles.dateHeader}>{dateStr}</Text>
+            {weekdayLabel ? (
+              <Text style={styles.weekdaySub}>{weekdayLabel} · 오늘의 기록</Text>
+            ) : null}
           </View>
-        );
-      })}
 
-      {/* Composition: Sobagi left + memory strip right */}
-      <View style={styles.composition} pointerEvents="none">
-        <View style={styles.sobagiSide}>
-          <Image source={{ uri: sobagiImageUri }} style={styles.sobagiImage} resizeMode="contain" />
-        </View>
+          <View style={styles.divider} />
 
-        <View style={styles.memorySide}>
-          {amount > 0 && (
-            <Text style={styles.memoryAmount}>{amount.toLocaleString()}원</Text>
+          <View style={styles.totalBlock}>
+            <Text style={styles.totalLabel}>총 금액</Text>
+            <Text style={styles.totalAmount}>₩ {amount.toLocaleString('ko-KR')}</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          {visibleRecords.length > 0 && (
+            <View style={styles.recordsBlock}>
+              {visibleRecords.map((r, idx) => {
+                const icon = r.category ? CATEGORY_ICON[r.category] ?? '·' : '·';
+                const label = r.categoryLabel ?? r.category ?? '';
+                return (
+                  <View key={r.id ?? idx}>
+                    {idx > 0 && <View style={styles.recordDivider} />}
+                    <View style={styles.recordRow}>
+                      <View style={styles.recordIconWrap}>
+                        <Text style={styles.recordIcon}>{icon}</Text>
+                      </View>
+                      <View style={styles.recordTextCol}>
+                        <Text style={styles.recordCategory}>{label}</Text>
+                        {r.memo ? (
+                          <Text style={styles.recordMemo} numberOfLines={1}>{r.memo}</Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.recordAmount}>₩ {r.amount.toLocaleString('ko-KR')}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+              {overflowCount > 0 && (
+                <Text style={styles.overflowText}>+ {overflowCount}개 더</Text>
+              )}
+            </View>
           )}
-          {categories.length > 0 && (
-            <Text style={styles.memoryCategories}>{categories.join(' · ')}</Text>
-          )}
-          <Animated.View style={[styles.memoryQuoteWrap, { opacity: quoteOpacity }]}>
-            <Text style={styles.memoryQuote}>"{displayQuote}"</Text>
-          </Animated.View>
-        </View>
-      </View>
 
-      {/* Date — bottom-right corner, like a photograph signature */}
-      <View style={styles.dateSig} pointerEvents="none">
-        <Text style={styles.dateSigText}>{dateStr}</Text>
+          <View style={styles.spacer} />
+
+          <View style={styles.noteBlock}>
+            <Text style={styles.noteHeading}>🌱 오늘의 한 줄</Text>
+            <Animated.View style={{ opacity: quoteOpacity }}>
+              <Text style={styles.noteText}>{displayQuote}</Text>
+            </Animated.View>
+          </View>
+        </View>
       </View>
     </View>
   );
 }
 
+const PAPER_BG = '#FAF6EE';
+const PAPER_BG_SOFT = '#F3ECDE';
+const TEXT_DARK = '#3D3020';
+const TEXT_MUTED = '#7A6A56';
+const DIVIDER = 'rgba(61, 48, 32, 0.10)';
+
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
+    backgroundColor: PAPER_BG,
   },
-
-  // Horizontal composition — Sobagi left, memory strip right
-  composition: {
+  row: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 56, // bias content slightly above vertical center
-  },
-  sobagiSide: {
-    flex: 1.15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sobagiImage: {
-    width: 130,
-    height: 130,
   },
 
-  // Memory strip — soft stacked text, no boxes, no labels
-  memorySide: {
+  // ─── Left panel ─────────────────────────────────────────────────────────────
+  leftPanel: {
     flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(20, 10, 4, 0.14)',
-    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: PAPER_BG_SOFT,
   },
-  memoryAmount: {
-    fontSize: 17,
-    fontWeight: '300',
-    color: 'rgba(255, 253, 248, 0.92)',
-    letterSpacing: 0.3,
-    marginBottom: 3,
-    ...SOFT_SHADOW,
+  leftImage: {
+    width: '100%',
+    height: '100%',
   },
-  memoryCategories: {
-    fontSize: 10,
-    color: 'rgba(255, 253, 248, 0.60)',
-    letterSpacing: 0.5,
-    fontStyle: 'italic',
-    marginBottom: 10,
-    textShadowColor: 'rgba(26, 20, 16, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  memoryQuoteWrap: {},
-  memoryQuote: {
-    fontSize: 10,
-    fontStyle: 'italic',
-    color: 'rgba(255, 253, 248, 0.84)',
-    lineHeight: 15,
-    ...SOFT_SHADOW,
-  },
-
-  // Room item overlay — emoji-only, no label, no animation, sits inside the room
-  photocardRoomItemEmoji: {
-    fontSize: 13,
-    opacity: 0.45,
-  },
-
-  // Date signature — bottom-right, barely visible
-  dateSig: {
+  timeBadge: {
     position: 'absolute',
-    bottom: 14,
-    right: 18,
+    top: 12,
+    right: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(250, 246, 238, 0.78)',
   },
-  dateSigText: {
-    fontSize: 9,
-    fontStyle: 'italic',
-    color: 'rgba(255, 253, 248, 0.40)',
+  timeBadgeText: {
+    fontSize: 10,
+    color: TEXT_DARK,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+
+  // ─── Right panel ────────────────────────────────────────────────────────────
+  rightPanel: {
+    flex: 1,
+    backgroundColor: PAPER_BG,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+  },
+  headerBlock: {
+    marginBottom: 10,
+  },
+  dateHeader: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT_DARK,
     letterSpacing: 0.4,
-    textShadowColor: 'rgba(26, 20, 16, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+  },
+  weekdaySub: {
+    fontSize: 10,
+    color: TEXT_MUTED,
+    marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: DIVIDER,
+    marginVertical: 10,
+  },
+  totalBlock: {
+    gap: 4,
+  },
+  totalLabel: {
+    fontSize: 10,
+    color: TEXT_MUTED,
+    letterSpacing: 0.3,
+  },
+  totalAmount: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    letterSpacing: 0.5,
+  },
+  recordsBlock: {
+    gap: 0,
+  },
+  recordDivider: {
+    height: 1,
+    backgroundColor: DIVIDER,
+    marginVertical: 8,
+  },
+  recordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recordIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: PAPER_BG_SOFT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordIcon: {
+    fontSize: 12,
+  },
+  recordTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  recordCategory: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: TEXT_DARK,
+    letterSpacing: 0.2,
+  },
+  recordMemo: {
+    fontSize: 10,
+    color: TEXT_MUTED,
+    marginTop: 1,
+  },
+  recordAmount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: TEXT_DARK,
+    letterSpacing: 0.2,
+  },
+  overflowText: {
+    fontSize: 10,
+    color: TEXT_MUTED,
+    marginTop: 8,
+    textAlign: 'right',
+  },
+  spacer: {
+    flex: 1,
+    minHeight: 8,
+  },
+  noteBlock: {
+    backgroundColor: PAPER_BG_SOFT,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  noteHeading: {
+    fontSize: 10,
+    color: TEXT_MUTED,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    marginBottom: 6,
+  },
+  noteText: {
+    fontSize: 12,
+    color: TEXT_DARK,
+    lineHeight: 18,
+    letterSpacing: 0.2,
   },
 });
