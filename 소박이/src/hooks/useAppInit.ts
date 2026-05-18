@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import * as storageService from '../services/storageService';
 import { promoteStaged, checkForFoundItem } from '../services/foundItemService';
 import { checkAndDeliverLetters } from '../services/letterService';
+import { checkForPlacement } from '../services/roomPresenceService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { VALID_EMOTIONS, EMOTION_MESSAGES } from '../constants/emotion';
 import { useExpenseStore } from '../store/expenseStore';
@@ -62,6 +63,8 @@ export function useAppInit(): boolean {
           lastEmotionRaw != null && VALID_EMOTIONS.includes(lastEmotionRaw as SobagiEmotion)
             ? (lastEmotionRaw as SobagiEmotion)
             : 'happy';
+
+        await checkForPlacement(emotion, recomputedDays, prevVisitDate);
 
         useEmotionStore.setState({
           currentEmotion: emotion,

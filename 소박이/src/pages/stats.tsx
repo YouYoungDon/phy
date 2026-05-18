@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Animated } from 'react-native';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated, TextInput, Keyboard, Platform } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
@@ -7,10 +7,9 @@ import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString } from '../utils/date';
 import { BottomTabs } from '../components/common/BottomTabs';
-import { PhotocardView } from '../components/photocard/PhotocardView';
+import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
-import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -34,6 +33,7 @@ const PHOTOCARD_CATEGORY_LABELS: Record<string, string> = {
 };
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -131,12 +131,12 @@ function MonthTrendGraph({ viewYear, viewMonth, daysInMonth, expensesByDate }: T
 
 // ─── Day expense list ─────────────────────────────────────────────────────────
 
-function ExpenseList({ expenses }: { expenses: Expense[] }) {
+function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (expense: Expense) => void }) {
   if (expenses.length === 0) return null;
   return (
     <View style={styles.expenseList}>
       {expenses.map((e, idx) => (
-        <View key={e.id}>
+        <Pressable key={e.id} onPress={() => onPress?.(e)}>
           {idx > 0 && <View style={styles.recordDivider} />}
           <View style={styles.recordRow}>
             <Text style={styles.recordCategory}>{CATEGORY_LABELS[e.category]}</Text>
@@ -145,12 +145,13 @@ function ExpenseList({ expenses }: { expenses: Expense[] }) {
                 <Text style={styles.recordEmotion}>{e.userEmotion}</Text>
               ) : null}
               <Text style={styles.recordAmount}>{e.amount.toLocaleString()}원</Text>
+              {onPress && <Text style={styles.recordChevron}>›</Text>}
             </View>
           </View>
           {e.memo ? (
             <Text style={styles.recordMemo}>{e.memo}</Text>
           ) : null}
-        </View>
+        </Pressable>
       ))}
     </View>
   );
@@ -161,12 +162,9 @@ function ExpenseList({ expenses }: { expenses: Expense[] }) {
 function StatsScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
   const streak = useUserStore((s) => s.streak);
-  const roomStage = useUserStore((s) => s.roomStage);
-  const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
 
   const today = new Date();
   const todayStr = getLocalDateString(today);
-  const currentHour = today.getHours();
 
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -264,14 +262,28 @@ function StatsScreen() {
     [selectedExpenses, selectedDay],
   );
 
-  const photocardCategories = useMemo(
-    () => [...new Set(selectedExpenses.map((e) => PHOTOCARD_CATEGORY_LABELS[e.category] ?? e.category))],
+  const photocardRecords: PhotocardRecord[] = useMemo(
+    () => selectedExpenses.map((e) => ({
+      id: e.id,
+      category: e.category,
+      categoryLabel: PHOTOCARD_CATEGORY_LABELS[e.category] ?? e.category,
+      amount: e.amount,
+      memo: e.memo,
+    })),
     [selectedExpenses],
   );
 
   const photocardDateStr = useMemo(() => {
     const d = new Date(selectedDay + 'T00:00:00');
-    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}.${m}.${day}`;
+  }, [selectedDay]);
+
+  const photocardWeekday = useMemo(() => {
+    const d = new Date(selectedDay + 'T00:00:00');
+    return WEEKDAY_LABELS[d.getDay()];
   }, [selectedDay]);
 
   const openDayPhotocard = useCallback(() => {
@@ -289,6 +301,61 @@ function StatsScreen() {
   const closeDayPhotocard = useCallback(() => {
     setShowDayPhotocard(false);
   }, []);
+
+  // ─── Edit sheet state ────────────────────────────────────────────────────────
+
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editCategory, setEditCategory] = useState<ExpenseCategory>('cafe');
+  const [editMemo, setEditMemo] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [editSheetBottom, setEditSheetBottom] = useState(0);
+  const editSheetAnim = useRef(new Animated.Value(500)).current;
+
+  useEffect(() => {
+    if (editingExpense === null) return;
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, (e) => setEditSheetBottom(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvt, () => setEditSheetBottom(0));
+    return () => { show.remove(); hide.remove(); };
+  }, [editingExpense]);
+
+  const openEdit = useCallback((expense: Expense) => {
+    setEditingExpense(expense);
+    setEditAmount(String(expense.amount));
+    setEditCategory(expense.category);
+    setEditMemo(expense.memo ?? '');
+    setDeleteConfirm(false);
+    Animated.spring(editSheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
+  }, [editSheetAnim]);
+
+  const closeEdit = useCallback(() => {
+    Keyboard.dismiss();
+    Animated.timing(editSheetAnim, { toValue: 500, duration: 210, useNativeDriver: true }).start(() => {
+      setEditingExpense(null);
+      setDeleteConfirm(false);
+      setEditSheetBottom(0);
+    });
+  }, [editSheetAnim]);
+
+  const commitEdit = useCallback(() => {
+    if (!editingExpense) return;
+    const parsed = parseInt(editAmount.replace(/[^0-9]/g, ''), 10);
+    if (isNaN(parsed) || parsed <= 0) return;
+    persistUpdateExpense(editingExpense.id, {
+      amount: parsed,
+      category: editCategory,
+      memo: editMemo.trim() || undefined,
+    });
+    closeEdit();
+  }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
+
+  const commitDelete = useCallback(() => {
+    if (!editingExpense) return;
+    persistDeleteExpense(editingExpense.id);
+    closeEdit();
+  }, [editingExpense, closeEdit]);
 
   return (
     <View style={styles.screen}>
@@ -366,7 +433,7 @@ function StatsScreen() {
               <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
               <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
             </View>
-            <ExpenseList expenses={selectedExpenses} />
+            <ExpenseList expenses={selectedExpenses} onPress={openEdit} />
           </View>
         )}
 
@@ -422,6 +489,85 @@ function StatsScreen() {
 
       <BottomTabs activeRoute="/stats" />
 
+      {/* Edit backdrop */}
+      {editingExpense !== null && (
+        <Pressable style={styles.editBackdrop} onPress={closeEdit} />
+      )}
+
+      {/* Edit sheet */}
+      <Animated.View
+        style={[styles.editSheet, { transform: [{ translateY: editSheetAnim }], bottom: editSheetBottom }]}
+        pointerEvents={editingExpense !== null ? 'auto' : 'none'}
+      >
+        <Text style={styles.editSheetTitle}>기록을 조금 고칠게요</Text>
+
+        <Text style={styles.editFieldLabel}>금액</Text>
+        <TextInput
+          style={styles.editAmountInput}
+          value={editAmount}
+          onChangeText={setEditAmount}
+          keyboardType="number-pad"
+          placeholder="0"
+          placeholderTextColor={COLORS.textLight}
+          returnKeyType="done"
+          onSubmitEditing={Keyboard.dismiss}
+        />
+
+        <Text style={styles.editFieldLabel}>분류</Text>
+        <View style={styles.editCategoryRow}>
+          {(Object.keys(CATEGORY_LABELS) as ExpenseCategory[]).map((cat) => (
+            <Pressable
+              key={cat}
+              style={[styles.editCatPill, editCategory === cat && styles.editCatPillActive]}
+              onPress={() => setEditCategory(cat)}
+            >
+              <Text style={[styles.editCatPillText, editCategory === cat && styles.editCatPillTextActive]}>
+                {CATEGORY_LABELS[cat]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.editFieldLabel}>메모 (선택)</Text>
+        <TextInput
+          style={styles.editMemoInput}
+          value={editMemo}
+          onChangeText={setEditMemo}
+          placeholder="없으면 비워두세요"
+          placeholderTextColor={COLORS.textLight}
+          returnKeyType="done"
+          onSubmitEditing={Keyboard.dismiss}
+          maxLength={60}
+        />
+
+        <View style={styles.editActionRow}>
+          <Pressable style={styles.editSaveBtn} onPress={commitEdit}>
+            <Text style={styles.editSaveBtnText}>고쳐두기</Text>
+          </Pressable>
+          <Pressable style={styles.editCancelBtn} onPress={closeEdit}>
+            <Text style={styles.editCancelBtnText}>취소</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.editDeleteArea}>
+          {!deleteConfirm ? (
+            <Pressable onPress={() => setDeleteConfirm(true)}>
+              <Text style={styles.editDeleteTriggerText}>삭제</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.editDeleteConfirmRow}>
+              <Text style={styles.editDeleteConfirmLabel}>이 기록을 지울까요?</Text>
+              <Pressable onPress={commitDelete}>
+                <Text style={styles.editDeleteYesText}>지우기</Text>
+              </Pressable>
+              <Pressable onPress={() => setDeleteConfirm(false)}>
+                <Text style={styles.editDeleteNoText}>아니요</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      </Animated.View>
+
       {/* Photocard modal — full-screen dark overlay */}
       {showDayPhotocard && dayFeeling && (
         <Pressable style={styles.photocardModal} onPress={closeDayPhotocard}>
@@ -429,13 +575,10 @@ function StatsScreen() {
             <PhotocardView
               quote={dayFeeling.mainLine}
               dateStr={photocardDateStr}
-              categories={photocardCategories}
+              weekdayLabel={photocardWeekday}
               amount={selectedData?.total ?? 0}
-              roomStage={roomStage}
-              backgroundUri={ROOM_BACKGROUND_URIS[roomStage]}
-              sobagiImageUri={SOBAGI_IMAGE_URIS[dayFeeling.sobagiEmotion] ?? SOBAGI_DEFAULT_URI}
-              atmosphereTint={getTimeOfDayTint(currentHour)}
-              warmthOpacity={getWarmthOpacity(recordedDaysCount)}
+              records={photocardRecords}
+              currentEmotion={dayFeeling.sobagiEmotion}
               quoteAnimated
             />
             <Animated.View
@@ -562,6 +705,11 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     lineHeight: 16,
   },
+  recordChevron: {
+    fontSize: 14,
+    color: COLORS.textLight,
+    marginLeft: 4,
+  },
 
   // Photocard entry button
   photocardEntryBtn: {
@@ -642,6 +790,136 @@ const styles = StyleSheet.create({
   closeHintText: {
     fontSize: 15,
     color: 'rgba(255, 255, 255, 0.6)',
+  },
+
+  // Edit sheet
+  editBackdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  editSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 40,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 10,
+  },
+  editSheetTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  editFieldLabel: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  editAmountInput: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  editCategoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  editCatPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+  },
+  editCatPillActive: {
+    backgroundColor: COLORS.oliveGreen,
+  },
+  editCatPillText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  editCatPillTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  editMemoInput: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 13,
+    color: COLORS.text,
+  },
+  editActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  editSaveBtn: {
+    flex: 1,
+    backgroundColor: COLORS.oliveGreen,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  editSaveBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  editCancelBtn: {
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+  },
+  editCancelBtnText: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+  },
+  editDeleteArea: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  editDeleteTriggerText: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  editDeleteConfirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  editDeleteConfirmLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  editDeleteYesText: {
+    fontSize: 12,
+    color: '#C96A45',
+    fontWeight: '600',
+  },
+  editDeleteNoText: {
+    fontSize: 12,
+    color: COLORS.textLight,
   },
 });
 

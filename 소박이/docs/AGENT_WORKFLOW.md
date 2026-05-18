@@ -7,14 +7,14 @@ The goal is a small, emotionally-focused creative team — not enterprise projec
 
 ---
 
-## 1. The Three Living Documents
+## 1. The Living Documents
 
-Every agent reads and (when relevant) updates these three files. They are the single source of truth.
+Every agent reads and (when relevant) updates these three files before touching code. Full update rules are in `SOBAGI_CURRENT_STATE.md §Update Rules`.
 
 | Document | Role | Update frequency |
 |---|---|---|
 | `docs/SOBAGI_PHILOSOPHY.md` | Emotional anchor — tone rules, anti-patterns, what the product is | Rare; only on explicit product decisions |
-| `docs/SOBAGI_CURRENT_STATE.md` | Technical + UX snapshot — what is built, what is partial, what is planned | When a system changes status |
+| `docs/SOBAGI_CURRENT_STATE.md` | Single operational source of truth — system status, storage keys, known issues, latest handoff | When a system changes status or a handoff is written |
 | `docs/SOBAGI_NEXT_PRIORITIES.md` | Current work queue — ordered list of what to do next | Before starting work; after finishing |
 
 ### Update rules
@@ -26,14 +26,21 @@ Every agent reads and (when relevant) updates these three files. They are the si
 
 **SOBAGI_CURRENT_STATE.md**
 - Update when a system moves from one status category to another (partial → complete, planned → partial)
-- Update when new known issues are discovered
+- Update when new known issues are discovered or resolved
 - Update when storage keys change
-- Do NOT update just because code changed internally — only update when the system's role or visibility changes
+- Do NOT update just because code changed internally — only when the system's role or status changes
+- Do NOT accumulate historical notes, "as of date X" summaries, or narrative logs — the document represents now, not then
+- Completed work: one row in the System Status table. Detail stays in the spec/plan file and commit history
 
 **SOBAGI_NEXT_PRIORITIES.md**
 - Update at the start of work (claim the item you're taking)
 - Update at the end of work (mark done, surface what's next)
 - Keep it short — 15 items max, strictly ordered
+
+**docs/archive/** (read-only for agents)
+- Contains dated project-state snapshots (`project-state-YYYY-MM-DD.md`) and superseded planning documents
+- Never authoritative — if archive contradicts CURRENT_STATE, CURRENT_STATE wins
+- Do not move spec or plan files here until the feature is shipped and the file will never be referenced again
 
 ---
 
@@ -245,11 +252,26 @@ Test cases that QA should always run for any new dialogue or UX:
 
 When documents conflict, this is the resolution order:
 
-1. `SOBAGI_PHILOSOPHY.md` — highest authority; if a plan contradicts it, stop
-2. `SOBAGI_CURRENT_STATE.md` — authoritative on current state; if a plan is out of date, the state doc wins
-3. Spec files (`docs/superpowers/specs/`) — approved designs; if implementation deviates, document why
-4. Plan files (`docs/superpowers/plans/`) — implementation guidance; plans may be stale, read carefully
-5. Code — actual truth of what runs; the docs should reflect the code, not the other way around
+```
+SOBAGI_PHILOSOPHY.md          highest authority — if a plan contradicts it, stop
+        ↓
+SOBAGI_CURRENT_STATE.md       authoritative on current state — if a plan is out of date, state wins
+        ↓
+SOBAGI_NEXT_PRIORITIES.md     authoritative on what to do next
+        ↓
+docs/superpowers/specs/       approved designs — if implementation deviates, document why
+docs/superpowers/plans/       implementation guidance — plans may be stale; read carefully
+        ↓
+docs/archive/                 historical only — never authoritative on current state
+        ↓
+code                          final truth of what runs; docs should reflect code, not vice versa
+```
+
+**Practical resolution:**
+- If a spec calls for something PHILOSOPHY forbids → stop, surface to product owner
+- If a plan is out of date → follow current state doc + code, not the plan
+- If an archived snapshot contradicts current state → archived snapshot is wrong, ignore it
+- If code and CURRENT_STATE disagree → update CURRENT_STATE to match code
 
 ---
 

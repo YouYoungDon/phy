@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
@@ -12,12 +12,13 @@ import { useUserStore, getNextThreshold } from '../store/userStore';
 import { useAppInit } from '../hooks/useAppInit';
 import { getLocalDateString } from '../utils/date';
 import { COLORS } from '../constants/colors';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS } from '../constants/assets';
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
+import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -35,39 +36,6 @@ function buildLetterLookup(): Map<string, MailboxLetter> {
 
 const LETTER_LOOKUP = buildLetterLookup();
 
-type BagTab = '장신구' | '재료' | '간식' | '장난감';
-const BAG_TABS: BagTab[] = ['장신구', '재료', '간식', '장난감'];
-
-type BagItem = { id: string; emoji: string; name: string; desc: string; minDays: number };
-
-const BAG_ITEMS: Record<BagTab, BagItem[]> = {
-  장신구: [
-    { id: 'a1', emoji: '🌸', name: '꽃잎 핀',    desc: '봄날에 주운 꽃잎이에요. 아직 향이 남아있는 것 같아요.',        minDays: 0  },
-    { id: 'a2', emoji: '🌿', name: '잎새 브로치', desc: '창문에 기대다가 발견했어요. 잘 어울려요.',                    minDays: 5  },
-    { id: 'a3', emoji: '🌙', name: '달 반지',     desc: '밤에 살짝 반짝이는 작은 반지예요. 소박이가 아끼는 물건이에요.', minDays: 14 },
-    { id: 'a4', emoji: '🎀', name: '작은 리본',   desc: '소박이가 아끼는 작은 리본이에요 🌿',                         minDays: 25 },
-  ],
-  재료: [
-    { id: 'm1', emoji: '🍃', name: '찻잎',    desc: '은은한 향이 나요. 차 한 잔 마시면 마음이 편해져요.',  minDays: 0  },
-    { id: 'm2', emoji: '🌰', name: '도토리',   desc: '산책하다 주웠어요. 특별한 이유는 없어요.',            minDays: 7  },
-    { id: 'm3', emoji: '🍯', name: '꿀병',     desc: '달콤한 꿀이 가득 들어있어요. 가끔 한 숟갈씩 먹어요.', minDays: 18 },
-    { id: 'm4', emoji: '🪵', name: '나뭇조각', desc: '결이 부드럽고 따뜻한 나뭇조각이에요.',               minDays: 32 },
-  ],
-  간식: [
-    { id: 's1', emoji: '🍪', name: '버터 쿠키',   desc: '바삭하고 달콤해요. 소박이가 가장 좋아하는 간식이에요.', minDays: 0  },
-    { id: 's2', emoji: '🍡', name: '쑥 경단',     desc: '쑥향이 은은하게 나요. 봄에 만든 거예요.',             minDays: 10 },
-    { id: 's3', emoji: '☕', name: '따뜻한 커피', desc: '식기 전에 마셔요. 한 모금이면 마음이 따뜻해져요.',    minDays: 20 },
-    { id: 's4', emoji: '🍞', name: '작은 빵',     desc: '갓 구운 빵이에요. 아직 따뜻해요.',                   minDays: 35 },
-  ],
-  장난감: [
-    { id: 't1', emoji: '🪀', name: '요요',     desc: '잘 못 하는데 그냥 갖고 있어요.',                               minDays: 3  },
-    { id: 't2', emoji: '🎈', name: '작은 풍선', desc: '언제 들고 온 건지 모르겠지만, 아직 팡 안 터졌어요.',            minDays: 12 },
-    { id: 't3', emoji: '🌀', name: '팽이',     desc: '조용히 돌아가는 걸 보고 있으면 마음이 고요해져요.',              minDays: 22 },
-    { id: 't4', emoji: '🧸', name: '작은 곰',  desc: '오래된 곰 인형이에요. 낡았지만 소박이가 아껴요.',               minDays: 40 },
-  ],
-};
-
-const ALL_BAG_ITEMS = Object.values(BAG_ITEMS).flat();
 
 const IDLE_MESSAGES = [
   '반가워요 🌿',
@@ -119,6 +87,8 @@ function HomeScreen() {
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
   const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
   const [hasNewBagItem, setHasNewBagItem] = useState(false);
+  const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
+  const [roomPlacements, setRoomPlacements] = useState<RoomPlacement[]>([]);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -131,7 +101,8 @@ function HomeScreen() {
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
       storageService.load<number>(STORAGE_KEYS.LAST_BAG_OPEN_DAYS),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays]) => {
+      storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays, placements]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) {
@@ -143,6 +114,7 @@ function HomeScreen() {
       if (ALL_BAG_ITEMS.some((item) => item.minDays > days && item.minDays <= recordedDaysCount)) {
         setHasNewBagItem(true);
       }
+      if (placements) setRoomPlacements(placements);
     });
   }, []);
 
@@ -178,6 +150,15 @@ function HomeScreen() {
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
   }, [sheetAnim, readIds, recordedDaysCount]);
 
+  const toggleLetterExpand = useCallback((id: string) => {
+    setExpandedReadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
   const closeSheet = useCallback(() => {
     const closingSheet = activeSheetRef.current;
     Animated.timing(sheetAnim, { toValue: 400, duration: 210, useNativeDriver: true }).start(() => {
@@ -185,6 +166,7 @@ function HomeScreen() {
       setActiveSheet(null);
       setSelectedBagItem(null);
       setSelectedFoundItem(null);
+      setExpandedReadIds(new Set());
       if (closingSheet === 'bag' && pendingRef.current !== null) {
         pendingRef.current = null;
         setPendingNewItemId(null);
@@ -216,62 +198,94 @@ function HomeScreen() {
   return (
     <View style={styles.root}>
       <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
-        {timeOfDayTint !== null && (
-          <View
-            style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
-            pointerEvents="none"
-          />
-        )}
-        <View
-          style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
-          pointerEvents="none"
-        />
-        <View style={styles.bottomFade} pointerEvents="none">
-          <View style={[styles.fadeSlice, { opacity: 0.06 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.18 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.38 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
-          <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
-        </View>
-        <View style={styles.header}>
-          <View style={styles.levelCard}>
-            <View style={styles.levelRow}>
-              <Text style={styles.levelText}>Lv.{level} 소박이</Text>
-              <Text style={styles.progressLabel}>함께한 날 {recordedDaysCount} / {nextThreshold}</Text>
-            </View>
-            <View style={styles.progressTrack}>
+            {timeOfDayTint !== null && (
               <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.min(Math.round((recordedDaysCount / nextThreshold) * 100), 100)}%` },
-                ]}
+                style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
+                pointerEvents="none"
               />
+            )}
+            <View
+              style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
+              pointerEvents="none"
+            />
+            <View style={styles.bottomFade} pointerEvents="none">
+              <View style={[styles.fadeSlice, { opacity: 0.06 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.18 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.38 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
+              <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
             </View>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.propMailbox} onPress={() => openSheet('mailbox')} activeOpacity={0.7}>
-          <Text style={styles.propIconMailbox}>📬</Text>
-          {mailboxUnread && (
-            <View style={styles.propBadge}>
-              <Text style={styles.propBadgeText}>!</Text>
+            {roomPlacements.map((placement) => {
+              const item = ALL_BAG_ITEMS.find((i) => i.id === placement.itemId);
+              const slot = ZONE_SLOTS[placement.zone]?.[0];
+              if (!item || !slot) return null;
+              return (
+                <View
+                  key={placement.itemId}
+                  pointerEvents="none"
+                  style={{ position: 'absolute', left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
+                >
+                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
+                </View>
+              );
+            })}
+            <View style={styles.header}>
+              <View style={styles.levelCard}>
+                <View style={styles.levelRow}>
+                  <Text style={styles.levelText}>Lv.{level} 소박이</Text>
+                  <Text style={styles.progressLabel}>함께한 날 {recordedDaysCount} / {nextThreshold}</Text>
+                </View>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.min(Math.round((recordedDaysCount / nextThreshold) * 100), 100)}%` },
+                    ]}
+                  />
+                </View>
+              </View>
             </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.propBag} onPress={() => openSheet('bag')} activeOpacity={0.7}>
-          <Text style={styles.propIconBag}>🎒</Text>
-          <View style={styles.propBagShadow} />
-          {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.bagDot} />}
-        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
-          <View style={styles.bubbleContainer} pointerEvents="none">
-            <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
-          </View>
-          <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
-          <View style={styles.sobagiShadow} />
-        </TouchableOpacity>
-      </RoomBackground>
+            <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
+              <View style={styles.bubbleContainer} pointerEvents="none">
+                <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
+              </View>
+              <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
+              <View style={styles.sobagiShadow} />
+            </TouchableOpacity>
+            <View style={styles.utilityStack}>
+              <View style={styles.utilityItem}>
+                <Pressable style={styles.utilityBtn} onPress={() => openSheet('bag')}>
+                  {({ pressed }) => (
+                    <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                      <Image
+                        source={{ uri: UTILITY_ICON_URIS.bag }}
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                      {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
+                    </View>
+                  )}
+                </Pressable>
+                <Text style={styles.utilityLabel}>가방</Text>
+              </View>
+              <View style={styles.utilityItem}>
+                <Pressable style={styles.utilityBtn} onPress={() => openSheet('mailbox')}>
+                  {({ pressed }) => (
+                    <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                      <Image
+                        source={{ uri: UTILITY_ICON_URIS.mailbox }}
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                      {mailboxUnread && <View style={styles.utilityDot} />}
+                    </View>
+                  )}
+                </Pressable>
+                <Text style={styles.utilityLabel}>우편함</Text>
+              </View>
+            </View>
+          </RoomBackground>
 
       <View style={styles.summaryCard}>
         <DailySummary totalAmount={todayTotal} recordCount={todayExpenses.length} />
@@ -289,24 +303,44 @@ function HomeScreen() {
         {activeSheet === 'mailbox' && (
           <View>
             <Text style={styles.sheetTitle}>편지함</Text>
-            {[...deliveredLetterIds].reverse().map((id, idx) => {
-              const letter = LETTER_LOOKUP.get(id);
-              if (!letter) return null;
-              const isNew = unreadAtOpenRef.current.has(id);
-              return (
-                <View key={id} style={[styles.letterCard, idx > 0 && styles.letterCardSpacing]}>
-                  {isNew && (
-                    <View style={styles.letterHeader}>
-                      <View style={styles.newBadge}>
-                        <Text style={styles.newBadgeText}>새 편지</Text>
-                      </View>
-                    </View>
-                  )}
-                  <Text style={styles.letterText}>{letter.body}</Text>
-                  <Text style={styles.letterSig}>{letter.sig}</Text>
-                </View>
-              );
-            })}
+            {deliveredLetterIds.length === 0 ? (
+              <Text style={styles.mailboxEmpty}>아직 도착한 편지가 없어요 🌿</Text>
+            ) : (
+              <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
+                {[...deliveredLetterIds].reverse().map((id, idx) => {
+                  const letter = LETTER_LOOKUP.get(id);
+                  if (!letter) return null;
+                  const isNew = unreadAtOpenRef.current.has(id);
+                  const isExpanded = isNew || expandedReadIds.has(id);
+                  const firstLine = letter.body.split('\n')[0] ?? letter.body;
+                  const preview = firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
+                  return (
+                    <Pressable
+                      key={id}
+                      style={[
+                        styles.letterCard,
+                        idx > 0 && styles.letterCardSpacing,
+                        isNew && styles.letterCardNew,
+                        !isExpanded && styles.letterCardCollapsed,
+                      ]}
+                      onPress={() => { if (!isNew) toggleLetterExpand(id); }}
+                    >
+                      {isExpanded ? (
+                        <>
+                          <Text style={styles.letterText}>{letter.body}</Text>
+                          <Text style={styles.letterSig}>{letter.sig}</Text>
+                        </>
+                      ) : (
+                        <View style={styles.letterFolded}>
+                          <Text style={styles.letterFoldedPreview} numberOfLines={1}>{preview}</Text>
+                          <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         )}
         {activeSheet === 'bag' && (
@@ -507,51 +541,6 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: COLORS.card,
   },
-  propMailbox: {
-    position: 'absolute',
-    top: '28%',
-    right: 20,
-    padding: 8,
-  },
-  propBag: {
-    position: 'absolute',
-    top: '58%',
-    left: 18,
-    padding: 8,
-  },
-  propIconMailbox: {
-    fontSize: 26,
-    opacity: 0.76,
-  },
-  propIconBag: {
-    fontSize: 30,
-    opacity: 0.90,
-  },
-  propBagShadow: {
-    width: 20,
-    height: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(61,48,32,0.10)',
-    alignSelf: 'center',
-    marginTop: -2,
-  },
-  propBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#C96A45',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  propBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#fff',
-    lineHeight: 11,
-  },
   sheetBackdrop: {
     position: 'absolute',
     top: 0,
@@ -671,14 +660,52 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 20,
   },
-  bagDot: {
+  utilityStack: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#C9A87C',
+    top: 118,
+    left: 16,
+    gap: 0,
+  },
+  utilityItem: {
+    alignItems: 'center',
+  },
+  utilityLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: -5,
+    lineHeight: 14,
+  },
+  utilityBtn: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconWrap: {
+    width: 60,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    // permanent borderWidth with transparent color — pressed state toggles color only, no layout shift
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  iconWrapPressed: {
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  iconImage: {
+    width: 60,
+    height: 60,
+  },
+  utilityDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF3B30',
   },
   foundSection: {
     marginTop: 14,
@@ -722,6 +749,15 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
   },
+  mailboxEmpty: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    paddingVertical: 20,
+    textAlign: 'center',
+  },
+  letterScroll: {
+    maxHeight: 420,
+  },
   letterCard: {
     backgroundColor: COLORS.surface,
     borderRadius: 14,
@@ -729,28 +765,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   letterCardSpacing: {
-    marginTop: 12,
+    marginTop: 10,
   },
-  letterHeader: {
+  letterCardNew: {
+    backgroundColor: '#FAF0E2',
+  },
+  letterCardCollapsed: {
+    paddingVertical: 10,
+    opacity: 0.6,
+  },
+  letterFolded: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
-  letterDate: {
-    fontSize: 11,
+  letterFoldedPreview: {
+    flex: 1,
+    fontSize: 13,
     color: COLORS.textMuted,
-    fontWeight: '500',
+    fontStyle: 'italic',
   },
-  newBadge: {
-    backgroundColor: '#C96A45',
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  newBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#fff',
+  letterFoldedSig: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    fontStyle: 'italic',
+    flexShrink: 0,
   },
   letterText: {
     fontSize: 14,
@@ -762,5 +802,9 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontStyle: 'italic',
     textAlign: 'right',
+  },
+  roomItemEmoji: {
+    fontSize: 16,
+    opacity: 0.60,
   },
 });

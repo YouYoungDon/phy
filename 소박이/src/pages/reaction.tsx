@@ -2,15 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { SobagiReaction } from '../components/sobagi/SobagiReaction';
-import { PhotocardView } from '../components/photocard/PhotocardView';
+import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { COLORS } from '../constants/colors';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
+import { SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 import { SobagiEmotion } from '../types';
 import { useUserStore } from '../store/userStore';
 import { getDialogueTier } from '../services/dialogueService';
-import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
@@ -25,8 +24,21 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: '기타',
 };
 
-function formatKoreanDate(date: Date): string {
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+
+function formatNumericDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}.${m}.${d}`;
+}
+
+function formatTimeLabel(date: Date): string {
+  const h = date.getHours();
+  const m = String(date.getMinutes()).padStart(2, '0');
+  const isAm = h < 12;
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${isAm ? '오전' : '오후'} ${h12}:${m}`;
 }
 
 function getReactionTitle(emotion: SobagiEmotion, tier: 1 | 2 | 3): string {
@@ -85,7 +97,6 @@ function SobagiReactionScreen() {
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const currentMessage = useEmotionStore((s) => s.currentMessage);
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
-  const roomStage = useUserStore((s) => s.roomStage);
   const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
   const tier = getDialogueTier(recordedDaysCount);
 
@@ -101,9 +112,17 @@ function SobagiReactionScreen() {
   // Computed once at mount — expenses are already loaded when reaction screen renders
   const todayExpenses = getTodayExpenses();
   const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const todayCategories = [...new Set(todayExpenses.map((e) => CATEGORY_LABELS[e.category] ?? e.category))];
-  const dateStr = formatKoreanDate(new Date());
-  const currentHour = new Date().getHours();
+  const now = new Date();
+  const dateStr = formatNumericDate(now);
+  const weekdayLabel = WEEKDAY_LABELS[now.getDay()];
+  const timeLabel = formatTimeLabel(now);
+  const photocardRecords: PhotocardRecord[] = todayExpenses.map((e) => ({
+    id: e.id,
+    category: e.category,
+    categoryLabel: CATEGORY_LABELS[e.category] ?? e.category,
+    amount: e.amount,
+    memo: e.memo,
+  }));
 
   const handleClose = useCallback(() => {
     navigation.reset({ index: 0, routes: [{ name: '/' }] });
@@ -191,13 +210,11 @@ function SobagiReactionScreen() {
             <PhotocardView
               quote={currentMessage}
               dateStr={dateStr}
-              categories={todayCategories}
+              weekdayLabel={weekdayLabel}
+              timeLabel={timeLabel}
               amount={todayTotal}
-              roomStage={roomStage}
-              backgroundUri={ROOM_BACKGROUND_URIS[roomStage]}
-              sobagiImageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
-              atmosphereTint={getTimeOfDayTint(currentHour)}
-              warmthOpacity={getWarmthOpacity(recordedDaysCount)}
+              records={photocardRecords}
+              currentEmotion={currentEmotion}
               quoteAnimated
             />
             {/* White overlay fades out as the card develops */}
@@ -289,7 +306,7 @@ const styles = StyleSheet.create({
     // PhotocardView provides its own fixed dimensions
   },
   revealOverlay: {
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#FAF6EE',
   },
   closeHint: {

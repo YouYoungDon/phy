@@ -1,4 +1,4 @@
-import { Expense, UserState } from '../types';
+import { Expense, ExpenseCategory, UserState } from '../types';
 import * as storageService from './storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { useExpenseStore } from '../store/expenseStore';
@@ -51,4 +51,17 @@ export async function saveExpense(expense: Expense): Promise<void> {
 
   void storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
   void storageService.save(STORAGE_KEYS.USER, updatedUser);
+}
+
+export function updateExpense(
+  id: string,
+  patch: { amount: number; category: ExpenseCategory; memo?: string },
+): void {
+  useExpenseStore.getState().updateExpense(id, patch);
+  void storageService.save(STORAGE_KEYS.EXPENSES, useExpenseStore.getState().expenses);
+}
+
+export function deleteExpense(id: string): void {
+  useExpenseStore.getState().deleteExpense(id);
+  void storageService.save(STORAGE_KEYS.EXPENSES, useExpenseStore.getState().expenses);
 }
