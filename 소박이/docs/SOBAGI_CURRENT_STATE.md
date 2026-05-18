@@ -62,61 +62,29 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-18
-**Group completed:** Photocard split-layout redesign + product direction shift to implicit accumulation
+**Group completed:** Implicit accumulation — streak → 작은 식물 (S-path)
 
 ### What changed
-- `src/components/photocard/PhotocardView.tsx` — full split-layout rewrite: left = pre-made mood asset (`photocard_1..10`), right = cream-paper summary (date / weekday / total / up to 3 record rows + "+ N개 더" / 오늘의 한 줄). Landscape ratio `CARD_HEIGHT = CARD_WIDTH * 0.667` (3:2). Old dynamic-room composition removed; legacy props kept as optional for backward compatibility.
-- `src/services/photocardMoodService.ts` (new) — deterministic `getPhotocardMoodAsset({hour, weather?, emotion?, spendingLevel?})`. Strong-signal overrides then time-of-day fallback. Safe default `photocard_2`.
-- `src/constants/assets.ts` — CDN SHA bumped to `94fdc8e`; `PhotocardMoodAsset` type + `PHOTOCARD_MOOD_URIS` map added. Remote filenames are `pothocard_*.png` (sic) — URL keeps the typo, TS identifier doesn't.
-- `src/pages/reaction.tsx` + `src/pages/stats.tsx` — pass `records`, `weekdayLabel`, `timeLabel` (reaction only), `currentEmotion`. Date format moved to `YYYY.MM.DD`. Old room-scene props dropped.
-- `docs/SOBAGI_PHILOSOPHY.md` — new subsection **"Implicit accumulation, never explicit decoration"** under Room Philosophy. Slot pickers, place-item buttons, drag-and-drop, furniture management, inventory-to-room flows, and unlock-messaging are now **explicitly rejected**, not deferred.
+- `src/constants/bagItems.ts` — BagItem gains optional `streakAffinity: { minStreak: number }`. `m6` 작은 식물 tagged with `{ minStreak: 7 }`. `RoomPlacement.placementPath` extended to include `'S'`.
+- `src/services/roomPresenceService.ts` — new pure functions `computeRecordingStreak`, `pickStreakEligibleItems`, `selectStreakCandidate`. `checkForPlacement` evaluates the S-path after the P-path and before B/A. Per-item threshold (vs. cafe's global config) lets future streak items settle at their own pace.
+- `src/services/__tests__/roomPresenceService.test.ts` — 17 new test cases covering the streak checklist (1:1 with the cafe polish pattern): grace day, 2-day gap collapse, multiple records same day, exclusion when already placed, minDays/minDaysInBag bypass.
 
 ### What's now working
-- Photocard renders as a shareable landscape card with a chosen mood asset on the left and the day's spending summary on the right. Modal flow, white-reveal animation, and quote fade-in are preserved. Three records visible; "+ N개 더" indicator for overflow; card height fixed; no scroll inside the card.
-- Mood resolver is deterministic and uses all 10 assets across emotion + hour combinations.
-- "오늘의 한 줄" slot uses Sobagi's existing tier-aware voice (emotion store message on reaction.tsx, `dayFeeling.mainLine` on stats.tsx) — no praise/evaluation copy.
+- A 7-day consecutive recording streak silently brings the small plant (`m6`) into the room. The streak is forgiving — recording today extends it; missing today but having recorded yesterday keeps it alive; two days of silence collapse it.
+- Trigger ordering inside `checkForPlacement`: auto-settle → pending-skip → category-pattern (P) → recording-streak (S) → emotion / return-gap (B/A) → drift relabel. Each path fires at most once per session.
 
 ### Fragile / surprising
-- **PHILOSOPHY shift on 2026-05-18**: the room is now defined as implicit emotional accumulation, not decoration. Any future spec or in-flight code that lets the user choose what goes in the room is out of scope. Existing `roomPresenceService` (B/A/C paths) is the model — extend it, don't replace it.
-- **Paused in-flight work, do not merge as-is:** `src/services/roomDecorationService.ts` (+ its `__tests__` file), the `PLACED_ITEMS` storage key, and the `ROOM_SLOTS` / `loadPlacedItems` integration in `src/pages/index.tsx` implement explicit slot decoration (`floor` / `desk` / `wall` / `shelf`). These conflict with the new direction. Files are left untouched in the working tree pending owner clarification; do not delete without confirming ownership, and do not merge into main UX.
-- The mockup example copy `"오늘도 수고했어, 내일의 나는 더 잘하고 있을 거야"` was rejected as praise/evaluation. CURRENT_STATE's "Copy / tone" known issues already flagged `"오늘도 수고했어요"` for removal.
-- The photocard now has a structured spending summary on the right panel. This sits in known tension with PHILOSOPHY's photocard section (*"What the photocard is not: A spending summary with emotional decoration"*). Shipped under explicit product direction on 2026-05-18; the photocard subsection of PHILOSOPHY has not been updated yet — flag for the product owner if/when that section needs to follow.
+- Trigger priority: P beats S beats B/A. Picked intentionally so a specific behavioural habit (cafe) wins over a general presence habit (streak) within the same session — feels more honest. Doc as you go if reordering is needed.
+- The plant has `roomPresence.zones: ['창가', '방구석']` but we always use `zones[0]` for placement. Acceptable for proof-of-feel; if future items need zone-aware fallback (skipping an occupied zone), revisit.
+- Paused work (`roomDecorationService` + `PLACED_ITEMS` key + `ROOM_SLOTS` integration in `index.tsx`) still untouched. Adding more triggers may reach the point where ignoring the paused state in `index.tsx` causes friction; flag if so.
 
 ### What the next agent must NOT do
-- Add any explicit decoration UI (slot pickers, place buttons, drag-and-drop). This is now permanently rejected per PHILOSOPHY.
-- Reintroduce room placement prompts in any form.
-- Modify the photocard flow, modal, or PhotocardView layout — the redesign is the current baseline.
-- Merge the paused `roomDecorationService` work without product owner sign-off and a replacement direction.
+- Don't expose `placementPath` ('P' / 'S' / etc.) in any UI — it's internal-only.
+- Don't add another trigger in the same commit. Stabilize each before extending.
+- Don't merge the paused decoration work without product owner sign-off.
 
 ### Next
-First proof-of-feel for implicit accumulation: cafe-pattern trigger. Extend `roomPresenceService` (not `roomDecorationService`) with a category-based path so that frequent cafe records cause the mug (`s5` 머그컵) to quietly appear in the room. No UI changes, deterministic, testable.
-
-### What changed
-- `src/constants/bagItems.ts` — `BagItem` now carries optional `roomPresence`, `photocardAffinity`, `ambientAffinity`; `BAG_ITEMS` extended (담요/식물/엽서/머그컵 added); `ZONE_SLOTS` introduced. *(committed earlier in this branch)*
-- `src/services/roomPresenceService.ts` — pure logic for B/A/C paths, drift, eligibility, auto-settle; `checkForPlacement` triggers on every app open, places directly when no prompt flag, defers via `PENDING_PLACEMENT` when `promptOnPlace: true`. **`confirmPlacement` and `deferPlacement` removed** as part of the reshape.
-- `src/hooks/useAppInit.ts` — `checkForPlacement` wired after emotion compute, before emotion store hydrates (so the new item is part of the room the moment the home screen first renders).
-- `src/pages/index.tsx` — `roomPlacements` loaded on mount and rendered as subtle emoji overlays inside `RoomBackground` (opacity 0.60, `pointerEvents="none"`, zone-positioned). **Placement prompt UI removed in this reshape pass.**
-- `src/constants/storage.ts` — added `ROOM_PLACEMENTS`, `PENDING_PLACEMENT`.
-
-### What's now working
-- Items appear in the room silently between sessions. A user who records an expense, closes the app, and returns later finds the matching object already part of the room.
-- `promptOnPlace: true` items (담요, 식물, 머그컵, 작은 곰) are routed through pending → auto-settle, which gives them a 3–5 day "courtship" delay before appearing. The user never sees a prompt — the delay simply becomes part of the discovery feel.
-- B/A/C path selection, drift phase, photocardAffinity field are all in place and tested.
-
-### Fragile / surprising
-- **The original Stage 4 placement prompt was a Discovery Principle violation** ("담요, 침대 옆에 놔둘까요? 응 / 나중에"). It was implemented per the spec, surfaced during this session as in conflict with PHILOSOPHY's *"Changes happen between sessions, never during one"*, and removed. The underlying pending/settle plumbing was kept and now functions as a silent delay instead of a UI gate.
-- `confirmPlacement` and `deferPlacement` are gone from the service — no caller exists now that the prompt is gone. Do not reintroduce without revisiting PHILOSOPHY.
-- The plan and spec at `docs/superpowers/plans/2026-05-17-room-presence.md` and `docs/superpowers/specs/2026-05-17-room-presence-design.md` still describe the prompt-based flow. They are now stale on that point. CURRENT_STATE wins per hierarchy.
-- Pre-existing photocard issues from previous handoff (warmth color, early dismiss, italic quote) are still open — none of them were touched here.
-
-### What the next agent must NOT do
-- Reintroduce any in-session UI prompt for placement, however gentle. Sobagi must not narrate the placement.
-- Add "new item appeared" toasts, dots, badges, or animations tied to room placement.
-- Roll back the room presence system entirely — the data model and silent placement are emotionally correct; only the foregrounding UI was wrong.
-- Add drag-and-drop, manual placement, or any item-management surface in the room.
-
-### Next
-Stage 5 — photocard emoji overlay. `PhotocardView.tsx` should accept `placedItems` + `currentEmotion`, filter by `photocardAffinity`, render one randomly-selected emoji at its zone position with reduced opacity, no label, no animation. `reaction.tsx` passes the props. Subtler than the home-screen rendering by design.
+Either: (a) stabilize the streak trigger on-device, watch for one more session, then move to the night-activity trigger; or (b) reconcile the paused `roomDecorationService` work with the implicit-accumulation direction.
 
 ---
 

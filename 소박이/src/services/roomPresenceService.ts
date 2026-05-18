@@ -190,6 +190,86 @@ const CATEGORY_TRIGGERS: ReadonlyArray<{
   { category: 'cafe', opts: { minCount: 3, minDistinctDays: 3, windowDays: 14 } },
 ];
 
+// ─── Implicit accumulation: recording-streak path ───────────────────────────
+//
+// Same philosophy as the category-pattern path — *quiet trace of repeated
+// behaviour, not a reward*. The streak path detects consecutive days of
+// presence (recording at least one expense per day) and lets items declare
+// at what streak they want to surface via `streakAffinity.minStreak`.
+//
+// "Consecutive" is forgiving: a streak counted as ending *today or yesterday*
+// is still alive. This honours Sobagi's tone ("absence is never failure") —
+// missing today doesn't immediately collapse a week of presence. Two-day
+// silence does collapse it, which is the right floor.
+//
+// Per-item threshold (vs. the global cafe config) lets future streak items
+// settle at their own pace — e.g. 식물 at 7, something later at 30.
+
+/**
+ * Pure. Returns the current consecutive-recording-day count ending at
+ * `today` or `today - 1`. A gap of two or more days from `today` yields 0.
+ */
+export function computeRecordingStreak(expenses: Expense[], today: string): number {
+  if (expenses.length === 0) return 0;
+
+  const dates = new Set(
+    expenses.map((e) => getLocalDateString(new Date(e.createdAt))),
+  );
+
+  const previousLocalDate = (dateStr: string): string => {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    return getLocalDateString(d);
+  };
+
+  // Anchor the streak to today if it has a record; otherwise yesterday (grace
+  // day). A gap of two days from today means the streak is broken.
+  let cursor = today;
+  if (!dates.has(cursor)) {
+    cursor = previousLocalDate(cursor);
+    if (!dates.has(cursor)) return 0;
+  }
+
+  let count = 0;
+  while (dates.has(cursor)) {
+    count++;
+    cursor = previousLocalDate(cursor);
+  }
+  return count;
+}
+
+/**
+ * Pure. Returns items whose `streakAffinity.minStreak` is met by `streak`,
+ * that have a roomPresence definition, and that aren't already placed.
+ * Bypasses minDays / minDaysInBag — the streak is the gate.
+ */
+export function pickStreakEligibleItems(
+  items: BagItem[],
+  placedItemIds: ReadonlySet<string>,
+  streak: number,
+): BagItem[] {
+  return items.filter((item) => {
+    if (!item.roomPresence) return false;
+    if (placedItemIds.has(item.id)) return false;
+    if (!item.streakAffinity) return false;
+    return streak >= item.streakAffinity.minStreak;
+  });
+}
+
+/**
+ * Pure composition. Returns the first eligible item if the user's current
+ * streak meets any item's `streakAffinity.minStreak`. Otherwise null.
+ */
+export function selectStreakCandidate(
+  items: BagItem[],
+  placedItemIds: ReadonlySet<string>,
+  expenses: Expense[],
+  today: string,
+): BagItem | null {
+  const streak = computeRecordingStreak(expenses, today);
+  return pickStreakEligibleItems(items, placedItemIds, streak)[0] ?? null;
+}
+
 // ─── I/O entry points (called from useAppInit) ───────────────────────────────
 
 /**
@@ -254,6 +334,23 @@ export async function checkForPlacement(
       await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
       return; // one action per session
     }
+  }
+
+  // Step 3b: streak path. Fires after category-pattern, before B/A — habits
+  // of presence (recording over days) are a quieter signal than category
+  // habits, so they get the lower priority within the implicit-accumulation
+  // band. Same direct-placement model as P; the streak is the delay.
+  const streakItem = selectStreakCandidate(ALL_BAG_ITEMS, placedItemIds, expenses, today);
+  if (streakItem) {
+    const zone = streakItem.roomPresence!.zones[0]!;
+    const newPlacement: RoomPlacement = {
+      itemId: streakItem.id,
+      zone,
+      placedAt: today,
+      placementPath: 'S',
+    };
+    await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
+    return; // one action per session
   }
 
   // Step 4: emotion / return-gap path (existing)

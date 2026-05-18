@@ -44,6 +44,12 @@ export type BagItem = {
   // minDays / minDaysInBag eligibility gates (the pattern itself is the gate).
   categoryAffinity?: ExpenseCategory[];
 
+  // Implicit accumulation by recording streak — e.g. a 7-day streak makes the
+  // small plant appear. When set, the room presence service can place this
+  // item via the streak path once the user's current recording streak meets
+  // `minStreak`. Like categoryAffinity, this bypasses minDays / minDaysInBag.
+  streakAffinity?: { minStreak: number };
+
   // Reserved — type slot for future systems
   ambientAffinity?: AmbientAffinity;
 };
@@ -52,7 +58,7 @@ export type RoomPlacement = {
   itemId: string;
   zone: RoomZone;
   placedAt: string;                          // YYYY-MM-DD
-  placementPath: 'B' | 'A' | 'C' | 'P';     // internal only, never shown in UI. 'P' = category pattern.
+  placementPath: 'B' | 'A' | 'C' | 'P' | 'S'; // internal only, never shown in UI. 'P' = category pattern, 'S' = recording streak.
 };
 
 export type PendingPlacement = {
@@ -144,13 +150,16 @@ export const BAG_ITEMS: Record<BagTab, BagItem[]> = {
       roomPresence: { zones: ['침대옆'], emotionAffinity: ['soft-sad', 'sleepy'], promptOnPlace: true, minDaysInBag: 7 },
       photocardAffinity: ['soft-sad', 'sleepy'],
     },
-    // New item — day 45
+    // New item — day 45. Also surfaces via the recording-streak trigger:
+    // 7 consecutive days of presence is enough for the plant to settle in,
+    // ahead of the day-45 unlock. The streak itself is the gate.
     {
       id: 'm6', emoji: '🪴', name: '작은 식물',
       desc: '창가에 놓아두면 잘 자라는 작은 식물이에요.',
       minDays: 45,
       roomPresence: { zones: ['창가', '방구석'], promptOnPlace: true, minDaysInBag: 14 },
       photocardAffinity: ['happy', 'surprised'],
+      streakAffinity: { minStreak: 7 },
     },
   ],
   간식: [

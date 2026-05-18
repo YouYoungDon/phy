@@ -11,6 +11,9 @@ import {
   hasCategoryPattern,
   pickCategoryEligibleItems,
   selectCategoryCandidate,
+  computeRecordingStreak,
+  pickStreakEligibleItems,
+  selectStreakCandidate,
 } from '../roomPresenceService';
 import { BagItem } from '../../constants/bagItems';
 import { Expense } from '../../types';
@@ -300,6 +303,187 @@ describe('selectCategoryCandidate', () => {
     const result = selectCategoryCandidate(
       [cafeItem], new Set(['mug']), 'cafe', expenses, CAFE_OPTS, '2026-05-18',
     );
+    expect(result).toBeNull();
+  });
+});
+
+// ─── Recording-streak path (S) ──────────────────────────────────────────────
+//
+// Safety checks (mirror of the P-path checklist):
+//   1. 7+ consecutive days triggers plant
+//   2. 6-day streak does NOT trigger
+//   3. already placed plant does NOT re-trigger
+//   4. broken streak (gap of 2+ days) does NOT trigger
+//   5. streak whose last record is older than yesterday does NOT trigger
+//
+
+describe('computeRecordingStreak', () => {
+  it('returns 0 on no records', () => {
+    expect(computeRecordingStreak([], '2026-05-18')).toBe(0);
+  });
+
+  it('returns 1 when only today has a record', () => {
+    const expenses = [makeExpense({ id: '1', createdAt: '2026-05-18T10:00:00' })];
+    expect(computeRecordingStreak(expenses, '2026-05-18')).toBe(1);
+  });
+
+  it('counts 7 consecutive days ending today', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-12T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-13T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-14T10:00:00' }),
+      makeExpense({ id: '4', createdAt: '2026-05-15T10:00:00' }),
+      makeExpense({ id: '5', createdAt: '2026-05-16T10:00:00' }),
+      makeExpense({ id: '6', createdAt: '2026-05-17T10:00:00' }),
+      makeExpense({ id: '7', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    expect(computeRecordingStreak(expenses, '2026-05-18')).toBe(7);
+  });
+
+  // Grace day: yesterday counts even if today has no record yet.
+  it('counts 7 consecutive days ending yesterday (today is empty)', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-11T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-12T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-13T10:00:00' }),
+      makeExpense({ id: '4', createdAt: '2026-05-14T10:00:00' }),
+      makeExpense({ id: '5', createdAt: '2026-05-15T10:00:00' }),
+      makeExpense({ id: '6', createdAt: '2026-05-16T10:00:00' }),
+      makeExpense({ id: '7', createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(computeRecordingStreak(expenses, '2026-05-18')).toBe(7);
+  });
+
+  // Safety check #4 (S): broken streak — gap of 2+ days breaks it.
+  it('returns 0 when last record is older than yesterday (gap of 2+ days)', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-11T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-12T10:00:00' }),
+    ];
+    expect(computeRecordingStreak(expenses, '2026-05-18')).toBe(0);
+  });
+
+  it('returns only the most recent consecutive run when there is an earlier gap', () => {
+    const expenses = [
+      // earlier 3-day run (broken by gap)
+      makeExpense({ id: '1', createdAt: '2026-05-01T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-02T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-03T10:00:00' }),
+      // recent 3-day run ending today
+      makeExpense({ id: '4', createdAt: '2026-05-16T10:00:00' }),
+      makeExpense({ id: '5', createdAt: '2026-05-17T10:00:00' }),
+      makeExpense({ id: '6', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    expect(computeRecordingStreak(expenses, '2026-05-18')).toBe(3);
+  });
+
+  it('multiple records on the same day still count as one streak day', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-17T08:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-17T20:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    expect(computeRecordingStreak(expenses, '2026-05-18')).toBe(2);
+  });
+});
+
+describe('pickStreakEligibleItems', () => {
+  const plant = makeItem({
+    id: 'plant',
+    roomPresence: { zones: ['창가'], promptOnPlace: false, minDaysInBag: 5 },
+    streakAffinity: { minStreak: 7 },
+  });
+  const other = makeItem({
+    id: 'mug',
+    roomPresence: { zones: ['책상'], promptOnPlace: false, minDaysInBag: 10 },
+    categoryAffinity: ['cafe'],
+  });
+
+  // Safety check #1 (S): 7+ streak triggers plant
+  it('returns items whose minStreak is met by the current streak', () => {
+    expect(pickStreakEligibleItems([plant, other], new Set(), 7)).toEqual([plant]);
+  });
+
+  // Safety check #2 (S): 6-day streak does NOT trigger
+  it('returns empty when streak is below minStreak', () => {
+    expect(pickStreakEligibleItems([plant], new Set(), 6)).toHaveLength(0);
+  });
+
+  // Safety check #3 (S): already-placed plant does NOT re-trigger
+  it('excludes already-placed items', () => {
+    expect(pickStreakEligibleItems([plant], new Set(['plant']), 30)).toHaveLength(0);
+  });
+
+  it('excludes items without streakAffinity', () => {
+    expect(pickStreakEligibleItems([other], new Set(), 30)).toHaveLength(0);
+  });
+
+  it('excludes items without roomPresence', () => {
+    const noPresence = makeItem({ id: 'x', streakAffinity: { minStreak: 7 } });
+    expect(pickStreakEligibleItems([noPresence], new Set(), 30)).toHaveLength(0);
+  });
+
+  it('does NOT gate on minDays or minDaysInBag — streak is the gate', () => {
+    const lateItem = makeItem({
+      id: 'late',
+      minDays: 999,
+      roomPresence: { zones: ['창가'], promptOnPlace: false, minDaysInBag: 999 },
+      streakAffinity: { minStreak: 7 },
+    });
+    expect(pickStreakEligibleItems([lateItem], new Set(), 7)).toEqual([lateItem]);
+  });
+});
+
+describe('selectStreakCandidate', () => {
+  const plant = makeItem({
+    id: 'plant',
+    roomPresence: { zones: ['창가'], promptOnPlace: false, minDaysInBag: 5 },
+    streakAffinity: { minStreak: 7 },
+  });
+
+  // Safety check #1 (S)
+  it('returns the eligible item when the streak meets the threshold', () => {
+    const expenses = Array.from({ length: 7 }, (_, i) => {
+      const day = 12 + i;
+      return makeExpense({ id: String(i), createdAt: `2026-05-${String(day).padStart(2, '0')}T10:00:00` });
+    });
+    const result = selectStreakCandidate([plant], new Set(), expenses, '2026-05-18');
+    expect(result?.id).toBe('plant');
+  });
+
+  // Safety check #2 (S)
+  it('returns null when the streak is below threshold', () => {
+    const expenses = Array.from({ length: 6 }, (_, i) => {
+      const day = 13 + i;
+      return makeExpense({ id: String(i), createdAt: `2026-05-${String(day).padStart(2, '0')}T10:00:00` });
+    });
+    const result = selectStreakCandidate([plant], new Set(), expenses, '2026-05-18');
+    expect(result).toBeNull();
+  });
+
+  // Safety check #5 (S): last record older than yesterday — streak broken
+  it('returns null when the streak is broken (last record older than yesterday)', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-09T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-10T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-11T10:00:00' }),
+      makeExpense({ id: '4', createdAt: '2026-05-12T10:00:00' }),
+      makeExpense({ id: '5', createdAt: '2026-05-13T10:00:00' }),
+      makeExpense({ id: '6', createdAt: '2026-05-14T10:00:00' }),
+      makeExpense({ id: '7', createdAt: '2026-05-15T10:00:00' }),
+    ];
+    const result = selectStreakCandidate([plant], new Set(), expenses, '2026-05-18');
+    expect(result).toBeNull();
+  });
+
+  // Safety check #3 (S) reinforced at composition layer
+  it('returns null when the plant is already placed even if streak meets threshold', () => {
+    const expenses = Array.from({ length: 7 }, (_, i) => {
+      const day = 12 + i;
+      return makeExpense({ id: String(i), createdAt: `2026-05-${String(day).padStart(2, '0')}T10:00:00` });
+    });
+    const result = selectStreakCandidate([plant], new Set(['plant']), expenses, '2026-05-18');
     expect(result).toBeNull();
   });
 });

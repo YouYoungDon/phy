@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-18 (Engineering — product direction shift: implicit accumulation)
+**Last updated:** 2026-05-18 (Engineering — streak → 작은 식물 trigger landed)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -9,12 +9,7 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ## Currently in progress
 
-- **Implicit accumulation — proof-of-feel #1: cafe → 머그컵** (Engineering)
-  - Extend `src/services/roomPresenceService.ts` with a category-pattern path. Frequent cafe records (deterministic threshold, recent window) make `s5` 머그컵 quietly appear in the room.
-  - Add `categoryAffinity?: ExpenseCategory[]` to `BagItem`; tag 머그컵 with `['cafe']`.
-  - Trigger fires through the existing silent placement flow — no UI, no prompt, no slot picker, no drag-and-drop.
-  - Tests for the new pure functions. Existing B/A/C path tests must still pass.
-  - Out of scope: photocard changes, more than one trigger, any touch to the paused `roomDecorationService` work.
+*(Nothing claimed. Next implicit trigger to consider: night activity → warm lamp.)*
 
 ---
 
@@ -62,11 +57,10 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ---
 
-## Future implicit-accumulation triggers (after cafe proof-of-feel lands)
+## Future implicit-accumulation triggers
 
-Order TBD; each follows the same pattern: extend `roomPresenceService` with a new pure path, no UI changes.
+Order TBD; each follows the same pattern: extend `roomPresenceService` with a new pure path, no UI changes. Stabilize each on-device before adding the next.
 
-- Recording streak → small plant
 - Night activity → warm lamp
 - Calm low-spending days → brighter room atmosphere
 - Weekend leisure spending → cozy floor items
@@ -95,6 +89,8 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Implicit accumulation — streak → 작은 식물 (S-path)** — `BagItem.streakAffinity: { minStreak }`; m6 식물 tagged at 7. `computeRecordingStreak` (forgiving: today or yesterday, 2-day gap collapses). `pickStreakEligibleItems`, `selectStreakCandidate`. S-path slotted into `checkForPlacement` between P-path and B/A. 17 new tests, including grace-day and gap-collapse. Per-item threshold so future streak items settle at their own pace. (2026-05-18)
+- [x] **Implicit accumulation — cafe → 머그컵 (P-path) + polish** — `BagItem.categoryAffinity`; m5 머그컵 tagged with `['cafe']`. `hasCategoryPattern` (recurrence-gated: minCount records across minDistinctDays distinct days within windowDays; cafe = 3/3/14). `pickCategoryEligibleItems`, `selectCategoryCandidate`. P-path slotted into `checkForPlacement` before B/A. Spec comment near P-path documents the rationale ("quiet traces of repeated behaviour, not rewards"). 20 tests including boundary cases. (2026-05-18)
 - [x] **Photocard split-layout redesign** — `PhotocardView.tsx` rewritten with horizontal split: left pre-made mood asset (`photocard_1..10`) via deterministic `getPhotocardMoodAsset` resolver, right cream-paper summary (date / weekday / total / up to 3 records + "+ N개 더" / 오늘의 한 줄). Landscape 3:2 ratio. New `photocardMoodService.ts`. `reaction.tsx` + `stats.tsx` rewired. CDN SHA bumped to `94fdc8e` for the `pothocard_*.png` (sic) assets. (2026-05-18)
 - [x] **Room presence — Stage 5: photocard emoji overlay** — placed items whose `photocardAffinity` matches current emotion rendered behind the composition; superseded by the 2026-05-18 split-layout redesign. (2026-05-17)
 - [x] **Room presence — Stages 1–4 (silent reshape)** — `bagItems.ts` (extended BagItem type, 4 new items, ZONE_SLOTS), `roomPresenceService.ts` (B/A/C path selection, drift, eligibility, auto-settle), `useAppInit.ts` wired, `index.tsx` renders placed items as subtle ambient emoji. Original Stage 4 placement prompt removed mid-stream — surfaced as Discovery Principle violation, replaced with silent between-session placement. `confirmPlacement`/`deferPlacement` removed from service. Spec/plan files are stale on the prompt point — CURRENT_STATE wins. (2026-05-17)
