@@ -64,7 +64,7 @@ export function useAppInit(): boolean {
             ? (lastEmotionRaw as SobagiEmotion)
             : 'happy';
 
-        await checkForPlacement(emotion, recomputedDays, prevVisitDate);
+        await checkForPlacement(emotion, recomputedDays, prevVisitDate, expenses ?? []);
 
         useEmotionStore.setState({
           currentEmotion: emotion,

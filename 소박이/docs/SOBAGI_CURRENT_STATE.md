@@ -61,8 +61,35 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 ## Latest Handoff
 
 **Agent:** Engineering
-**Date:** 2026-05-17
-**Group completed:** Room presence — silent reshape
+**Date:** 2026-05-18
+**Group completed:** Photocard split-layout redesign + product direction shift to implicit accumulation
+
+### What changed
+- `src/components/photocard/PhotocardView.tsx` — full split-layout rewrite: left = pre-made mood asset (`photocard_1..10`), right = cream-paper summary (date / weekday / total / up to 3 record rows + "+ N개 더" / 오늘의 한 줄). Landscape ratio `CARD_HEIGHT = CARD_WIDTH * 0.667` (3:2). Old dynamic-room composition removed; legacy props kept as optional for backward compatibility.
+- `src/services/photocardMoodService.ts` (new) — deterministic `getPhotocardMoodAsset({hour, weather?, emotion?, spendingLevel?})`. Strong-signal overrides then time-of-day fallback. Safe default `photocard_2`.
+- `src/constants/assets.ts` — CDN SHA bumped to `94fdc8e`; `PhotocardMoodAsset` type + `PHOTOCARD_MOOD_URIS` map added. Remote filenames are `pothocard_*.png` (sic) — URL keeps the typo, TS identifier doesn't.
+- `src/pages/reaction.tsx` + `src/pages/stats.tsx` — pass `records`, `weekdayLabel`, `timeLabel` (reaction only), `currentEmotion`. Date format moved to `YYYY.MM.DD`. Old room-scene props dropped.
+- `docs/SOBAGI_PHILOSOPHY.md` — new subsection **"Implicit accumulation, never explicit decoration"** under Room Philosophy. Slot pickers, place-item buttons, drag-and-drop, furniture management, inventory-to-room flows, and unlock-messaging are now **explicitly rejected**, not deferred.
+
+### What's now working
+- Photocard renders as a shareable landscape card with a chosen mood asset on the left and the day's spending summary on the right. Modal flow, white-reveal animation, and quote fade-in are preserved. Three records visible; "+ N개 더" indicator for overflow; card height fixed; no scroll inside the card.
+- Mood resolver is deterministic and uses all 10 assets across emotion + hour combinations.
+- "오늘의 한 줄" slot uses Sobagi's existing tier-aware voice (emotion store message on reaction.tsx, `dayFeeling.mainLine` on stats.tsx) — no praise/evaluation copy.
+
+### Fragile / surprising
+- **PHILOSOPHY shift on 2026-05-18**: the room is now defined as implicit emotional accumulation, not decoration. Any future spec or in-flight code that lets the user choose what goes in the room is out of scope. Existing `roomPresenceService` (B/A/C paths) is the model — extend it, don't replace it.
+- **Paused in-flight work, do not merge as-is:** `src/services/roomDecorationService.ts` (+ its `__tests__` file), the `PLACED_ITEMS` storage key, and the `ROOM_SLOTS` / `loadPlacedItems` integration in `src/pages/index.tsx` implement explicit slot decoration (`floor` / `desk` / `wall` / `shelf`). These conflict with the new direction. Files are left untouched in the working tree pending owner clarification; do not delete without confirming ownership, and do not merge into main UX.
+- The mockup example copy `"오늘도 수고했어, 내일의 나는 더 잘하고 있을 거야"` was rejected as praise/evaluation. CURRENT_STATE's "Copy / tone" known issues already flagged `"오늘도 수고했어요"` for removal.
+- The photocard now has a structured spending summary on the right panel. This sits in known tension with PHILOSOPHY's photocard section (*"What the photocard is not: A spending summary with emotional decoration"*). Shipped under explicit product direction on 2026-05-18; the photocard subsection of PHILOSOPHY has not been updated yet — flag for the product owner if/when that section needs to follow.
+
+### What the next agent must NOT do
+- Add any explicit decoration UI (slot pickers, place buttons, drag-and-drop). This is now permanently rejected per PHILOSOPHY.
+- Reintroduce room placement prompts in any form.
+- Modify the photocard flow, modal, or PhotocardView layout — the redesign is the current baseline.
+- Merge the paused `roomDecorationService` work without product owner sign-off and a replacement direction.
+
+### Next
+First proof-of-feel for implicit accumulation: cafe-pattern trigger. Extend `roomPresenceService` (not `roomDecorationService`) with a category-based path so that frequent cafe records cause the mug (`s5` 머그컵) to quietly appear in the room. No UI changes, deterministic, testable.
 
 ### What changed
 - `src/constants/bagItems.ts` — `BagItem` now carries optional `roomPresence`, `photocardAffinity`, `ambientAffinity`; `BAG_ITEMS` extended (담요/식물/엽서/머그컵 added); `ZONE_SLOTS` introduced. *(committed earlier in this branch)*
@@ -108,7 +135,7 @@ Stage 5 — photocard emoji overlay. `PhotocardView.tsx` should accept `placedIt
 | Emotion engine (5-rule priority chain) | `src/services/emotionEngine.ts` |
 | Dialogue tier system (3 tiers × 5 emotions + 4 observation types) | `src/constants/dialogue.ts`, `src/services/dialogueService.ts` |
 | Reaction screen (tier-aware title, floating hearts, photocard button) | `src/pages/reaction.tsx` |
-| Photocard — Tier 2 baseline | `src/components/photocard/PhotocardView.tsx` |
+| Photocard — split-layout landscape (mood asset + spending summary) | `src/components/photocard/PhotocardView.tsx`, `src/services/photocardMoodService.ts` |
 | Stats / calendar + trend graph | `src/pages/stats.tsx` |
 | Per-day photocard entry point in stats | `src/pages/stats.tsx` |
 | DayFeelingCard (8 buckets, observational) | `src/components/stats/DayFeelingCard.tsx`, `src/services/dayFeelingService.ts` |
@@ -124,16 +151,25 @@ Stage 5 — photocard emoji overlay. `PhotocardView.tsx` should accept `placedIt
 | System | Blocked on |
 |---|---|
 | Room stage 2–5 | Image assets; one-line change in `constants/assets.ts` |
-| Room object accumulation (plant, bookshelf, candle) | Sprite assets |
 | Sobagi idle behaviors | Image assets |
 | Seasonal room ambience | Design + assets |
 | Year-end recap | — |
+| Implicit accumulation triggers (cafe pattern, streak, night activity, calm low-spend days, weekend leisure) | Next: cafe → mug as proof-of-feel |
+
+### Paused (in-flight, conflicts with current direction)
+
+| Work | Conflict | Owner action needed |
+|---|---|---|
+| `src/services/roomDecorationService.ts` + tests | Explicit slot decoration (`floor`/`desk`/`wall`/`shelf` + `placeItem`/`unplaceItem`) — rejected by PHILOSOPHY 2026-05-18 | Confirm whether to delete or refactor into trigger-based path |
+| `PLACED_ITEMS` storage key | Backs the paused service | Remove after service is resolved |
+| `ROOM_SLOTS` / `loadPlacedItems` wiring in `index.tsx` | Loads the paused state | Strip after service is resolved |
 
 ### Explicitly rejected
 
 Push notifications · streak anxiety framing · achievement badges · budget limits / savings goals ·
 social sharing / leaderboards · spending advice / behavioral nudges · gamified unlock announcements ·
-EXP point system · finance dashboard summaries
+EXP point system · finance dashboard summaries · slot pickers · drag-and-drop room decoration ·
+furniture management UI · inventory-to-room transfer flows · "you unlocked X for your room" messaging
 
 ---
 

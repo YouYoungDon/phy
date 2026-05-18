@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-17 (Engineering — room presence reshape)
+**Last updated:** 2026-05-18 (Engineering — product direction shift: implicit accumulation)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -9,10 +9,12 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ## Currently in progress
 
-- **Room presence — Stage 5: photocard emoji overlay** (Engineering)
-  - `src/components/photocard/PhotocardView.tsx` — accept optional `placedItems: RoomPlacement[]` and `currentEmotion: SobagiEmotion`; pick one placed item whose `photocardAffinity` matches current emotion; render its emoji at the zone-mapped position with opacity ~0.52, fontSize 16, no label, no border, no animation
-  - `src/pages/reaction.tsx` — load `ROOM_PLACEMENTS` on mount; pass `placedItems` + `currentEmotion` to `PhotocardView`
-  - Rule: photocard overlay must be subtler than the home-screen room render. The item is part of the memory, not the subject of the memory.
+- **Implicit accumulation — proof-of-feel #1: cafe → 머그컵** (Engineering)
+  - Extend `src/services/roomPresenceService.ts` with a category-pattern path. Frequent cafe records (deterministic threshold, recent window) make `s5` 머그컵 quietly appear in the room.
+  - Add `categoryAffinity?: ExpenseCategory[]` to `BagItem`; tag 머그컵 with `['cafe']`.
+  - Trigger fires through the existing silent placement flow — no UI, no prompt, no slot picker, no drag-and-drop.
+  - Tests for the new pure functions. Existing B/A/C path tests must still pass.
+  - Out of scope: photocard changes, more than one trigger, any touch to the paused `roomDecorationService` work.
 
 ---
 
@@ -47,11 +49,27 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ---
 
+## Paused (owner action needed)
+
+- **Explicit slot decoration work** — `src/services/roomDecorationService.ts` (+ its test), `PLACED_ITEMS` storage key, `ROOM_SLOTS` / `loadPlacedItems` integration in `index.tsx`. Conflicts with the 2026-05-18 direction shift (PHILOSOPHY: "Implicit accumulation, never explicit decoration"). Files left untouched in the working tree; original author should confirm whether to delete or refactor into trigger-based path.
+
+---
+
 ## Blocked on assets
 
 - **Room stage 2+** — architecture ready (`getRoomStage()` written), blocked on image assets; one-line change in `constants/assets.ts` when art exists
 - **Sobagi idle behaviors** — reading/napping/window variants; blocked on images
-- **Room object accumulation** — plant, bookshelf, candle; architecture can be built now, sprites not yet commissioned
+
+---
+
+## Future implicit-accumulation triggers (after cafe proof-of-feel lands)
+
+Order TBD; each follows the same pattern: extend `roomPresenceService` with a new pure path, no UI changes.
+
+- Recording streak → small plant
+- Night activity → warm lamp
+- Calm low-spending days → brighter room atmosphere
+- Weekend leisure spending → cozy floor items
 
 ---
 
@@ -64,6 +82,7 @@ See `SOBAGI_PHILOSOPHY.md` and `SOBAGI_CURRENT_STATE.md` for the full rejection 
 - Budget limits or savings goals
 - Achievement badges
 - Finance dashboard improvements
+- Slot pickers / drag-and-drop / explicit decoration UI
 
 ---
 
@@ -76,6 +95,8 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Photocard split-layout redesign** — `PhotocardView.tsx` rewritten with horizontal split: left pre-made mood asset (`photocard_1..10`) via deterministic `getPhotocardMoodAsset` resolver, right cream-paper summary (date / weekday / total / up to 3 records + "+ N개 더" / 오늘의 한 줄). Landscape 3:2 ratio. New `photocardMoodService.ts`. `reaction.tsx` + `stats.tsx` rewired. CDN SHA bumped to `94fdc8e` for the `pothocard_*.png` (sic) assets. (2026-05-18)
+- [x] **Room presence — Stage 5: photocard emoji overlay** — placed items whose `photocardAffinity` matches current emotion rendered behind the composition; superseded by the 2026-05-18 split-layout redesign. (2026-05-17)
 - [x] **Room presence — Stages 1–4 (silent reshape)** — `bagItems.ts` (extended BagItem type, 4 new items, ZONE_SLOTS), `roomPresenceService.ts` (B/A/C path selection, drift, eligibility, auto-settle), `useAppInit.ts` wired, `index.tsx` renders placed items as subtle ambient emoji. Original Stage 4 placement prompt removed mid-stream — surfaced as Discovery Principle violation, replaced with silent between-session placement. `confirmPlacement`/`deferPlacement` removed from service. Spec/plan files are stale on the prompt point — CURRENT_STATE wins. (2026-05-17)
 - [x] **Group F — Photocard** — `PhotocardView.tsx`; reaction.tsx modal overlay; 1.8s white-reveal + quote fade-in; auto-dismiss paused at 1000ms; Tier 2 baseline (no capture/save/share); empty-quote fallback (2026-05-17)
 - [x] **Group E — Bag new-item dot** — `LAST_BAG_OPEN_DAYS` storage key; `hasNewBagItem` computed on init from flat BAG_ITEMS; cleared + persisted on `openSheet('bag')`; dot shows on either pending found item or newly unlocked bag item (2026-05-17)

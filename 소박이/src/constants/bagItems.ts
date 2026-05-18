@@ -1,4 +1,4 @@
-import { SobagiEmotion } from '../types';
+import { SobagiEmotion, ExpenseCategory } from '../types';
 
 export type RoomZone =
   | '창가'
@@ -38,6 +38,12 @@ export type BagItem = {
   // Photocard appearance — only for already-placed items
   photocardAffinity?: SobagiEmotion[];
 
+  // Implicit accumulation by category pattern — e.g. frequent cafe records
+  // make the mug appear in the room. When set, the room presence service
+  // can place this item via the category-pattern path, bypassing the normal
+  // minDays / minDaysInBag eligibility gates (the pattern itself is the gate).
+  categoryAffinity?: ExpenseCategory[];
+
   // Reserved — type slot for future systems
   ambientAffinity?: AmbientAffinity;
 };
@@ -45,8 +51,8 @@ export type BagItem = {
 export type RoomPlacement = {
   itemId: string;
   zone: RoomZone;
-  placedAt: string;                    // YYYY-MM-DD
-  placementPath: 'B' | 'A' | 'C';     // internal only, never shown in UI
+  placedAt: string;                          // YYYY-MM-DD
+  placementPath: 'B' | 'A' | 'C' | 'P';     // internal only, never shown in UI. 'P' = category pattern.
 };
 
 export type PendingPlacement = {
@@ -170,13 +176,16 @@ export const BAG_ITEMS: Record<BagTab, BagItem[]> = {
       desc: '갓 구운 빵이에요. 아직 따뜻해요.',
       minDays: 35,
     },
-    // New item — day 55
+    // New item — day 55. Also surfaces via the cafe category-pattern trigger:
+    // recurring cafe records bring the mug into the room ahead of the day-55
+    // unlock, because the user has effectively built the habit themselves.
     {
       id: 's5', emoji: '🫖', name: '머그컵',
       desc: '두 손으로 감싸면 따뜻해지는 머그컵이에요.',
       minDays: 55,
       roomPresence: { zones: ['책상', '차코너'], emotionAffinity: ['happy', 'excited'], promptOnPlace: true, minDaysInBag: 10 },
       photocardAffinity: ['happy', 'excited'],
+      categoryAffinity: ['cafe'],
     },
   ],
   장난감: [

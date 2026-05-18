@@ -8,8 +8,12 @@ import {
   pickEligibleItems,
   selectCandidate,
   shouldAutoSettle,
+  hasCategoryPattern,
+  pickCategoryEligibleItems,
+  selectCategoryCandidate,
 } from '../roomPresenceService';
 import { BagItem } from '../../constants/bagItems';
+import { Expense } from '../../types';
 
 const makeItem = (overrides: Partial<BagItem> & Pick<BagItem, 'id'>): BagItem => ({
   emoji: '🌸', name: 'test', desc: 'test', minDays: 0, ...overrides,
@@ -125,5 +129,144 @@ describe('shouldAutoSettle', () => {
       { itemId: 'x1', pendingFrom: '2026-05-13', settleAfter: 4 },
       '2026-05-17',
     )).toBe(true);
+  });
+});
+
+// ─── Category-pattern path (P) ──────────────────────────────────────────────
+
+const makeExpense = (overrides: Partial<Expense> & Pick<Expense, 'id' | 'createdAt'>): Expense => ({
+  amount: 5000,
+  category: 'cafe',
+  sobagiEmotion: 'happy',
+  ...overrides,
+});
+
+const CAFE_OPTS = { minCount: 3, minDistinctDays: 3, windowDays: 14 } as const;
+
+describe('hasCategoryPattern', () => {
+  it('returns false when no matching records exist', () => {
+    expect(hasCategoryPattern([], 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  it('returns false when fewer than minCount records', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-16T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  it('returns false when records spread across too few distinct days (single-day spree)', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-18T08:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-18T12:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T18:00:00' }),
+    ];
+    // 3 records, 1 distinct day — minDistinctDays is 3, so no pattern.
+    expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  it('returns true when records spread across enough distinct days', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(true);
+  });
+
+  it('ignores records outside the look-back window', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-04-01T10:00:00' }), // > 14 days ago
+      makeExpense({ id: '2', createdAt: '2026-04-15T10:00:00' }), // > 14 days ago
+      makeExpense({ id: '3', createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  it('ignores records of other categories', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00', category: 'food' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T10:00:00', category: 'food' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00', category: 'food' }),
+    ];
+    expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
+  });
+});
+
+describe('pickCategoryEligibleItems', () => {
+  const cafeItem = makeItem({
+    id: 'mug',
+    roomPresence: { zones: ['책상'], promptOnPlace: false, minDaysInBag: 10 },
+    categoryAffinity: ['cafe'],
+  });
+  const otherItem = makeItem({
+    id: 'plant',
+    roomPresence: { zones: ['창가'], promptOnPlace: false, minDaysInBag: 5 },
+  });
+
+  it('returns items with matching categoryAffinity', () => {
+    expect(pickCategoryEligibleItems([cafeItem, otherItem], new Set(), 'cafe')).toEqual([cafeItem]);
+  });
+
+  it('excludes already-placed items', () => {
+    expect(pickCategoryEligibleItems([cafeItem], new Set(['mug']), 'cafe')).toHaveLength(0);
+  });
+
+  it('excludes items without roomPresence', () => {
+    const noPresence = makeItem({ id: 'x', categoryAffinity: ['cafe'] });
+    expect(pickCategoryEligibleItems([noPresence], new Set(), 'cafe')).toHaveLength(0);
+  });
+
+  it('does NOT gate on minDays or minDaysInBag — pattern is the gate', () => {
+    const lateItem = makeItem({
+      id: 'late',
+      minDays: 999, // far future — would be excluded by pickEligibleItems
+      roomPresence: { zones: ['책상'], promptOnPlace: false, minDaysInBag: 999 },
+      categoryAffinity: ['cafe'],
+    });
+    expect(pickCategoryEligibleItems([lateItem], new Set(), 'cafe')).toEqual([lateItem]);
+  });
+});
+
+describe('selectCategoryCandidate', () => {
+  const cafeItem = makeItem({
+    id: 'mug',
+    roomPresence: { zones: ['책상'], promptOnPlace: false, minDaysInBag: 10 },
+    categoryAffinity: ['cafe'],
+  });
+
+  it('returns the eligible item when the pattern fires', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    const result = selectCategoryCandidate(
+      [cafeItem], new Set(), 'cafe', expenses, CAFE_OPTS, '2026-05-18',
+    );
+    expect(result?.id).toBe('mug');
+  });
+
+  it('returns null when the pattern does not fire', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    const result = selectCategoryCandidate(
+      [cafeItem], new Set(), 'cafe', expenses, CAFE_OPTS, '2026-05-18',
+    );
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the item is already placed even if the pattern fires', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T10:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00' }),
+    ];
+    const result = selectCategoryCandidate(
+      [cafeItem], new Set(['mug']), 'cafe', expenses, CAFE_OPTS, '2026-05-18',
+    );
+    expect(result).toBeNull();
   });
 });

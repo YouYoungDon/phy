@@ -108,6 +108,28 @@ Negative space is part of the emotional design. A cozy room becomes emotionally 
 
 **Deeper, not larger.** The room is one centered, vertically-deepening space — not a panoramic or scrollable one. Horizontal spatial expansion (side panels, peek-affordances, multi-screen rooms, carousel layouts) was probed and explicitly rejected on 2026-05-18 because, even under extreme restraint, it drifted into carousel/navigation energy and broke the "one continuous inhabited room" feel. When the room needs to feel more inhabited, the answer is atmosphere — depth of light, time, warmth, traces accumulated in place — not lateral space.
 
+### Implicit accumulation, never explicit decoration
+
+The room evolves only from the user's behavior and emotional patterns — not from anything the user *chooses to do to it*. The contract in one sentence: *I didn't decorate this room manually — but somehow it became mine.*
+
+Concretely:
+- The user is never asked to place, move, or configure an object.
+- There are no slots, no decoration sheets, no edit modes, no drag-and-drop.
+- A change happens because the user *recorded their life* — not because they opened a decoration UI.
+- Triggers come from patterns the user can feel but didn't optimize for: a cafe habit, a recording streak, evening activity, calm low-spending days, weekend leisure spending.
+- Each appearance is irreversible and undiscussed — the room absorbed it, and the user notices on return.
+
+**Rejected patterns** (not deferred — explicitly out of scope, decided 2026-05-18):
+- Slot pickers (`floor` / `desk` / `wall` / `shelf` choices)
+- "Place item" buttons or any explicit confirm UI
+- Drag-and-drop decoration loops
+- Furniture management screens
+- Inventory-to-room transfer flows
+- Visible "you unlocked X for your room" messaging
+- Any optimization mechanic that rewards specific behavior with specific objects
+
+If a feature would let a user say "I'm going to set up my room now," reject it. The room is **emotional memory accumulation, not a simulator.**
+
 ---
 
 ## Color and Visual Tone
