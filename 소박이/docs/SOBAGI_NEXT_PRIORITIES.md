@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-18 (Engineering — streak → 작은 식물 trigger landed)
+**Last updated:** 2026-05-18 (Engineering — paused roomDecorationService removed)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -44,12 +44,6 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ---
 
-## Paused (owner action needed)
-
-- **Explicit slot decoration work** — `src/services/roomDecorationService.ts` (+ its test), `PLACED_ITEMS` storage key, `ROOM_SLOTS` / `loadPlacedItems` integration in `index.tsx`. Conflicts with the 2026-05-18 direction shift (PHILOSOPHY: "Implicit accumulation, never explicit decoration"). Files left untouched in the working tree; original author should confirm whether to delete or refactor into trigger-based path.
-
----
-
 ## Blocked on assets
 
 - **Room stage 2+** — architecture ready (`getRoomStage()` written), blocked on image assets; one-line change in `constants/assets.ts` when art exists
@@ -89,6 +83,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Paused `roomDecorationService` removed** — Files (`roomDecorationService.ts` + test) deleted; `PLACED_ITEMS` storage key reverted; `index.tsx` integration (import, state, mount-effect load, parallel render block) reverted. PHILOSOPHY gets a historical note explaining the removal. Single source of truth for placement is now `roomPresenceService` (zones B/A/C/P/S). (2026-05-18)
 - [x] **Implicit accumulation — streak → 작은 식물 (S-path)** — `BagItem.streakAffinity: { minStreak }`; m6 식물 tagged at 7. `computeRecordingStreak` (forgiving: today or yesterday, 2-day gap collapses). `pickStreakEligibleItems`, `selectStreakCandidate`. S-path slotted into `checkForPlacement` between P-path and B/A. 17 new tests, including grace-day and gap-collapse. Per-item threshold so future streak items settle at their own pace. (2026-05-18)
 - [x] **Implicit accumulation — cafe → 머그컵 (P-path) + polish** — `BagItem.categoryAffinity`; m5 머그컵 tagged with `['cafe']`. `hasCategoryPattern` (recurrence-gated: minCount records across minDistinctDays distinct days within windowDays; cafe = 3/3/14). `pickCategoryEligibleItems`, `selectCategoryCandidate`. P-path slotted into `checkForPlacement` before B/A. Spec comment near P-path documents the rationale ("quiet traces of repeated behaviour, not rewards"). 20 tests including boundary cases. (2026-05-18)
 - [x] **Photocard split-layout redesign** — `PhotocardView.tsx` rewritten with horizontal split: left pre-made mood asset (`photocard_1..10`) via deterministic `getPhotocardMoodAsset` resolver, right cream-paper summary (date / weekday / total / up to 3 records + "+ N개 더" / 오늘의 한 줄). Landscape 3:2 ratio. New `photocardMoodService.ts`. `reaction.tsx` + `stats.tsx` rewired. CDN SHA bumped to `94fdc8e` for the `pothocard_*.png` (sic) assets. (2026-05-18)

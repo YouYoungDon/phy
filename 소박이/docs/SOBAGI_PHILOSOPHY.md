@@ -130,6 +130,8 @@ Concretely:
 
 If a feature would let a user say "I'm going to set up my room now," reject it. The room is **emotional memory accumulation, not a simulator.**
 
+**Historical note (2026-05-18):** A `roomDecorationService` was in flight implementing the slot/decoration model (`floor` / `desk` / `wall` / `shelf` slots, `placeItem(slot, ...)`, `unplaceItem(slot)`, a `PLACED_ITEMS` storage key, a parallel render block in `index.tsx`). It was removed in full — not archived — because every function in its API was structurally explicit, and keeping it as dormant code left an import path the next agent could re-introduce by accident. Git history is the archive. If implicit accumulation ever needs a richer placement model, build it as a new path on `roomPresenceService` (the system that already handles silent placement via zones), not by reviving the decoration shape.
+
 ---
 
 ## Color and Visual Tone
