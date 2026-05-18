@@ -59,7 +59,7 @@ interface PhotocardViewProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export const CARD_WIDTH = SCREEN_WIDTH - 48;
-export const CARD_HEIGHT = Math.round(CARD_WIDTH * (16 / 9));
+export const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.62);
 
 const VISIBLE_RECORDS = 3;
 
@@ -142,19 +142,13 @@ export function PhotocardView({
               {visibleRecords.map((r, idx) => {
                 const icon = r.category ? CATEGORY_ICON[r.category] ?? '·' : '·';
                 const label = r.categoryLabel ?? r.category ?? '';
+                const lineText = r.memo ? `${label} · ${r.memo}` : label;
                 return (
                   <View key={r.id ?? idx}>
                     {idx > 0 && <View style={styles.recordDivider} />}
                     <View style={styles.recordRow}>
-                      <View style={styles.recordIconWrap}>
-                        <Text style={styles.recordIcon}>{icon}</Text>
-                      </View>
-                      <View style={styles.recordTextCol}>
-                        <Text style={styles.recordCategory}>{label}</Text>
-                        {r.memo ? (
-                          <Text style={styles.recordMemo} numberOfLines={1}>{r.memo}</Text>
-                        ) : null}
-                      </View>
+                      <Text style={styles.recordIcon}>{icon}</Text>
+                      <Text style={styles.recordLine} numberOfLines={1}>{lineText}</Text>
                       <Text style={styles.recordAmount}>₩ {r.amount.toLocaleString('ko-KR')}</Text>
                     </View>
                   </View>
@@ -199,9 +193,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
 
-  // ─── Left panel ─────────────────────────────────────────────────────────────
+  // ─── Left panel — ~48% width, asset fills via cover ─────────────────────────
   leftPanel: {
-    flex: 1,
+    flex: 0.92,
     overflow: 'hidden',
     backgroundColor: PAPER_BG_SOFT,
   },
@@ -211,57 +205,57 @@ const styles = StyleSheet.create({
   },
   timeBadge: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(250, 246, 238, 0.78)',
+    top: 10,
+    right: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(250, 246, 238, 0.82)',
   },
   timeBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     color: TEXT_DARK,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
 
-  // ─── Right panel ────────────────────────────────────────────────────────────
+  // ─── Right panel — ~52% width, compact landscape density ────────────────────
   rightPanel: {
-    flex: 1,
+    flex: 1.08,
     backgroundColor: PAPER_BG,
-    paddingHorizontal: 14,
-    paddingVertical: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   headerBlock: {
-    marginBottom: 10,
+    marginBottom: 6,
   },
   dateHeader: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: TEXT_DARK,
     letterSpacing: 0.4,
   },
   weekdaySub: {
-    fontSize: 10,
+    fontSize: 9,
     color: TEXT_MUTED,
-    marginTop: 4,
+    marginTop: 2,
     letterSpacing: 0.3,
   },
   divider: {
     height: 1,
     backgroundColor: DIVIDER,
-    marginVertical: 10,
+    marginVertical: 6,
   },
   totalBlock: {
-    gap: 4,
+    gap: 2,
   },
   totalLabel: {
-    fontSize: 10,
+    fontSize: 9,
     color: TEXT_MUTED,
     letterSpacing: 0.3,
   },
   totalAmount: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: TEXT_DARK,
     letterSpacing: 0.5,
@@ -272,72 +266,58 @@ const styles = StyleSheet.create({
   recordDivider: {
     height: 1,
     backgroundColor: DIVIDER,
-    marginVertical: 8,
+    marginVertical: 5,
   },
   recordRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  recordIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: PAPER_BG_SOFT,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
   recordIcon: {
     fontSize: 12,
+    width: 16,
+    textAlign: 'center',
   },
-  recordTextCol: {
+  recordLine: {
     flex: 1,
     minWidth: 0,
-  },
-  recordCategory: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
     color: TEXT_DARK,
     letterSpacing: 0.2,
   },
-  recordMemo: {
-    fontSize: 10,
-    color: TEXT_MUTED,
-    marginTop: 1,
-  },
   recordAmount: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: TEXT_DARK,
     letterSpacing: 0.2,
   },
   overflowText: {
-    fontSize: 10,
+    fontSize: 9,
     color: TEXT_MUTED,
-    marginTop: 8,
+    marginTop: 5,
     textAlign: 'right',
   },
   spacer: {
     flex: 1,
-    minHeight: 8,
+    minHeight: 4,
   },
   noteBlock: {
     backgroundColor: PAPER_BG_SOFT,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
   noteHeading: {
-    fontSize: 10,
+    fontSize: 9,
     color: TEXT_MUTED,
     fontWeight: '600',
     letterSpacing: 0.3,
-    marginBottom: 6,
+    marginBottom: 3,
   },
   noteText: {
-    fontSize: 12,
+    fontSize: 11,
     color: TEXT_DARK,
-    lineHeight: 18,
+    lineHeight: 15,
     letterSpacing: 0.2,
   },
 });
