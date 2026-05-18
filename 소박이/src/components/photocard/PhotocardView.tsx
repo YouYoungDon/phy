@@ -59,7 +59,7 @@ interface PhotocardViewProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export const CARD_WIDTH = SCREEN_WIDTH - 48;
-export const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.62);
+export const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.667);
 
 const VISIBLE_RECORDS = 3;
 
