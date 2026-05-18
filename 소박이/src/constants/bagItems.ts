@@ -50,6 +50,13 @@ export type BagItem = {
   // `minStreak`. Like categoryAffinity, this bypasses minDays / minDaysInBag.
   streakAffinity?: { minStreak: number };
 
+  // Implicit accumulation by night-hour activity — e.g. recording during
+  // evening / late-night hours across multiple nights makes the warm lamp
+  // appear. The night window and thresholds are configured globally in the
+  // room presence service. Like categoryAffinity / streakAffinity, the pattern
+  // is the gate; minDays / minDaysInBag are bypassed when this fires.
+  nightAffinity?: boolean;
+
   // Reserved — type slot for future systems
   ambientAffinity?: AmbientAffinity;
 };
@@ -58,7 +65,7 @@ export type RoomPlacement = {
   itemId: string;
   zone: RoomZone;
   placedAt: string;                          // YYYY-MM-DD
-  placementPath: 'B' | 'A' | 'C' | 'P' | 'S'; // internal only, never shown in UI. 'P' = category pattern, 'S' = recording streak.
+  placementPath: 'B' | 'A' | 'C' | 'P' | 'S' | 'L'; // internal only, never shown in UI. 'P' = category pattern, 'S' = recording streak, 'L' = night-activity / lamp.
 };
 
 export type PendingPlacement = {
@@ -116,6 +123,17 @@ export const BAG_ITEMS: Record<BagTab, BagItem[]> = {
       minDays: 50,
       roomPresence: { zones: ['작은선반', '책상'], promptOnPlace: false, minDaysInBag: 5 },
       photocardAffinity: ['happy', 'excited', 'surprised', 'sleepy', 'soft-sad'],
+    },
+    // New item — day 30. Also surfaces via the night-activity trigger:
+    // recording at night across multiple distinct nights is enough for a
+    // warm light to settle into the room, ahead of the day-30 unlock.
+    {
+      id: 'a6', emoji: '🪔', name: '따뜻한 램프',
+      desc: '밤에 켜두면 방이 조용해지는 작은 램프예요.',
+      minDays: 30,
+      roomPresence: { zones: ['침대옆', '책상'], emotionAffinity: ['sleepy', 'soft-sad'], promptOnPlace: false, minDaysInBag: 10 },
+      photocardAffinity: ['sleepy', 'soft-sad'],
+      nightAffinity: true,
     },
   ],
   재료: [

@@ -14,6 +14,10 @@ import {
   computeRecordingStreak,
   pickStreakEligibleItems,
   selectStreakCandidate,
+  isNightHour,
+  hasNightPattern,
+  pickNightEligibleItems,
+  selectNightCandidate,
 } from '../roomPresenceService';
 import { BagItem } from '../../constants/bagItems';
 import { Expense } from '../../types';
@@ -484,6 +488,207 @@ describe('selectStreakCandidate', () => {
       return makeExpense({ id: String(i), createdAt: `2026-05-${String(day).padStart(2, '0')}T10:00:00` });
     });
     const result = selectStreakCandidate([plant], new Set(['plant']), expenses, '2026-05-18');
+    expect(result).toBeNull();
+  });
+});
+
+// ─── Night-activity path (L) ────────────────────────────────────────────────
+//
+// Safety checks (mirror of the P-path checklist, with a night-specific twist):
+//   1. 3+ night-hour records across 3+ distinct nights triggers lamp
+//   2. 3 records all in one night (one-night spree) does NOT trigger
+//   3. already placed lamp does NOT re-trigger
+//   4. daytime-only records do NOT trigger
+//   5. old night records outside 14 days do NOT trigger
+//
+
+const NIGHT_OPTS = {
+  startHour: 19,
+  endHour: 4,
+  minCount: 3,
+  minDistinctDays: 3,
+  windowDays: 14,
+} as const;
+
+describe('isNightHour', () => {
+  it('inclusive at startHour', () => {
+    expect(isNightHour(19, 19, 4)).toBe(true);
+  });
+  it('exclusive at endHour', () => {
+    expect(isNightHour(4, 19, 4)).toBe(false);
+  });
+  it('counts midnight-wrapping hours (e.g. 2am with window 19–4)', () => {
+    expect(isNightHour(2, 19, 4)).toBe(true);
+  });
+  it('does not count daytime hours', () => {
+    expect(isNightHour(10, 19, 4)).toBe(false);
+    expect(isNightHour(15, 19, 4)).toBe(false);
+  });
+  it('handles a non-wrapping window correctly', () => {
+    expect(isNightHour(10, 9, 17)).toBe(true);
+    expect(isNightHour(17, 9, 17)).toBe(false);
+    expect(isNightHour(8, 9, 17)).toBe(false);
+  });
+});
+
+describe('hasNightPattern', () => {
+  it('returns false on empty expenses', () => {
+    expect(hasNightPattern([], NIGHT_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  // Safety check #1 (L): 3+ night-hour records across 3+ distinct nights triggers
+  it('returns true when 3 night-hour records span 3 distinct days', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T22:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T23:30:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T20:00:00' }),
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(true);
+  });
+
+  // Safety check #2 (L): all on one night does NOT trigger
+  it('returns false when 3 night-hour records all fall on one date (single-night spree)', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-17T19:30:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-17T21:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T23:00:00' }),
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  // Safety check #4 (L): daytime records do NOT trigger
+  it('returns false when records fall in daytime hours', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T13:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T16:00:00' }),
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  // Safety check #5 (L): old records outside windowDays do NOT trigger
+  it('ignores night records older than windowDays', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-04-01T22:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-04-15T22:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T22:00:00' }),
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  // Boundary cases
+  it('counts a record at exactly startHour as a night record', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-15T19:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-16T19:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T19:00:00' }),
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(true);
+  });
+
+  it('does NOT count a record at exactly endHour', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-15T04:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-16T04:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T04:00:00' }),
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(false);
+  });
+
+  it('counts a record at 2am (window wraps midnight)', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-15T02:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-16T02:00:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T02:00:00' }),
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(true);
+  });
+
+  it('does not count daytime records mixed with night records — needs minCount of night-hour records', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-15T22:00:00' }), // night
+      makeExpense({ id: '2', createdAt: '2026-05-16T10:00:00' }), // day
+      makeExpense({ id: '3', createdAt: '2026-05-17T14:00:00' }), // day
+    ];
+    expect(hasNightPattern(expenses, NIGHT_OPTS, '2026-05-18')).toBe(false);
+  });
+});
+
+describe('pickNightEligibleItems', () => {
+  const lamp = makeItem({
+    id: 'lamp',
+    roomPresence: { zones: ['침대옆'], promptOnPlace: false, minDaysInBag: 10 },
+    nightAffinity: true,
+  });
+  const mug = makeItem({
+    id: 'mug',
+    roomPresence: { zones: ['책상'], promptOnPlace: false, minDaysInBag: 10 },
+    categoryAffinity: ['cafe'],
+  });
+
+  it('returns items flagged with nightAffinity', () => {
+    expect(pickNightEligibleItems([lamp, mug], new Set())).toEqual([lamp]);
+  });
+
+  // Safety check #3 (L): already placed lamp excluded
+  it('excludes already-placed items', () => {
+    expect(pickNightEligibleItems([lamp], new Set(['lamp']))).toHaveLength(0);
+  });
+
+  it('excludes items without nightAffinity', () => {
+    expect(pickNightEligibleItems([mug], new Set())).toHaveLength(0);
+  });
+
+  it('excludes items without roomPresence', () => {
+    const noPresence = makeItem({ id: 'x', nightAffinity: true });
+    expect(pickNightEligibleItems([noPresence], new Set())).toHaveLength(0);
+  });
+
+  it('does NOT gate on minDays or minDaysInBag — pattern is the gate', () => {
+    const lateItem = makeItem({
+      id: 'late',
+      minDays: 999,
+      roomPresence: { zones: ['침대옆'], promptOnPlace: false, minDaysInBag: 999 },
+      nightAffinity: true,
+    });
+    expect(pickNightEligibleItems([lateItem], new Set())).toEqual([lateItem]);
+  });
+});
+
+describe('selectNightCandidate', () => {
+  const lamp = makeItem({
+    id: 'lamp',
+    roomPresence: { zones: ['침대옆'], promptOnPlace: false, minDaysInBag: 10 },
+    nightAffinity: true,
+  });
+
+  // Safety check #1 (L) reinforced at composition layer
+  it('returns the eligible item when the night pattern fires', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T22:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T23:30:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T20:00:00' }),
+    ];
+    const result = selectNightCandidate([lamp], new Set(), expenses, NIGHT_OPTS, '2026-05-18');
+    expect(result?.id).toBe('lamp');
+  });
+
+  it('returns null when the night pattern does not fire', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-17T22:00:00' }),
+    ];
+    const result = selectNightCandidate([lamp], new Set(), expenses, NIGHT_OPTS, '2026-05-18');
+    expect(result).toBeNull();
+  });
+
+  // Safety check #3 (L) reinforced at composition layer
+  it('returns null when the lamp is already placed even if pattern fires', () => {
+    const expenses = [
+      makeExpense({ id: '1', createdAt: '2026-05-10T22:00:00' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T23:30:00' }),
+      makeExpense({ id: '3', createdAt: '2026-05-17T20:00:00' }),
+    ];
+    const result = selectNightCandidate([lamp], new Set(['lamp']), expenses, NIGHT_OPTS, '2026-05-18');
     expect(result).toBeNull();
   });
 });

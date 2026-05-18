@@ -62,29 +62,31 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-18
-**Group completed:** Removed paused `roomDecorationService` (explicit-decoration dead-end resolved)
+**Group completed:** Implicit accumulation — 야간 활동 → 따뜻한 램프 (L-path)
 
 ### What changed
-- Deleted `src/services/roomDecorationService.ts` and `src/services/__tests__/roomDecorationService.test.ts`.
-- Reverted `src/constants/storage.ts` to drop the `PLACED_ITEMS` storage key.
-- Reverted the `roomDecorationService` integration block in `src/pages/index.tsx` (the import, the `placedItems` state, the `loadPlacedItems()` call in the mount effect, and the parallel render block inside `RoomBackground`).
-- `SOBAGI_PHILOSOPHY.md` — added a historical note under the Room Philosophy rejection list documenting the removal and why dormant retention was the wrong choice.
+- `src/constants/bagItems.ts` — BagItem gains optional `nightAffinity: boolean`. New item `a6` 따뜻한 램프 (🪔) in 장신구, day 30, zones `[침대옆, 책상]`, `emotionAffinity: [sleepy, soft-sad]`, `photocardAffinity: [sleepy, soft-sad]`, `nightAffinity: true`. `RoomPlacement.placementPath` extended to include `'L'`.
+- `src/services/roomPresenceService.ts` — new pure functions `isNightHour`, `hasNightPattern`, `pickNightEligibleItems`, `selectNightCandidate`, `NightPatternOpts` type. Global `NIGHT_TRIGGER` config (19:00–04:00, 3 records / 3 distinct days / 14 days). `checkForPlacement` evaluates the L-path after the S-path and before B/A.
+- `src/services/__tests__/roomPresenceService.test.ts` — 22 new test cases. 5-item safety checklist 1:1 mapped (3+ night records across 3+ nights triggers, single-night spree doesn't, already-placed excluded, daytime records don't trigger, old records outside window don't trigger) plus boundary checks (inclusive `startHour`, exclusive `endHour`, midnight-wrapping window, daytime-mixed records).
 
 ### What's now working
-- The room's only placement mechanism is `roomPresenceService` (zones from `bagItems.ts`, paths B/A/C/P/S). Single source of truth.
-- No import path to a decoration API remains in the codebase. Future autocomplete on `roomD…` won't suggest the dead-end.
+- Recording during night hours (19:00–04:00) across at least 3 distinct nights within 14 days silently brings the warm lamp into the room. Same direct-placement model as P/S — no UI, no prompt, no announcement.
+- Trigger ordering inside `checkForPlacement`: auto-settle → pending-skip → P (cafe pattern) → S (streak) → L (night activity) → B/A. Each path fires at most once per session.
+- Three implicit triggers now live: cafe → 머그컵, streak → 작은 식물, night → 따뜻한 램프.
 
 ### Fragile / surprising
-- The two in-flight files (`roomDecorationService.ts` + test) were untracked — they never landed on any commit. They lived only in the working tree of whichever environment had them. Removal is therefore invisible in git history *as a deletion* (you'll see them appear briefly in this same commit only if I had staged them first — which I didn't). The PHILOSOPHY historical note is the canonical record that this path existed and was rejected.
-- The cafe → 머그컵 (P) and streak → 작은 식물 (S) triggers from the previous handoffs remain in place and tested (47/47 roomPresenceService tests).
+- The night window wraps midnight (`startHour > endHour`). `isNightHour` handles this explicitly; tests cover the boundary cases (`19:00` inclusive, `04:00` exclusive, `02:00` counted as night).
+- Calendar-day distinctness is used for the "different nights" gate. A hangout that crosses midnight (23:00 → 02:00) shows up as 2 distinct days, which is the honest reading (the user opened the app on two local dates). If a future spec wants "logical nights" treated as one, that's a separate refactor.
+- The lamp shares `침대옆` zone with `달 반지` (a3). Both placed at the same coords if both fire. Acceptable for proof-of-feel; if visual collisions become a concern, build zone-aware fallback (skip occupied zone) on `roomPresenceService`, not at item-declaration time.
+- `nightAffinity` is a boolean (item declares "I respond to night signal"); the window/threshold is global in the service. Mirrors cafe's design (global config, item flags). Streak uses per-item threshold instead — divergence is intentional (streak items may want different floors; night items currently share a window).
 
 ### What the next agent must NOT do
-- Don't recreate the slot-based decoration shape (`floor` / `desk` / `wall` / `shelf` slots; `placeItem(slot, ...)` / `unplaceItem(slot)`; user-chosen placement). Build any future placement enrichment on `roomPresenceService` zones.
-- Don't expose `placementPath` ('P' / 'S' / etc.) in any UI — it's internal-only.
+- Don't recreate the slot-based decoration shape. Build any new placement enrichment on `roomPresenceService` zones (the path letter is whatever fits the signal).
+- Don't expose `placementPath` ('P' / 'S' / 'L' etc.) in any UI — it's internal-only.
 - Don't add another trigger in the same commit. Stabilize each before extending.
 
 ### Next
-Third implicit trigger: 야간 활동 → 따뜻한 램프. Same pattern as cafe (P) and streak (S): one new pure-function path on `roomPresenceService`, item declares its own affinity in `bagItems.ts`, tests mirror the safety checklist.
+Either: (a) stabilize the L-path on-device, observe for a session, then move to the next trigger (calm low-spending days → brighter atmosphere, or weekend leisure → cozy floor items); or (b) revisit zone-collision behaviour now that three items can land in the room (mug at 책상, plant at 창가, lamp at 침대옆 — currently safe, but 달 반지 + lamp both want 침대옆).
 
 ---
 
@@ -108,7 +110,7 @@ Third implicit trigger: 야간 활동 → 따뜻한 램프. Same pattern as cafe
 | Per-day photocard entry point in stats | `src/pages/stats.tsx` |
 | DayFeelingCard (8 buckets, observational) | `src/components/stats/DayFeelingCard.tsx`, `src/services/dayFeelingService.ts` |
 | Mailbox (dynamic: milestone + seasonal letters) | `src/services/letterService.ts`, `src/constants/letters.ts` |
-| Bag accumulation (20 items across 4 tabs, minDays thresholds) | `src/constants/bagItems.ts`, `src/pages/index.tsx` |
+| Bag accumulation (21 items across 4 tabs, minDays thresholds) | `src/constants/bagItems.ts`, `src/pages/index.tsx` |
 | Found item system (4 triggers, staged delivery) | `src/services/foundItemService.ts`, `src/constants/findableItems.ts` |
 | Bag new-item amber dot | `src/pages/index.tsx`, `src/constants/storage.ts` |
 | Room presence — silent ambient placement (B/A/C paths, drift, auto-settle) | `src/services/roomPresenceService.ts`, `src/hooks/useAppInit.ts`, `src/pages/index.tsx` |

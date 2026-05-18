@@ -270,6 +270,106 @@ export function selectStreakCandidate(
   return pickStreakEligibleItems(items, placedItemIds, streak)[0] ?? null;
 }
 
+// ─── Implicit accumulation: night-activity path ─────────────────────────────
+//
+// Same shape as the category-pattern path (recurrence-gated, recent-window-
+// bounded), but the filter is *when* a record was made rather than its
+// category. Across multiple distinct nights, the room absorbs a warm light.
+//
+// The night window can wrap midnight — a 19:00–04:00 window covers evening
+// through early morning. Hours are compared on the record's local clock.
+// Calendar-day distinctness is used for the "different nights" gate; a single
+// hangout that crosses midnight will count as two distinct days, which is the
+// honest reading (the user opened the app twice across local dates).
+
+export interface NightPatternOpts {
+  startHour: number;       // inclusive, 0–23
+  endHour: number;         // exclusive, 0–23. May be <= startHour (wraps midnight).
+  minCount: number;
+  minDistinctDays: number;
+  windowDays: number;
+}
+
+/**
+ * Pure. True when `hour` falls inside the (possibly midnight-wrapping)
+ * window `[startHour, endHour)`.
+ */
+export function isNightHour(hour: number, startHour: number, endHour: number): boolean {
+  if (startHour < endHour) return hour >= startHour && hour < endHour;
+  return hour >= startHour || hour < endHour;
+}
+
+/**
+ * Pure. Returns true when the user has recorded enough times during the
+ * night window across enough distinct days within `windowDays` of `today`.
+ * Same recurrence gate as the category path: one all-nighter is data, a
+ * habit is multiple nights.
+ */
+export function hasNightPattern(
+  expenses: Expense[],
+  opts: NightPatternOpts,
+  today: string,
+): boolean {
+  const todayMs = new Date(today + 'T12:00:00').getTime();
+  const cutoffMs = todayMs - opts.windowDays * 24 * 60 * 60 * 1000;
+  const matching = expenses.filter((e) => {
+    const d = new Date(e.createdAt);
+    const ts = d.getTime();
+    if (ts < cutoffMs || ts > todayMs + 24 * 60 * 60 * 1000) return false;
+    return isNightHour(d.getHours(), opts.startHour, opts.endHour);
+  });
+  if (matching.length < opts.minCount) return false;
+  const distinctDays = new Set(
+    matching.map((e) => getLocalDateString(new Date(e.createdAt))),
+  );
+  return distinctDays.size >= opts.minDistinctDays;
+}
+
+/**
+ * Pure. Returns items flagged with `nightAffinity: true` that have a
+ * roomPresence definition and aren't already placed. Like the other
+ * implicit paths, bypasses minDays / minDaysInBag.
+ */
+export function pickNightEligibleItems(
+  items: BagItem[],
+  placedItemIds: ReadonlySet<string>,
+): BagItem[] {
+  return items.filter((item) => {
+    if (!item.roomPresence) return false;
+    if (placedItemIds.has(item.id)) return false;
+    return item.nightAffinity === true;
+  });
+}
+
+/**
+ * Pure composition. If the night pattern fires for `opts` and an eligible
+ * item exists, returns the first one. Otherwise null.
+ */
+export function selectNightCandidate(
+  items: BagItem[],
+  placedItemIds: ReadonlySet<string>,
+  expenses: Expense[],
+  opts: NightPatternOpts,
+  today: string,
+): BagItem | null {
+  if (!hasNightPattern(expenses, opts, today)) return null;
+  return pickNightEligibleItems(items, placedItemIds)[0] ?? null;
+}
+
+// Night trigger config. Single source of truth — items just flag
+// `nightAffinity: true` and the window/threshold are decided here.
+//
+// 19:00–04:00 covers evening through pre-dawn. 3 records across 3 distinct
+// nights within 14 days mirrors the cafe pattern's recurrence floor: a
+// single late hangout doesn't fire the trigger; a habit does.
+const NIGHT_TRIGGER: NightPatternOpts = {
+  startHour: 19,
+  endHour: 4,
+  minCount: 3,
+  minDistinctDays: 3,
+  windowDays: 14,
+};
+
 // ─── I/O entry points (called from useAppInit) ───────────────────────────────
 
 /**
@@ -348,6 +448,23 @@ export async function checkForPlacement(
       zone,
       placedAt: today,
       placementPath: 'S',
+    };
+    await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
+    return; // one action per session
+  }
+
+  // Step 3c: night-activity path. Same model as P/S — direct placement,
+  // recurrence gate. Sits after streak because it's a more specific time-of-day
+  // habit; if the room is going to absorb only one trace this session, prefer
+  // the more general "user is here" signals first.
+  const nightItem = selectNightCandidate(ALL_BAG_ITEMS, placedItemIds, expenses, NIGHT_TRIGGER, today);
+  if (nightItem) {
+    const zone = nightItem.roomPresence!.zones[0]!;
+    const newPlacement: RoomPlacement = {
+      itemId: nightItem.id,
+      zone,
+      placedAt: today,
+      placementPath: 'L',
     };
     await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
     return; // one action per session
