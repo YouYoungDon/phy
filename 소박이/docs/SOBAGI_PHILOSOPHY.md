@@ -106,6 +106,8 @@ If it feels like the second: reject it.
 
 Negative space is part of the emotional design. A cozy room becomes emotionally stronger when not every corner is filled.
 
+**Deeper, not larger.** The room is one centered, vertically-deepening space — not a panoramic or scrollable one. Horizontal spatial expansion (side panels, peek-affordances, multi-screen rooms, carousel layouts) was probed and explicitly rejected on 2026-05-18 because, even under extreme restraint, it drifted into carousel/navigation energy and broke the "one continuous inhabited room" feel. When the room needs to feel more inhabited, the answer is atmosphere — depth of light, time, warmth, traces accumulated in place — not lateral space.
+
 ---
 
 ## Color and Visual Tone

@@ -1,8 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { setIosSwipeGestureEnabled } from '@apps-in-toss/native-modules';
-
-const SCREEN_W = Dimensions.get('window').width;
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
@@ -94,13 +91,6 @@ function HomeScreen() {
   const [roomPlacements, setRoomPlacements] = useState<RoomPlacement[]>([]);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
-  const roomScrollRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    setIosSwipeGestureEnabled({ isEnabled: false });
-    return () => { setIosSwipeGestureEnabled({ isEnabled: true }); };
-  }, []);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
   const unreadAtOpenRef = useRef<ReadonlySet<string>>(new Set());
 
@@ -207,34 +197,7 @@ function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <ScrollView
-        ref={roomScrollRef}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        decelerationRate="fast"
-        bounces={false}
-        overScrollMode="never"
-        scrollEnabled={activeSheet === null}
-        contentOffset={{ x: SCREEN_W, y: 0 }}
-        style={styles.roomScroll}
-        contentContainerStyle={styles.roomScrollContent}
-      >
-        {/* Left panel — same room atmosphere, empty */}
-        <View style={styles.sidePanel}>
-          <Image
-            source={{ uri: ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1] }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            resizeMode="cover"
-          />
-          {timeOfDayTint !== null && (
-            <View style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]} pointerEvents="none" />
-          )}
-          <View style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]} pointerEvents="none" />
-        </View>
-
-        {/* Center panel — current room, fully unchanged */}
-        <View style={styles.centerPanel}>
-          <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
+      <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
             {timeOfDayTint !== null && (
               <View
                 style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
@@ -323,21 +286,6 @@ function HomeScreen() {
               </View>
             </View>
           </RoomBackground>
-        </View>
-
-        {/* Right panel — same room atmosphere, empty */}
-        <View style={styles.sidePanel}>
-          <Image
-            source={{ uri: ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1] }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            resizeMode="cover"
-          />
-          {timeOfDayTint !== null && (
-            <View style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]} pointerEvents="none" />
-          )}
-          <View style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]} pointerEvents="none" />
-        </View>
-      </ScrollView>
 
       <View style={styles.summaryCard}>
         <DailySummary totalAmount={todayTotal} recordCount={todayExpenses.length} />
@@ -509,19 +457,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: COLORS.cream,
-  },
-  roomScroll: {
-    flex: 1,
-  },
-  roomScrollContent: {
-    alignItems: 'stretch',
-  },
-  centerPanel: {
-    width: SCREEN_W,
-  },
-  sidePanel: {
-    width: SCREEN_W,
-    overflow: 'hidden',
   },
   header: {
     position: 'absolute',

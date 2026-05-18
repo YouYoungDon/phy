@@ -44,6 +44,12 @@ export const PERSONAL_LETTERS: PersonalLetter[] = [
 
 export const SEASONAL_LETTERS_2026: SeasonalLetter[] = [
   {
+    id: 'seasonal-may-2026',
+    month: 5, day: 1, endDay: 31,
+    sig: '— 창가에서',
+    body: '오월이네요.\n\n바람이 좋은 계절이에요. 창문을 열어두면 좋은 냄새가 나요.\n오늘 하루도 여기 두고 가세요 🌿',
+  },
+  {
     id: 'seasonal-spring-2026',
     month: 3, day: 1, endDay: 15,
     sig: '— 창가에서',
