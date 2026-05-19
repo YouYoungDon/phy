@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import * as storageService from '../services/storageService';
+import { runExpenseCategoryMigration } from '../services/expenseMigration';
 import { promoteStaged } from '../services/foundItemService';
 import { checkAndDeliverLetters } from '../services/letterService';
 import { checkForPlacement } from '../services/roomPresenceService';
@@ -29,6 +30,8 @@ export function useAppInit(): boolean {
 
     async function loadStored() {
       try {
+        await runExpenseCategoryMigration();
+
         const [userData, expenses, lastEmotionRaw] = await Promise.all([
           storageService.load<UserState>(STORAGE_KEYS.USER),
           storageService.load<Expense[]>(STORAGE_KEYS.EXPENSES),
