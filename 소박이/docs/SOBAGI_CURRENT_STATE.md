@@ -62,45 +62,45 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-19
-**Group completed:** Daily first-record loop + no-spend daily record + amount-based-reward decoupling + no-spend photocard composition
+**Group completed:** Life-scene category taxonomy (12 categories + `no_spend` marker)
 
 ### What changed
-- `src/types/index.ts` — `ExpenseCategory` extended with `'no_spend'`. New literal recognised everywhere `ExpenseCategory` is consumed.
-- `src/services/expenseService.ts` — added `recordNoSpend()` which builds a `{amount: 0, category: 'no_spend', sobagiEmotion: 'happy', createdAt: now}` expense and delegates to `saveExpense` so all streak / recorded-day / persistence plumbing stays in one place. Inside `saveExpense`, the found-item eval is now invoked at the end of the function, gated by `isRealTimeRecord && todayExpenses.length === 0` (first real-time record of the day). Catch-up records for past dates do not eval.
-- `src/hooks/useAppInit.ts` — removed the app-init `checkForFoundItem` call. App init still calls `promoteStaged`, so already-staged items continue to surface on the next-day open. Eval itself is now single-source: it fires exactly once per calendar day, tied to the first-record event.
-- `src/pages/record.tsx` — "오늘은 무지출이에요" button at the top of `/record`, visible only when (a) no record today AND (b) the date chip is set to today. On tap: `recordNoSpend()` → `setEmotion('happy', '오늘은 조용히 머물렀네요 🌿')` → navigate to `/reaction`.
-- `src/services/foundItemService.ts` — T3 trigger replaced. Old: `yesterdayExpenses.reduce(s, e => s + e.amount) < 15000`. New: `yesterdayExpenses.length === 1`. Activity-based ("yesterday was a quiet day, one record only") regardless of amount. Removes synchronized "low-spending → reward" signal across atmosphere / dayFeeling / found-item systems.
-- `src/components/photocard/PhotocardView.tsx` — wrapped the `totalBlock` + its trailing divider in `{amount > 0 && (<>…</>)}`. Records block was already conditional on `visibleRecords.length > 0`. No-spend-only days now collapse both financial blocks, leaving date + mood asset + quote.
-- `src/pages/reaction.tsx` — added `todaySpendingExpenses = todayExpenses.filter(e => e.category !== 'no_spend')`. `todayTotal` and `photocardRecords` derive from this filtered list. A no-spend-only day passes `amount=0` and `records=[]` into PhotocardView, which collapses both financial blocks per the rule above. Local `CATEGORY_LABELS` extended with `no_spend: '무지출'`.
-- `src/pages/stats.tsx` — added `selectedSpendingExpenses` filter; the day-detail spending list, top-category, dayFeeling derivation, and `photocardRecords` all derive from it. Calendar cells where `data.total === 0` (no-spend-only days) now render `🌿` in the existing `dayAmount` slot instead of `"0"`. `CATEGORY_LABELS` extended with `no_spend: '무지출 🌿'`.
-- `src/components/expense/ExpenseCard.tsx` — `CATEGORY_LABELS` extended with `no_spend: '🌿 무지출'`. The `/history` page renders no-spend records via this card, quietly distinguishable from spending.
-- `__tests__/foundItemService.test.ts` — 3 new T3 cases pin the activity-based behavior: (1) fires for a single large-amount yesterday record, (2) fires for a no-spend yesterday, (3) does not fire for a multi-record yesterday.
+- `src/types/index.ts` — `ExpenseCategory` rewritten as a 13-token union (12 scene categories + `no_spend`). Legacy tokens `food / shopping / other` removed.
+- `src/constants/categories.ts` (new) — single source of truth for category metadata. Exports `CATEGORIES` (full list, ordered), `CATEGORY_BY_TOKEN: Partial<Record<>>` (lookup), `PICKER_CATEGORIES` (excludes `no_spend`), and two formatting helpers: `formatCategoryWithEmoji(token)` ("☕ 카페" — used in history card / stats records / monthly top) and `formatCategoryLabel(token)` ("카페" — bare label for photocard records).
+- `src/services/expenseMigration.ts` (new) — pure `migrateExpenseCategories(expenses)` plus an IO wrapper `runExpenseCategoryMigration()` that is gated by `STORAGE_KEYS.CATEGORY_MIGRATION_DONE` and runs once per install before `useAppInit` hydrates expenses. Idempotent.
+- `src/constants/storage.ts` — added `CATEGORY_MIGRATION_DONE` storage key.
+- `src/components/expense/CategorySelector.tsx` — reads `PICKER_CATEGORIES`; no longer hardcodes the chip list.
+- `src/components/expense/ExpenseCard.tsx`, `src/pages/reaction.tsx`, `src/pages/stats.tsx` — local `CATEGORY_LABELS` (and `PHOTOCARD_CATEGORY_LABELS` in stats) removed; all three consume the shared module's helpers. The stats records list and monthly top line now render "emoji label" (was "label emoji") — small unification for one shared helper. The stats edit picker iterates `PICKER_CATEGORIES` so `no_spend` is no longer selectable when editing a spending record.
+- `src/services/dayFeelingService.ts` — bucket-trigger logic and `buildObservations` updated for the new taxonomy. `warm` now reads `home_meal + dining_out`; `sweet` includes `home_meal / dining_out`; `selfcare` keys on `hobby`. `caffeinated / active / quiet / modest / hard` unchanged in shape.
+- `src/services/foundItemService.ts` — T4 trigger (small everyday purchase under 6,000 KRW) migrated from `cafe || food` to `cafe || home_meal || dining_out`. Discovered while preparing the union cleanup; behavior preserved.
+- `src/services/dialogueService.ts` — `categoryWarm` filter migrated from `cafe || food` to `cafe || home_meal || dining_out`. Same shape preservation.
+- `src/services/__tests__/roomPresenceService.test.ts` — fixtures' "non-cafe category" examples migrated from `'food'` to `'dining_out'`.
+- `src/hooks/useAppInit.ts` — `runExpenseCategoryMigration()` awaits before the parallel storage load so hydrate consumes migrated data.
+- `__tests__/expenseMigration.test.ts` (new, 9 tests), `__tests__/dayFeelingService.test.ts` (new, 14 tests).
 
 ### What's now working
-- Daily first-record loop: spending record OR no-spend record (both qualify as "first meaningful record") triggers the found-item eval exactly once per calendar day. Subsequent same-day records do not re-trigger. Already-staged items continue to surface via `promoteStaged` on next-day app open.
-- No-spend daily record: amount 0, category `'no_spend'`, counts toward streak + recordedDaysCount, can trigger the same quiet found-item flow as a normal first record. Surfaces silently in `/history` (with `🌿 무지출` card) and in the `/stats` calendar (as `🌿` marker in the day cell). Does not inflate spending totals (amount 0). Filtered out of all spending-analysis surfaces.
-- T3 reacts to *shape of yesterday's presence* (one quiet touchpoint) — never to amount. The user cannot infer "spent less → got an item."
-- No-spend day photocard collapses to a quiet emotional card. Mood asset + date + "🌱 오늘의 한 줄" + quote. No total block, no records block, no ₩0 line. Matches the philosophy rule (PHILOSOPHY → The Photocard → No-spend day composition).
+- Recording surfaces the 12 life-scene chips in the picker; ordering is cafe → home_meal → dining_out → transport → living → hobby → gift → pet → travel → health → event → allowance.
+- Existing stored expenses with legacy tokens (`food / shopping / other`) are remapped on first app launch: `food → dining_out`, `shopping → living`, `other → living`. Cafe / transport / no_spend pass through. After migration completes once, the flag prevents re-running.
+- DayFeeling buckets react to the new tokens; old `shopping`-keyed `selfcare` is now keyed on `hobby`. The food-trigger logic in `foundItemService.T4` and `dialogueService.categoryWarm` was updated in tandem so behavior is preserved under the new taxonomy.
+- All pages that show category labels (history card, reaction screen, stats list, photocard, monthly top, edit picker) read from one shared module.
 
 ### Fragile / surprising
-- `useAppInit.checkForFoundItem` removal is structural. A user who recorded yesterday but doesn't record today gets no eval until their next record. Pre-existing semantic of "eval on every app open with the latest expenses snapshot" is gone on purpose — eval is now bound to the *act of recording*, not to *opening the app*. Don't restore the init-time eval; the once-per-day rule depends on saveExpense being the single source.
-- T3 also fires when *yesterday was a no-spend day*. Single-record yesterday qualifies regardless of category. This is intentional — quiet presence is the signal, not the kind of presence.
-- No-spend button uses `selectedDate === todayStr` as a guard so it never surfaces while the user is on a past-date catch-up chip. The "오늘은…" copy would mislead otherwise.
-- The 🌿 calendar marker reuses the `dayAmount` Text style slot (same size, same selected-state styling). Calendar layout is unchanged; only the glyph swaps. If a future user has both spending and a no-spend record on the same day, total > 0 and the amount text wins — 🌿 is only for amount-0 days.
-- Photocard financial blocks gate on `amount > 0`. The leading divider after the date header stays in both branches so the quote block keeps its soft separator. Don't move that divider into the conditional.
-- No new STORAGE_KEYS. No migration concerns. No-spend lives inside the existing `EXPENSES` array.
+- The `allowance` 🫶 glyph is Unicode 14 (2021). On very old Android builds the emoji may fall back to tofu. Document if it surfaces in user feedback; do not swap unilaterally.
+- Migration writes back to `STORAGE_KEYS.EXPENSES` only when at least one record was remapped, then always sets the `CATEGORY_MIGRATION_DONE` flag. If you ever need to re-run the migration for a single user (debug path), clear the flag — the function is safe to re-run on already-migrated data (no-op return).
+- `CATEGORY_BY_TOKEN` is typed `Partial<Record<>>` rather than full `Record<>` because legacy tokens used to share the union and the type stayed truthful. With the union now clean, this could be tightened to a full `Record<>` in a follow-up, but it doesn't matter functionally — both formatters already guard against undefined.
+- Stats' edit picker now skips `no_spend` — editing a spending record cannot convert it into the no-spend marker. This is the correct behavior; do not "fix" it by adding `no_spend` to `PICKER_CATEGORIES`.
+- `roomPresenceService` `CATEGORY_TRIGGERS.cafe` and `bagItems.m5 머그컵.categoryAffinity: ['cafe']` are unchanged. The cafe token survives the rename, so the mug pattern keeps working.
+- DayFeeling `selfcare` main-line pool still uses "뭔가 산 / 작은 선물 / 나를 챙긴" language inherited from the `shopping`-keyed era. The trigger is now `hobby` (취미) — the observation line (`'좋아하는 일에 시간을 썼어요 🎀'`) matches, but the main pool reads slightly off-tone for the new trigger. Copy refresh is a future concern, not a code fault.
 
 ### What the next agent must NOT do
-- Don't re-introduce `checkForFoundItem` in `useAppInit`. The once-per-day "first record" semantics depend on saveExpense being the sole eval point.
-- Don't change T3 back to an amount threshold. The decoupling fixes a synchronized low-spending signal across atmosphere / dayFeeling / triggers (PHILOSOPHY → Anti-Pattern List → "Synchronized restraint signaling").
-- Don't render any "₩ 0" line on the photocard for no-spend-only days. The financial-block collapse is the composition.
-- Don't add "saved money" / "successful no-spend" / "achievement" / "streak bonus" framing anywhere in the no-spend flow. Copy stays observational ("오늘은 조용히 머물렀네요 🌿").
-- Don't add no-spend records into spending-analysis surfaces (top category, day-card spending list, photocard records block, monthly totals).
+- Don't reintroduce a hardcoded `CATEGORY_LABELS` map in any consumer. Always read from `src/constants/categories.ts`.
+- Don't treat `no_spend` as a normal expense category. It's a separate daily-presence marker. The picker excludes it; downstream filters that strip it (`reaction.tsx` / `stats.tsx` photocard records, spending totals, top-category) stay as they are.
+- Don't reframe `allowance` as income. 용돈 is a giving scene (parents / kids / someone). Copy and downstream consumers must not invert this.
+- Don't add nested categories, subcategory pickers, or budget UI. The taxonomy is flat by design.
+- Don't change `dayFeeling`'s `selfcare` back to keying on legacy `shopping` — that token no longer exists.
 
 ### Next
-Quiet-bucket dayFeeling refinement landed. `linesFor('quiet')` in `dayFeelingService.ts` rewritten to time/presence-oriented copy with no financial implication (`'오늘은 잔잔하게 지나갔네요 🌿'` / `'천천히 흘러간 하루였어요 🍃'` / `'조용히 머무른 하루였네요 🌙'`). Threshold lowered from `< 10000` to `< 8000` to break exact equality with `CALM_DAILY_THRESHOLD` (atmosphere overlay) — synchronized thresholds would let users infer "low spending = reward state". A short rationale comment is inline at the threshold check.
-
-Held: weekend leisure → cozy floor items trigger. User explicitly paused this and asked for a QA pass first; QA completed and the dayFeeling decoupling is its only material follow-up. Awaiting explicit unblock before opening the weekend trigger.
+Held: weekend leisure → cozy floor items implicit trigger (paused earlier). Future room-presence triggers for new tokens (`hobby → ribbons`, `pet → cushion`, `travel → postcard`, `home_meal → kitchen traces`, `gift → wrapping traces`) are out of scope for this landing but become trivial to add now that the tokens exist.
 
 ---
 
@@ -169,6 +169,7 @@ sobagi-last-visit-date         → string (YYYY-MM-DD)  gap detection
 sobagi-observation-save-count  → number               cooldown for observation messages
 sobagi-room-placements         → RoomPlacement[]      items currently in the room
 sobagi-pending-placement       → PendingPlacement|null delayed placement (silent settle)
+sobagi-category-migration-done → boolean  one-time flag for legacy category migration
 ```
 
 ---
