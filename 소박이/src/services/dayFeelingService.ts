@@ -113,20 +113,20 @@ function pickLine(pool: [string, ...string[]], seed: number): string {
 function buildObservations(expenses: Expense[], dominant: DayFeelingType): string[] {
   const cats = expenses.map((e) => e.category);
   const cafeCount = cats.filter((c) => c === 'cafe').length;
-  const foodCount = cats.filter((c) => c === 'food').length;
+  const mealCount = cats.filter((c) => c === 'home_meal' || c === 'dining_out').length;
   const obs: string[] = [];
 
   if (dominant !== 'caffeinated' && cafeCount > 0) {
     obs.push(cafeCount >= 2 ? '카페를 두 번 들렀어요 ☕' : '카페를 들렀어요 ☕');
   }
-  if (dominant !== 'warm' && foodCount > 0) {
-    obs.push(foodCount >= 2 ? '따뜻한 음식을 두 번 먹었어요 🍚' : '따뜻한 음식도 먹었네요 🍲');
+  if (dominant !== 'warm' && mealCount > 0) {
+    obs.push(mealCount >= 2 ? '따뜻한 음식을 두 번 먹었어요 🍚' : '따뜻한 음식도 먹었네요 🍲');
   }
   if (cats.includes('transport') && dominant !== 'active') {
     obs.push('잠깐 이동도 했어요 🚌');
   }
-  if (cats.includes('shopping') && dominant !== 'selfcare') {
-    obs.push('뭔가 사기도 했어요 🛍️');
+  if (cats.includes('hobby') && dominant !== 'selfcare') {
+    obs.push('좋아하는 일에 시간을 썼어요 🎀');
   }
 
   return obs.slice(0, 2);
@@ -158,18 +158,20 @@ export function getDayFeeling(expenses: Expense[], dateStr: string): DayFeelingR
   // Priority 2: caffeinated (cafe ≥ 2)
   if (cats.filter((c) => c === 'cafe').length >= 2) return make('caffeinated');
 
-  // Priority 3: warm (food ≥ 2, or food + cafe combo)
-  const foodCount = cats.filter((c) => c === 'food').length;
+  // Priority 3: warm (home_meal + dining_out ≥ 2, or any meal + cafe combo)
+  const mealCount = cats.filter((c) => c === 'home_meal' || c === 'dining_out').length;
   const cafeCount = cats.filter((c) => c === 'cafe').length;
-  if (foodCount >= 2 || (foodCount >= 1 && cafeCount >= 1)) return make('warm');
+  if (mealCount >= 2 || (mealCount >= 1 && cafeCount >= 1)) return make('warm');
 
-  // Priority 4: sweet (small cafe/food purchase under 6,000)
-  if (expenses.some((e) => (e.category === 'cafe' || e.category === 'food') && e.amount < 6000)) {
+  // Priority 4: sweet (small cafe/home_meal/dining_out purchase under 6,000)
+  if (expenses.some((e) =>
+    (e.category === 'cafe' || e.category === 'home_meal' || e.category === 'dining_out') && e.amount < 6000
+  )) {
     return make('sweet');
   }
 
-  // Priority 5: self-care (shopping present)
-  if (cats.includes('shopping')) return make('selfcare');
+  // Priority 5: selfcare (hobby present — closest scene to "small treat to self")
+  if (cats.includes('hobby')) return make('selfcare');
 
   // Priority 6: active (transport + 3+ distinct categories)
   if (cats.includes('transport') && new Set(cats).size >= 3) return make('active');
