@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-18 (Engineering — calm-day atmosphere brightening landed)
+**Last updated:** 2026-05-19 (Engineering — dayFeeling quiet bucket decoupled from calm-atmosphere)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -81,6 +81,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **dayFeeling — `quiet` bucket decoupled from calm-atmosphere** — `dayFeelingService.ts` lines rewritten with time/presence-oriented copy (no financial implication); threshold lowered from `< 10000` to `< 8000` so the quiet dayFeeling and the calm-atmosphere overlay no longer share a boundary. Inline comment explains the decoupling intent. No new tests required (no `dayFeelingService.test.ts` exists). (2026-05-19)
 - [x] **Implicit accumulation — 차분한 저소비 일 → 분위기 밝아짐 (calm atmosphere)** — `atmosphereService` extended with `computeCalmDayCount` and `getCalmAtmosphereOpacity`. Calm day = recorded daily total < 10,000 KRW (strict, days with no records don't count). Graduated opacity per calm day (0.005 step, capped at 0.04). Warm-white overlay `#FFF5E6` rendered in `index.tsx` between warmth and bottom-fade. Pure-function, no UI surface, no metrics shown, no storage state. 13 new tests. (2026-05-18)
 - [x] **Implicit accumulation — 야간 활동 → 따뜻한 램프 (L-path)** — `BagItem.nightAffinity: boolean`; new item `a6` 따뜻한 램프 in 장신구. `isNightHour` (midnight-wrapping), `hasNightPattern` (3 records / 3 distinct nights / 14 days, recurrence-gated, daytime records ignored), `pickNightEligibleItems`, `selectNightCandidate`. Global `NIGHT_TRIGGER` (19–04). L-path slotted in `checkForPlacement` between S and B/A. 22 new tests including startHour/endHour boundary, midnight wrap, daytime mix. (2026-05-18)
 - [x] **Paused `roomDecorationService` removed** — Files (`roomDecorationService.ts` + test) deleted; `PLACED_ITEMS` storage key reverted; `index.tsx` integration (import, state, mount-effect load, parallel render block) reverted. PHILOSOPHY gets a historical note explaining the removal. Single source of truth for placement is now `roomPresenceService` (zones B/A/C/P/S). (2026-05-18)
