@@ -222,6 +222,7 @@ Per philosophy notes — these must NOT be introduced by this work:
 - Treating `no_spend` as a normal expense type
 - "You spent X on Y this month" summaries beyond what stats already shows
 - Corporate/accounting copy ("지출 항목", "분류" — keep "기록")
+- Reframing `allowance` as income / salary / earnings. 용돈 stays a **giving** scene: 부모님 / 아이 / 누군가에게 드리는 돈. Copy and downstream consumers must not invert this into a "money received" channel.
 
 ## Out of scope for this spec
 
