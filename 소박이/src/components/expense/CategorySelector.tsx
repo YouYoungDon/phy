@@ -1,15 +1,8 @@
 import React from 'react';
 import { Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { ExpenseCategory } from '../../types';
+import { PICKER_CATEGORIES } from '../../constants/categories';
 import { COLORS } from '../../constants/colors';
-
-const CATEGORIES: { key: ExpenseCategory; label: string; emoji: string }[] = [
-  { key: 'cafe', label: '카페', emoji: '☕' },
-  { key: 'food', label: '식비', emoji: '🍚' },
-  { key: 'transport', label: '교통', emoji: '🚌' },
-  { key: 'shopping', label: '쇼핑', emoji: '🛍️' },
-  { key: 'other', label: '기타', emoji: '📦' },
-];
 
 interface CategorySelectorProps {
   selected: ExpenseCategory;
@@ -23,7 +16,7 @@ export function CategorySelector({ selected, onSelect }: CategorySelectorProps) 
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.row}
     >
-      {CATEGORIES.map((c) => (
+      {PICKER_CATEGORIES.map((c) => (
         <Pressable
           key={c.key}
           style={[styles.chip, selected === c.key && styles.chipSelected]}
