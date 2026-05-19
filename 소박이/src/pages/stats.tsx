@@ -10,28 +10,12 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
+import { PICKER_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel } from '../constants/categories';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
   component: StatsScreen,
 });
-
-const CATEGORY_LABELS: Partial<Record<ExpenseCategory, string>> = {
-  cafe: '카페 ☕',
-  food: '식비 🍚',
-  transport: '교통 🚌',
-  shopping: '쇼핑 🛍️',
-  other: '기타 📦',
-  no_spend: '무지출 🌿',
-};
-
-const PHOTOCARD_CATEGORY_LABELS: Record<string, string> = {
-  cafe: '카페',
-  food: '식비',
-  transport: '교통',
-  shopping: '쇼핑',
-  other: '기타',
-};
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
@@ -140,7 +124,7 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
         <Pressable key={e.id} onPress={() => onPress?.(e)}>
           {idx > 0 && <View style={styles.recordDivider} />}
           <View style={styles.recordRow}>
-            <Text style={styles.recordCategory}>{CATEGORY_LABELS[e.category]}</Text>
+            <Text style={styles.recordCategory}>{formatCategoryWithEmoji(e.category)}</Text>
             <View style={styles.recordRight}>
               {e.userEmotion ? (
                 <Text style={styles.recordEmotion}>{e.userEmotion}</Text>
@@ -280,7 +264,7 @@ function StatsScreen() {
     () => selectedSpendingExpenses.map((e) => ({
       id: e.id,
       category: e.category,
-      categoryLabel: PHOTOCARD_CATEGORY_LABELS[e.category] ?? e.category,
+      categoryLabel: formatCategoryLabel(e.category),
       amount: e.amount,
       memo: e.memo,
     })),
@@ -487,7 +471,7 @@ function StatsScreen() {
           {topCategoryThisMonth && (
             <View style={styles.settlementChip}>
               <Text style={styles.settlementChipText}>
-                이번 달은 {CATEGORY_LABELS[topCategoryThisMonth]}이 제일 많았어요
+                이번 달은 {formatCategoryWithEmoji(topCategoryThisMonth)}이 제일 많았어요
               </Text>
             </View>
           )}
@@ -540,14 +524,14 @@ function StatsScreen() {
 
         <Text style={styles.editFieldLabel}>분류</Text>
         <View style={styles.editCategoryRow}>
-          {(Object.keys(CATEGORY_LABELS) as ExpenseCategory[]).map((cat) => (
+          {PICKER_CATEGORIES.map((c) => (
             <Pressable
-              key={cat}
-              style={[styles.editCatPill, editCategory === cat && styles.editCatPillActive]}
-              onPress={() => setEditCategory(cat)}
+              key={c.key}
+              style={[styles.editCatPill, editCategory === c.key && styles.editCatPillActive]}
+              onPress={() => setEditCategory(c.key)}
             >
-              <Text style={[styles.editCatPillText, editCategory === cat && styles.editCatPillTextActive]}>
-                {CATEGORY_LABELS[cat]}
+              <Text style={[styles.editCatPillText, editCategory === c.key && styles.editCatPillTextActive]}>
+                {c.label} {c.emoji}
               </Text>
             </Pressable>
           ))}

@@ -1,16 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Expense, ExpenseCategory } from '../../types';
+import { Expense } from '../../types';
 import { COLORS } from '../../constants/colors';
-
-const CATEGORY_LABELS: Partial<Record<ExpenseCategory, string>> = {
-  cafe: '☕ 카페',
-  food: '🍚 식비',
-  transport: '🚌 교통',
-  shopping: '🛍️ 쇼핑',
-  other: '📦 기타',
-  no_spend: '🌿 무지출',
-};
+import { formatCategoryWithEmoji } from '../../constants/categories';
 
 const EMOTION_EMOJIS: Record<string, string> = {
   happy: '😊', excited: '✨', surprised: '😮', sleepy: '😴', 'soft-sad': '🌧️',
@@ -23,7 +15,7 @@ interface ExpenseCardProps {
 export function ExpenseCard({ expense }: ExpenseCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.category}>{CATEGORY_LABELS[expense.category]}</Text>
+      <Text style={styles.category}>{formatCategoryWithEmoji(expense.category)}</Text>
       <View style={styles.row}>
         <Text style={styles.amount}>{expense.amount.toLocaleString()}원</Text>
         <Text style={styles.emotionEmoji}>{EMOTION_EMOJIS[expense.sobagiEmotion]}</Text>

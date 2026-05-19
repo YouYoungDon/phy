@@ -10,20 +10,12 @@ import { SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 import { SobagiEmotion } from '../types';
 import { useUserStore } from '../store/userStore';
 import { getDialogueTier } from '../services/dialogueService';
+import { formatCategoryLabel } from '../constants/categories';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
   component: SobagiReactionScreen,
 });
-
-const CATEGORY_LABELS: Record<string, string> = {
-  cafe: '카페',
-  food: '식비',
-  transport: '교통',
-  shopping: '쇼핑',
-  other: '기타',
-  no_spend: '무지출',
-};
 
 const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
 
@@ -125,7 +117,7 @@ function SobagiReactionScreen() {
   const photocardRecords: PhotocardRecord[] = todaySpendingExpenses.map((e) => ({
     id: e.id,
     category: e.category,
-    categoryLabel: CATEGORY_LABELS[e.category] ?? e.category,
+    categoryLabel: formatCategoryLabel(e.category),
     amount: e.amount,
     memo: e.memo,
   }));
