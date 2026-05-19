@@ -60,9 +60,9 @@ function linesFor(type: DayFeelingType): [string, ...string[]] {
       ];
     case 'quiet':
       return [
-        '오늘은 조용히 지낸 하루였어요 🌙',
-        '아무것도 안 쓴 날도 있어요. 그런 하루였네요 🌿',
-        '잠잠하게 흘러간 하루예요 🍃',
+        '오늘은 잔잔하게 지나갔네요 🌿',
+        '천천히 흘러간 하루였어요 🍃',
+        '조용히 머무른 하루였네요 🌙',
       ];
     case 'modest':
       return [
@@ -175,8 +175,10 @@ export function getDayFeeling(expenses: Expense[], dateStr: string): DayFeelingR
   if (cats.includes('transport') && new Set(cats).size >= 3) return make('active');
 
   // Priority 7: quiet (very low total)
+  // Threshold intentionally decoupled from calm-atmosphere's 10,000.
+  // Synchronized thresholds would let users infer "low spending = reward state".
   const total = expenses.reduce((s, e) => s + e.amount, 0);
-  if (total < 10000) return make('quiet');
+  if (total < 8000) return make('quiet');
 
   // Fallback
   return make('modest');

@@ -1,4 +1,4 @@
-import { SobagiEmotion } from '../types';
+import { SobagiEmotion, ExpenseCategory } from '../types';
 
 export type RoomZone =
   | '창가'
@@ -38,6 +38,25 @@ export type BagItem = {
   // Photocard appearance — only for already-placed items
   photocardAffinity?: SobagiEmotion[];
 
+  // Implicit accumulation by category pattern — e.g. frequent cafe records
+  // make the mug appear in the room. When set, the room presence service
+  // can place this item via the category-pattern path, bypassing the normal
+  // minDays / minDaysInBag eligibility gates (the pattern itself is the gate).
+  categoryAffinity?: ExpenseCategory[];
+
+  // Implicit accumulation by recording streak — e.g. a 7-day streak makes the
+  // small plant appear. When set, the room presence service can place this
+  // item via the streak path once the user's current recording streak meets
+  // `minStreak`. Like categoryAffinity, this bypasses minDays / minDaysInBag.
+  streakAffinity?: { minStreak: number };
+
+  // Implicit accumulation by night-hour activity — e.g. recording during
+  // evening / late-night hours across multiple nights makes the warm lamp
+  // appear. The night window and thresholds are configured globally in the
+  // room presence service. Like categoryAffinity / streakAffinity, the pattern
+  // is the gate; minDays / minDaysInBag are bypassed when this fires.
+  nightAffinity?: boolean;
+
   // Reserved — type slot for future systems
   ambientAffinity?: AmbientAffinity;
 };
@@ -45,8 +64,8 @@ export type BagItem = {
 export type RoomPlacement = {
   itemId: string;
   zone: RoomZone;
-  placedAt: string;                    // YYYY-MM-DD
-  placementPath: 'B' | 'A' | 'C';     // internal only, never shown in UI
+  placedAt: string;                          // YYYY-MM-DD
+  placementPath: 'B' | 'A' | 'C' | 'P' | 'S' | 'L'; // internal only, never shown in UI. 'P' = category pattern, 'S' = recording streak, 'L' = night-activity / lamp.
 };
 
 export type PendingPlacement = {
@@ -105,6 +124,17 @@ export const BAG_ITEMS: Record<BagTab, BagItem[]> = {
       roomPresence: { zones: ['작은선반', '책상'], promptOnPlace: false, minDaysInBag: 5 },
       photocardAffinity: ['happy', 'excited', 'surprised', 'sleepy', 'soft-sad'],
     },
+    // New item — day 30. Also surfaces via the night-activity trigger:
+    // recording at night across multiple distinct nights is enough for a
+    // warm light to settle into the room, ahead of the day-30 unlock.
+    {
+      id: 'a6', emoji: '🪔', name: '따뜻한 램프',
+      desc: '밤에 켜두면 방이 조용해지는 작은 램프예요.',
+      minDays: 30,
+      roomPresence: { zones: ['침대옆', '책상'], emotionAffinity: ['sleepy', 'soft-sad'], promptOnPlace: false, minDaysInBag: 10 },
+      photocardAffinity: ['sleepy', 'soft-sad'],
+      nightAffinity: true,
+    },
   ],
   재료: [
     {
@@ -138,13 +168,16 @@ export const BAG_ITEMS: Record<BagTab, BagItem[]> = {
       roomPresence: { zones: ['침대옆'], emotionAffinity: ['soft-sad', 'sleepy'], promptOnPlace: true, minDaysInBag: 7 },
       photocardAffinity: ['soft-sad', 'sleepy'],
     },
-    // New item — day 45
+    // New item — day 45. Also surfaces via the recording-streak trigger:
+    // 7 consecutive days of presence is enough for the plant to settle in,
+    // ahead of the day-45 unlock. The streak itself is the gate.
     {
       id: 'm6', emoji: '🪴', name: '작은 식물',
       desc: '창가에 놓아두면 잘 자라는 작은 식물이에요.',
       minDays: 45,
       roomPresence: { zones: ['창가', '방구석'], promptOnPlace: true, minDaysInBag: 14 },
       photocardAffinity: ['happy', 'surprised'],
+      streakAffinity: { minStreak: 7 },
     },
   ],
   간식: [
@@ -170,13 +203,16 @@ export const BAG_ITEMS: Record<BagTab, BagItem[]> = {
       desc: '갓 구운 빵이에요. 아직 따뜻해요.',
       minDays: 35,
     },
-    // New item — day 55
+    // New item — day 55. Also surfaces via the cafe category-pattern trigger:
+    // recurring cafe records bring the mug into the room ahead of the day-55
+    // unlock, because the user has effectively built the habit themselves.
     {
       id: 's5', emoji: '🫖', name: '머그컵',
       desc: '두 손으로 감싸면 따뜻해지는 머그컵이에요.',
       minDays: 55,
       roomPresence: { zones: ['책상', '차코너'], emotionAffinity: ['happy', 'excited'], promptOnPlace: true, minDaysInBag: 10 },
       photocardAffinity: ['happy', 'excited'],
+      categoryAffinity: ['cafe'],
     },
   ],
   장난감: [

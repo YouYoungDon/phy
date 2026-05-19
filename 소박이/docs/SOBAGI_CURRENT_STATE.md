@@ -61,35 +61,46 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 ## Latest Handoff
 
 **Agent:** Engineering
-**Date:** 2026-05-17
-**Group completed:** Room presence — silent reshape
+**Date:** 2026-05-19
+**Group completed:** Daily first-record loop + no-spend daily record + amount-based-reward decoupling + no-spend photocard composition
 
 ### What changed
-- `src/constants/bagItems.ts` — `BagItem` now carries optional `roomPresence`, `photocardAffinity`, `ambientAffinity`; `BAG_ITEMS` extended (담요/식물/엽서/머그컵 added); `ZONE_SLOTS` introduced. *(committed earlier in this branch)*
-- `src/services/roomPresenceService.ts` — pure logic for B/A/C paths, drift, eligibility, auto-settle; `checkForPlacement` triggers on every app open, places directly when no prompt flag, defers via `PENDING_PLACEMENT` when `promptOnPlace: true`. **`confirmPlacement` and `deferPlacement` removed** as part of the reshape.
-- `src/hooks/useAppInit.ts` — `checkForPlacement` wired after emotion compute, before emotion store hydrates (so the new item is part of the room the moment the home screen first renders).
-- `src/pages/index.tsx` — `roomPlacements` loaded on mount and rendered as subtle emoji overlays inside `RoomBackground` (opacity 0.60, `pointerEvents="none"`, zone-positioned). **Placement prompt UI removed in this reshape pass.**
-- `src/constants/storage.ts` — added `ROOM_PLACEMENTS`, `PENDING_PLACEMENT`.
+- `src/types/index.ts` — `ExpenseCategory` extended with `'no_spend'`. New literal recognised everywhere `ExpenseCategory` is consumed.
+- `src/services/expenseService.ts` — added `recordNoSpend()` which builds a `{amount: 0, category: 'no_spend', sobagiEmotion: 'happy', createdAt: now}` expense and delegates to `saveExpense` so all streak / recorded-day / persistence plumbing stays in one place. Inside `saveExpense`, the found-item eval is now invoked at the end of the function, gated by `isRealTimeRecord && todayExpenses.length === 0` (first real-time record of the day). Catch-up records for past dates do not eval.
+- `src/hooks/useAppInit.ts` — removed the app-init `checkForFoundItem` call. App init still calls `promoteStaged`, so already-staged items continue to surface on the next-day open. Eval itself is now single-source: it fires exactly once per calendar day, tied to the first-record event.
+- `src/pages/record.tsx` — "오늘은 무지출이에요" button at the top of `/record`, visible only when (a) no record today AND (b) the date chip is set to today. On tap: `recordNoSpend()` → `setEmotion('happy', '오늘은 조용히 머물렀네요 🌿')` → navigate to `/reaction`.
+- `src/services/foundItemService.ts` — T3 trigger replaced. Old: `yesterdayExpenses.reduce(s, e => s + e.amount) < 15000`. New: `yesterdayExpenses.length === 1`. Activity-based ("yesterday was a quiet day, one record only") regardless of amount. Removes synchronized "low-spending → reward" signal across atmosphere / dayFeeling / found-item systems.
+- `src/components/photocard/PhotocardView.tsx` — wrapped the `totalBlock` + its trailing divider in `{amount > 0 && (<>…</>)}`. Records block was already conditional on `visibleRecords.length > 0`. No-spend-only days now collapse both financial blocks, leaving date + mood asset + quote.
+- `src/pages/reaction.tsx` — added `todaySpendingExpenses = todayExpenses.filter(e => e.category !== 'no_spend')`. `todayTotal` and `photocardRecords` derive from this filtered list. A no-spend-only day passes `amount=0` and `records=[]` into PhotocardView, which collapses both financial blocks per the rule above. Local `CATEGORY_LABELS` extended with `no_spend: '무지출'`.
+- `src/pages/stats.tsx` — added `selectedSpendingExpenses` filter; the day-detail spending list, top-category, dayFeeling derivation, and `photocardRecords` all derive from it. Calendar cells where `data.total === 0` (no-spend-only days) now render `🌿` in the existing `dayAmount` slot instead of `"0"`. `CATEGORY_LABELS` extended with `no_spend: '무지출 🌿'`.
+- `src/components/expense/ExpenseCard.tsx` — `CATEGORY_LABELS` extended with `no_spend: '🌿 무지출'`. The `/history` page renders no-spend records via this card, quietly distinguishable from spending.
+- `__tests__/foundItemService.test.ts` — 3 new T3 cases pin the activity-based behavior: (1) fires for a single large-amount yesterday record, (2) fires for a no-spend yesterday, (3) does not fire for a multi-record yesterday.
 
 ### What's now working
-- Items appear in the room silently between sessions. A user who records an expense, closes the app, and returns later finds the matching object already part of the room.
-- `promptOnPlace: true` items (담요, 식물, 머그컵, 작은 곰) are routed through pending → auto-settle, which gives them a 3–5 day "courtship" delay before appearing. The user never sees a prompt — the delay simply becomes part of the discovery feel.
-- B/A/C path selection, drift phase, photocardAffinity field are all in place and tested.
+- Daily first-record loop: spending record OR no-spend record (both qualify as "first meaningful record") triggers the found-item eval exactly once per calendar day. Subsequent same-day records do not re-trigger. Already-staged items continue to surface via `promoteStaged` on next-day app open.
+- No-spend daily record: amount 0, category `'no_spend'`, counts toward streak + recordedDaysCount, can trigger the same quiet found-item flow as a normal first record. Surfaces silently in `/history` (with `🌿 무지출` card) and in the `/stats` calendar (as `🌿` marker in the day cell). Does not inflate spending totals (amount 0). Filtered out of all spending-analysis surfaces.
+- T3 reacts to *shape of yesterday's presence* (one quiet touchpoint) — never to amount. The user cannot infer "spent less → got an item."
+- No-spend day photocard collapses to a quiet emotional card. Mood asset + date + "🌱 오늘의 한 줄" + quote. No total block, no records block, no ₩0 line. Matches the philosophy rule (PHILOSOPHY → The Photocard → No-spend day composition).
 
 ### Fragile / surprising
-- **The original Stage 4 placement prompt was a Discovery Principle violation** ("담요, 침대 옆에 놔둘까요? 응 / 나중에"). It was implemented per the spec, surfaced during this session as in conflict with PHILOSOPHY's *"Changes happen between sessions, never during one"*, and removed. The underlying pending/settle plumbing was kept and now functions as a silent delay instead of a UI gate.
-- `confirmPlacement` and `deferPlacement` are gone from the service — no caller exists now that the prompt is gone. Do not reintroduce without revisiting PHILOSOPHY.
-- The plan and spec at `docs/superpowers/plans/2026-05-17-room-presence.md` and `docs/superpowers/specs/2026-05-17-room-presence-design.md` still describe the prompt-based flow. They are now stale on that point. CURRENT_STATE wins per hierarchy.
-- Pre-existing photocard issues from previous handoff (warmth color, early dismiss, italic quote) are still open — none of them were touched here.
+- `useAppInit.checkForFoundItem` removal is structural. A user who recorded yesterday but doesn't record today gets no eval until their next record. Pre-existing semantic of "eval on every app open with the latest expenses snapshot" is gone on purpose — eval is now bound to the *act of recording*, not to *opening the app*. Don't restore the init-time eval; the once-per-day rule depends on saveExpense being the single source.
+- T3 also fires when *yesterday was a no-spend day*. Single-record yesterday qualifies regardless of category. This is intentional — quiet presence is the signal, not the kind of presence.
+- No-spend button uses `selectedDate === todayStr` as a guard so it never surfaces while the user is on a past-date catch-up chip. The "오늘은…" copy would mislead otherwise.
+- The 🌿 calendar marker reuses the `dayAmount` Text style slot (same size, same selected-state styling). Calendar layout is unchanged; only the glyph swaps. If a future user has both spending and a no-spend record on the same day, total > 0 and the amount text wins — 🌿 is only for amount-0 days.
+- Photocard financial blocks gate on `amount > 0`. The leading divider after the date header stays in both branches so the quote block keeps its soft separator. Don't move that divider into the conditional.
+- No new STORAGE_KEYS. No migration concerns. No-spend lives inside the existing `EXPENSES` array.
 
 ### What the next agent must NOT do
-- Reintroduce any in-session UI prompt for placement, however gentle. Sobagi must not narrate the placement.
-- Add "new item appeared" toasts, dots, badges, or animations tied to room placement.
-- Roll back the room presence system entirely — the data model and silent placement are emotionally correct; only the foregrounding UI was wrong.
-- Add drag-and-drop, manual placement, or any item-management surface in the room.
+- Don't re-introduce `checkForFoundItem` in `useAppInit`. The once-per-day "first record" semantics depend on saveExpense being the sole eval point.
+- Don't change T3 back to an amount threshold. The decoupling fixes a synchronized low-spending signal across atmosphere / dayFeeling / triggers (PHILOSOPHY → Anti-Pattern List → "Synchronized restraint signaling").
+- Don't render any "₩ 0" line on the photocard for no-spend-only days. The financial-block collapse is the composition.
+- Don't add "saved money" / "successful no-spend" / "achievement" / "streak bonus" framing anywhere in the no-spend flow. Copy stays observational ("오늘은 조용히 머물렀네요 🌿").
+- Don't add no-spend records into spending-analysis surfaces (top category, day-card spending list, photocard records block, monthly totals).
 
 ### Next
-Stage 5 — photocard emoji overlay. `PhotocardView.tsx` should accept `placedItems` + `currentEmotion`, filter by `photocardAffinity`, render one randomly-selected emoji at its zone position with reduced opacity, no label, no animation. `reaction.tsx` passes the props. Subtler than the home-screen rendering by design.
+Quiet-bucket dayFeeling refinement landed. `linesFor('quiet')` in `dayFeelingService.ts` rewritten to time/presence-oriented copy with no financial implication (`'오늘은 잔잔하게 지나갔네요 🌿'` / `'천천히 흘러간 하루였어요 🍃'` / `'조용히 머무른 하루였네요 🌙'`). Threshold lowered from `< 10000` to `< 8000` to break exact equality with `CALM_DAILY_THRESHOLD` (atmosphere overlay) — synchronized thresholds would let users infer "low spending = reward state". A short rationale comment is inline at the threshold check.
+
+Held: weekend leisure → cozy floor items trigger. User explicitly paused this and asked for a QA pass first; QA completed and the dayFeeling decoupling is its only material follow-up. Awaiting explicit unblock before opening the weekend trigger.
 
 ---
 
@@ -105,16 +116,17 @@ Stage 5 — photocard emoji overlay. `PhotocardView.tsx` should accept `placedIt
 | Level chip + progress bar | `src/pages/index.tsx` |
 | DailySummary card | `src/pages/index.tsx` |
 | Record flow (amount, category, emotion, memo, date chips) | `src/pages/record.tsx` |
+| No-spend daily record ("오늘은 무지출이에요" → 0-amount, category `no_spend`) | `src/pages/record.tsx`, `src/services/expenseService.ts` (`recordNoSpend`) |
 | Emotion engine (5-rule priority chain) | `src/services/emotionEngine.ts` |
 | Dialogue tier system (3 tiers × 5 emotions + 4 observation types) | `src/constants/dialogue.ts`, `src/services/dialogueService.ts` |
 | Reaction screen (tier-aware title, floating hearts, photocard button) | `src/pages/reaction.tsx` |
-| Photocard — Tier 2 baseline | `src/components/photocard/PhotocardView.tsx` |
+| Photocard — split-layout landscape (mood asset + spending summary) | `src/components/photocard/PhotocardView.tsx`, `src/services/photocardMoodService.ts` |
 | Stats / calendar + trend graph | `src/pages/stats.tsx` |
 | Per-day photocard entry point in stats | `src/pages/stats.tsx` |
 | DayFeelingCard (8 buckets, observational) | `src/components/stats/DayFeelingCard.tsx`, `src/services/dayFeelingService.ts` |
 | Mailbox (dynamic: milestone + seasonal letters) | `src/services/letterService.ts`, `src/constants/letters.ts` |
-| Bag accumulation (20 items across 4 tabs, minDays thresholds) | `src/constants/bagItems.ts`, `src/pages/index.tsx` |
-| Found item system (4 triggers, staged delivery) | `src/services/foundItemService.ts`, `src/constants/findableItems.ts` |
+| Bag accumulation (21 items across 4 tabs, minDays thresholds) | `src/constants/bagItems.ts`, `src/pages/index.tsx` |
+| Found item system (4 triggers, T3 activity-based not amount-based, eval on first-of-day saveExpense, staged delivery via app-init promote) | `src/services/foundItemService.ts`, `src/services/expenseService.ts`, `src/hooks/useAppInit.ts`, `src/constants/findableItems.ts` |
 | Bag new-item amber dot | `src/pages/index.tsx`, `src/constants/storage.ts` |
 | Room presence — silent ambient placement (B/A/C paths, drift, auto-settle) | `src/services/roomPresenceService.ts`, `src/hooks/useAppInit.ts`, `src/pages/index.tsx` |
 | summaryCard boundary dissolve | `src/pages/index.tsx` |
@@ -124,16 +136,17 @@ Stage 5 — photocard emoji overlay. `PhotocardView.tsx` should accept `placedIt
 | System | Blocked on |
 |---|---|
 | Room stage 2–5 | Image assets; one-line change in `constants/assets.ts` |
-| Room object accumulation (plant, bookshelf, candle) | Sprite assets |
 | Sobagi idle behaviors | Image assets |
 | Seasonal room ambience | Design + assets |
 | Year-end recap | — |
+| Implicit accumulation triggers (cafe pattern, streak, night activity, calm low-spend days, weekend leisure) | Next: cafe → mug as proof-of-feel |
 
 ### Explicitly rejected
 
 Push notifications · streak anxiety framing · achievement badges · budget limits / savings goals ·
 social sharing / leaderboards · spending advice / behavioral nudges · gamified unlock announcements ·
-EXP point system · finance dashboard summaries
+EXP point system · finance dashboard summaries · slot pickers · drag-and-drop room decoration ·
+furniture management UI · inventory-to-room transfer flows · "you unlocked X for your room" messaging
 
 ---
 

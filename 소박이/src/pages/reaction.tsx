@@ -22,6 +22,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   transport: '교통',
   shopping: '쇼핑',
   other: '기타',
+  no_spend: '무지출',
 };
 
 const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
@@ -109,14 +110,19 @@ function SobagiReactionScreen() {
 
   const hintOpacity = photocardBtnAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
-  // Computed once at mount — expenses are already loaded when reaction screen renders
+  // Computed once at mount — expenses are already loaded when reaction screen renders.
+  // No-spend records carry amount 0 and exist only to mark the day; they must
+  // not surface in the photocard's total/records blocks. Filtering them here
+  // means a no-spend-only day passes amount=0 and records=[] into PhotocardView,
+  // which then collapses both blocks via their existing conditions.
   const todayExpenses = getTodayExpenses();
-  const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const todaySpendingExpenses = todayExpenses.filter((e) => e.category !== 'no_spend');
+  const todayTotal = todaySpendingExpenses.reduce((sum, e) => sum + e.amount, 0);
   const now = new Date();
   const dateStr = formatNumericDate(now);
   const weekdayLabel = WEEKDAY_LABELS[now.getDay()];
   const timeLabel = formatTimeLabel(now);
-  const photocardRecords: PhotocardRecord[] = todayExpenses.map((e) => ({
+  const photocardRecords: PhotocardRecord[] = todaySpendingExpenses.map((e) => ({
     id: e.id,
     category: e.category,
     categoryLabel: CATEGORY_LABELS[e.category] ?? e.category,

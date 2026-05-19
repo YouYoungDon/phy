@@ -56,11 +56,11 @@ function hasTrigger(expenses: Expense[], today: string, yesterday: string): bool
     if (otherDaysThisMonth.size === 0) return true;
   }
 
-  // T3: Yesterday was a quiet spending day (under 15,000 won total)
-  if (yesterdayExpenses.length > 0) {
-    const total = yesterdayExpenses.reduce((s, e) => s + e.amount, 0);
-    if (total < 15000) return true;
-  }
+  // T3: Yesterday was a quiet day — exactly one record. Activity-based, not
+  // amount-based: we react to the shape of yesterday's presence (one quiet
+  // touchpoint), never to how little the user spent. No-spend records count
+  // here the same as a single small purchase would.
+  if (yesterdayExpenses.length === 1) return true;
 
   // T4: Small everyday purchase (cafe or food under 6,000 won)
   if (

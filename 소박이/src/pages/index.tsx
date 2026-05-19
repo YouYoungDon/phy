@@ -17,7 +17,7 @@ import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
-import { getTimeOfDayTint, getWarmthOpacity } from '../services/atmosphereService';
+import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR } from '../services/atmosphereService';
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
 
 export const Route = createRoute('/', {
@@ -63,6 +63,7 @@ function HomeScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
   const timeOfDayTint = getTimeOfDayTint(new Date().getHours());
   const warmthOpacity = getWarmthOpacity(recordedDaysCount);
+  const calmOpacity = getCalmAtmosphereOpacity(expenses, getLocalDateString(new Date()));
 
   const todayExpenses = useMemo(() => {
     const todayStr = getLocalDateString(new Date());
@@ -208,6 +209,12 @@ function HomeScreen() {
               style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
               pointerEvents="none"
             />
+            {calmOpacity > 0 && (
+              <View
+                style={[styles.atmosphereOverlay, { backgroundColor: CALM_OVERLAY_COLOR, opacity: calmOpacity }]}
+                pointerEvents="none"
+              />
+            )}
             <View style={styles.bottomFade} pointerEvents="none">
               <View style={[styles.fadeSlice, { opacity: 0.06 }]} />
               <View style={[styles.fadeSlice, { opacity: 0.18 }]} />

@@ -130,12 +130,21 @@ export function PhotocardView({
 
           <View style={styles.divider} />
 
-          <View style={styles.totalBlock}>
-            <Text style={styles.totalLabel}>총 금액</Text>
-            <Text style={styles.totalAmount}>₩ {amount.toLocaleString('ko-KR')}</Text>
-          </View>
+          {/* Total + records blocks render only when the day had real spending.
+              A no-spend-only day (amount === 0 with no records) collapses both
+              so the photocard reads as a quiet emotional card, not a ₩0 receipt.
+              The leading divider above stays so the date header still has its
+              soft separator before the quote block below. */}
+          {amount > 0 && (
+            <>
+              <View style={styles.totalBlock}>
+                <Text style={styles.totalLabel}>총 금액</Text>
+                <Text style={styles.totalAmount}>₩ {amount.toLocaleString('ko-KR')}</Text>
+              </View>
 
-          <View style={styles.divider} />
+              <View style={styles.divider} />
+            </>
+          )}
 
           {visibleRecords.length > 0 && (
             <View style={styles.recordsBlock}>

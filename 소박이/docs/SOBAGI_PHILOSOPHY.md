@@ -89,6 +89,8 @@ Check every new feature and copy line against this.
 | Objects that feel like rewards | Users start recording to get objects, not to record their day |
 | Warmth drift too fast | Makes the system feel like a game progression curve |
 | Observations about amounts | Turns Sobagi into analytics with a cute face |
+| Amount-based implicit triggers | "Spend less → quiet atmosphere → unlocked item" reads as finance-restraint gamification. Implicit triggers must react to presence shape (recorded? once? at this hour?), never to how little the user spent. |
+| Synchronized restraint signaling | Multiple systems (atmosphere, dayFeeling, found-item triggers) tuned to the same low-spending signal compound into "reward for spending less." Each system reacts to a different facet of presence; thresholds and conditions should be decoupled on purpose. |
 | Letters arriving too frequently | Mailbox becomes a notification feed |
 | Every corner filled | Room stops breathing; negative space is load-bearing |
 | Badge counts on navigation tabs | Standard app anxiety pattern |
@@ -107,6 +109,30 @@ If it feels like the second: reject it.
 Negative space is part of the emotional design. A cozy room becomes emotionally stronger when not every corner is filled.
 
 **Deeper, not larger.** The room is one centered, vertically-deepening space — not a panoramic or scrollable one. Horizontal spatial expansion (side panels, peek-affordances, multi-screen rooms, carousel layouts) was probed and explicitly rejected on 2026-05-18 because, even under extreme restraint, it drifted into carousel/navigation energy and broke the "one continuous inhabited room" feel. When the room needs to feel more inhabited, the answer is atmosphere — depth of light, time, warmth, traces accumulated in place — not lateral space.
+
+### Implicit accumulation, never explicit decoration
+
+The room evolves only from the user's behavior and emotional patterns — not from anything the user *chooses to do to it*. The contract in one sentence: *I didn't decorate this room manually — but somehow it became mine.*
+
+Concretely:
+- The user is never asked to place, move, or configure an object.
+- There are no slots, no decoration sheets, no edit modes, no drag-and-drop.
+- A change happens because the user *recorded their life* — not because they opened a decoration UI.
+- Triggers come from patterns the user can feel but didn't optimize for: a cafe habit, a recording streak, evening activity, calm low-spending days, weekend leisure spending.
+- Each appearance is irreversible and undiscussed — the room absorbed it, and the user notices on return.
+
+**Rejected patterns** (not deferred — explicitly out of scope, decided 2026-05-18):
+- Slot pickers (`floor` / `desk` / `wall` / `shelf` choices)
+- "Place item" buttons or any explicit confirm UI
+- Drag-and-drop decoration loops
+- Furniture management screens
+- Inventory-to-room transfer flows
+- Visible "you unlocked X for your room" messaging
+- Any optimization mechanic that rewards specific behavior with specific objects
+
+If a feature would let a user say "I'm going to set up my room now," reject it. The room is **emotional memory accumulation, not a simulator.**
+
+**Historical note (2026-05-18):** A `roomDecorationService` was in flight implementing the slot/decoration model (`floor` / `desk` / `wall` / `shelf` slots, `placeItem(slot, ...)`, `unplaceItem(slot)`, a `PLACED_ITEMS` storage key, a parallel render block in `index.tsx`). It was removed in full — not archived — because every function in its API was structurally explicit, and keeping it as dormant code left an import path the next agent could re-introduce by accident. Git history is the archive. If implicit accumulation ever needs a richer placement model, build it as a new path on `roomPresenceService` (the system that already handles silent placement via zones), not by reviving the decoration shape.
 
 ---
 
@@ -158,6 +184,9 @@ Should feel like a photograph slowly developing — gradual, quiet, unhurried. N
 
 **Card composition rule:**
 The Sobagi image and the emotional quote are the card. Everything else — date, amount, categories — lives softly below them. If a user screenshots only the top 65% of the card, it should feel complete and emotionally whole. The data is context. The atmosphere is the point.
+
+**No-spend day composition (decided 2026-05-19):**
+When a day has no real spending (the only record is a no-spend mark, `category === 'no_spend'`, amount 0), the photocard collapses its total-amount block and its records block. Date, mood asset, and the day's quote remain. The card reads as a quiet emotional keepsake, never as a ₩0 receipt. The principle: the photocard is an emotional snapshot of *being present today*, not a report on spending. The collapse is implemented by passing `amount=0` + `records=[]` from `reaction.tsx` / `stats.tsx` into PhotocardView and gating the financial blocks on `amount > 0`. Do not show "₩ 0" or any zero-amount line for no-spend-only days.
 
 **The card is the product:**
 The card appearing is the complete experience. Saving and sharing are optional enhancements. A user who generates a card and closes the modal without saving has still had the full experience — the moment of seeing it is the thing. The app should behave as though this is the intended path, not a fallback.
