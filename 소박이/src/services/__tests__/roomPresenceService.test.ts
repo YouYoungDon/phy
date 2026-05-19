@@ -224,9 +224,9 @@ describe('hasCategoryPattern', () => {
   // Safety check #4: non-cafe categories do NOT trigger mug
   it('ignores records of other categories', () => {
     const expenses = [
-      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00', category: 'food' }),
-      makeExpense({ id: '2', createdAt: '2026-05-14T10:00:00', category: 'food' }),
-      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00', category: 'food' }),
+      makeExpense({ id: '1', createdAt: '2026-05-10T10:00:00', category: 'dining_out' }),
+      makeExpense({ id: '2', createdAt: '2026-05-14T10:00:00', category: 'dining_out' }),
+      makeExpense({ id: '3', createdAt: '2026-05-18T10:00:00', category: 'dining_out' }),
     ];
     expect(hasCategoryPattern(expenses, 'cafe', CAFE_OPTS, '2026-05-18')).toBe(false);
   });

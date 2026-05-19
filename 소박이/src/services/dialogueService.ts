@@ -75,7 +75,7 @@ export function detectObservationType(ctx: ObservationContext): ObservationType 
 
   const recent10 = ctx.expenses.slice(-10);
   const warmCount = recent10.filter(
-    (e) => e.category === 'cafe' || e.category === 'food',
+    (e) => e.category === 'cafe' || e.category === 'home_meal' || e.category === 'dining_out',
   ).length;
   if (warmCount >= 6) return 'categoryWarm';
 
