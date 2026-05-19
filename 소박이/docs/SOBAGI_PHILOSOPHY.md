@@ -89,6 +89,8 @@ Check every new feature and copy line against this.
 | Objects that feel like rewards | Users start recording to get objects, not to record their day |
 | Warmth drift too fast | Makes the system feel like a game progression curve |
 | Observations about amounts | Turns Sobagi into analytics with a cute face |
+| Amount-based implicit triggers | "Spend less → quiet atmosphere → unlocked item" reads as finance-restraint gamification. Implicit triggers must react to presence shape (recorded? once? at this hour?), never to how little the user spent. |
+| Synchronized restraint signaling | Multiple systems (atmosphere, dayFeeling, found-item triggers) tuned to the same low-spending signal compound into "reward for spending less." Each system reacts to a different facet of presence; thresholds and conditions should be decoupled on purpose. |
 | Letters arriving too frequently | Mailbox becomes a notification feed |
 | Every corner filled | Room stops breathing; negative space is load-bearing |
 | Badge counts on navigation tabs | Standard app anxiety pattern |
@@ -182,6 +184,9 @@ Should feel like a photograph slowly developing — gradual, quiet, unhurried. N
 
 **Card composition rule:**
 The Sobagi image and the emotional quote are the card. Everything else — date, amount, categories — lives softly below them. If a user screenshots only the top 65% of the card, it should feel complete and emotionally whole. The data is context. The atmosphere is the point.
+
+**No-spend day composition (decided 2026-05-19):**
+When a day has no real spending (the only record is a no-spend mark, `category === 'no_spend'`, amount 0), the photocard collapses its total-amount block and its records block. Date, mood asset, and the day's quote remain. The card reads as a quiet emotional keepsake, never as a ₩0 receipt. The principle: the photocard is an emotional snapshot of *being present today*, not a report on spending. The collapse is implemented by passing `amount=0` + `records=[]` from `reaction.tsx` / `stats.tsx` into PhotocardView and gating the financial blocks on `amount > 0`. Do not show "₩ 0" or any zero-amount line for no-spend-only days.
 
 **The card is the product:**
 The card appearing is the complete experience. Saving and sharing are optional enhancements. A user who generates a card and closes the modal without saving has still had the full experience — the moment of seeing it is the thing. The app should behave as though this is the intended path, not a fallback.

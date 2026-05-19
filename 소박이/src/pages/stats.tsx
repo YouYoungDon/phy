@@ -22,6 +22,7 @@ const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   transport: '교통 🚌',
   shopping: '쇼핑 🛍️',
   other: '기타 📦',
+  no_spend: '무지출 🌿',
 };
 
 const PHOTOCARD_CATEGORY_LABELS: Record<string, string> = {
@@ -190,6 +191,15 @@ function StatsScreen() {
     [expenses, selectedDay],
   );
 
+  // No-spend records carry amount 0; they exist for streak/day-count/found-item
+  // purposes but are not "spending" and shouldn't surface in the spending list,
+  // top-category, or dayFeeling derivations. Calendar totals are unaffected
+  // because no-spend amount is 0.
+  const selectedSpendingExpenses = useMemo(
+    () => selectedExpenses.filter((e) => e.category !== 'no_spend'),
+    [selectedExpenses],
+  );
+
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDow = getFirstDayOfWeek(viewYear, viewMonth);
 
@@ -249,6 +259,7 @@ function StatsScreen() {
     const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
     const counts: Partial<Record<ExpenseCategory, number>> = {};
     for (const e of expenses) {
+      if (e.category === 'no_spend') continue;
       if (!getLocalDateString(new Date(e.createdAt)).startsWith(prefix)) continue;
       counts[e.category] = (counts[e.category] ?? 0) + 1;
     }
@@ -256,21 +267,24 @@ function StatsScreen() {
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
   }, [expenses, viewYear, viewMonth]);
 
-  // Photocard data — derived from the selected day's records
+  // Photocard data — derived from the selected day's spending records only.
+  // A no-spend-only day has no spending feeling to surface.
   const dayFeeling = useMemo(
-    () => selectedExpenses.length > 0 ? getDayFeeling(selectedExpenses, selectedDay) : null,
-    [selectedExpenses, selectedDay],
+    () => selectedSpendingExpenses.length > 0 ? getDayFeeling(selectedSpendingExpenses, selectedDay) : null,
+    [selectedSpendingExpenses, selectedDay],
   );
 
+  // Photocard renders only real spending records. No-spend entries exist for
+  // streak/day-count but never appear as "₩ 0 — 무지출" lines on the card.
   const photocardRecords: PhotocardRecord[] = useMemo(
-    () => selectedExpenses.map((e) => ({
+    () => selectedSpendingExpenses.map((e) => ({
       id: e.id,
       category: e.category,
       categoryLabel: PHOTOCARD_CATEGORY_LABELS[e.category] ?? e.category,
       amount: e.amount,
       memo: e.memo,
     })),
-    [selectedExpenses],
+    [selectedSpendingExpenses],
   );
 
   const photocardDateStr = useMemo(() => {
@@ -412,9 +426,18 @@ function StatsScreen() {
                         {day}
                       </Text>
                       {data ? (
-                        <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}>
-                          {data.total.toLocaleString('ko-KR')}
-                        </Text>
+                        data.total === 0 ? (
+                          // No-spend-only day: render a quiet leaf instead of "0".
+                          // Same slot/size as the amount text, just a different glyph,
+                          // so the calendar layout stays untouched.
+                          <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}>
+                            🌿
+                          </Text>
+                        ) : (
+                          <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}>
+                            {data.total.toLocaleString('ko-KR')}
+                          </Text>
+                        )
                       ) : (
                         <View style={styles.dayAmountPlaceholder} />
                       )}
@@ -426,19 +449,21 @@ function StatsScreen() {
           </View>
         </View>
 
-        {/* Selected day expense list */}
-        {selectedExpenses.length > 0 && (
+        {/* Selected day expense list — only renders if the day had actual spending.
+            No-spend-only days exist in the underlying data and the calendar, but
+            don't surface a spending detail card. */}
+        {selectedSpendingExpenses.length > 0 && (
           <View style={styles.dayCard}>
             <View style={styles.dayCardHeader}>
               <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
               <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
             </View>
-            <ExpenseList expenses={selectedExpenses} onPress={openEdit} />
+            <ExpenseList expenses={selectedSpendingExpenses} onPress={openEdit} />
           </View>
         )}
 
-        {/* Photocard entry — replaces DayFeelingCard, shown when selected day has records */}
-        {selectedExpenses.length > 0 && (
+        {/* Photocard entry — replaces DayFeelingCard, shown when selected day has spending */}
+        {selectedSpendingExpenses.length > 0 && (
           <Pressable style={styles.photocardEntryBtn} onPress={openDayPhotocard}>
             <Text style={styles.photocardEntryText}>포토카드 생성</Text>
           </Pressable>

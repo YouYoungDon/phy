@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { CategorySelector } from '../components/expense/CategorySelector';
-import { saveExpense } from '../services/expenseService';
+import { saveExpense, recordNoSpend } from '../services/expenseService';
 import { evaluate } from '../services/emotionEngine';
 import { getDialogueTier, selectReactionMessage, detectObservationType, selectObservationMessage } from '../services/dialogueService';
 import * as storageService from '../services/storageService';
@@ -109,6 +109,21 @@ function RecordScreen() {
 
   const amount = parseInt(amountText.replace(/,/g, ''), 10) || 0;
   const canSave = amount > 0 && !isSaving;
+
+  // The no-spend button is the only way to mark a calendar day with zero
+  // spending. It only surfaces when there's nothing recorded today yet AND
+  // the user is on the "today" date chip — past-date catch-up has its own
+  // flow and the button's "오늘은…" copy would be misleading there.
+  const hasRecordToday = getTodayExpenses().length > 0;
+  const canNoSpend = !hasRecordToday && !isSaving && selectedDate === todayStr;
+
+  const handleNoSpend = async () => {
+    if (!canNoSpend) return;
+    setIsSaving(true);
+    await recordNoSpend();
+    setEmotion('happy', '오늘은 조용히 머물렀네요 🌿');
+    navigation.navigate('/reaction');
+  };
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -210,6 +225,17 @@ function RecordScreen() {
             );
           })}
         </ScrollView>
+
+        {/* No-spend option — only visible when nothing has been recorded today */}
+        {canNoSpend && (
+          <Pressable
+            style={styles.noSpendBtn}
+            onPress={handleNoSpend}
+            disabled={!canNoSpend}
+          >
+            <Text style={styles.noSpendLabel}>오늘은 무지출이에요</Text>
+          </Pressable>
+        )}
 
         {/* Amount hero */}
         <Pressable style={styles.amountCard} onPress={() => amountInputRef.current?.focus()}>
@@ -372,6 +398,22 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  noSpendBtn: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 16,
+  },
+  noSpendLabel: {
+    fontSize: 14,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
   amountDisplay: {
     fontSize: 44,

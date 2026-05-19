@@ -9,6 +9,7 @@ const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   transport: '🚌 교통',
   shopping: '🛍️ 쇼핑',
   other: '📦 기타',
+  no_spend: '🌿 무지출',
 };
 
 const EMOTION_EMOJIS: Record<string, string> = {

@@ -1,6 +1,6 @@
 export type SobagiEmotion = 'happy' | 'excited' | 'surprised' | 'sleepy' | 'soft-sad';
 
-export type ExpenseCategory = 'cafe' | 'food' | 'transport' | 'shopping' | 'other';
+export type ExpenseCategory = 'cafe' | 'food' | 'transport' | 'shopping' | 'other' | 'no_spend';
 
 export interface Expense {
   id: string;

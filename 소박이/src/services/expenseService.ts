@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from '../constants/storage';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
 import { getLocalDateString } from '../utils/date';
+import { checkForFoundItem } from './foundItemService';
 
 export async function saveExpense(expense: Expense): Promise<void> {
   const expenseStore = useExpenseStore.getState();
@@ -16,7 +17,8 @@ export async function saveExpense(expense: Expense): Promise<void> {
   // Streak: only the first real-time (today-dated) record of the day advances it.
   // Past-date catch-up records are quiet — they never affect streak.
   const todayExpenses = expenseStore.getTodayExpenses();
-  if (isRealTimeRecord && todayExpenses.length === 0) {
+  const isFirstRecordToday = isRealTimeRecord && todayExpenses.length === 0;
+  if (isFirstRecordToday) {
     const yesterdayStr = getLocalDateString(new Date(Date.now() - 86400000));
     const yesterdayHadRecord = expenseStore.expenses.some(
       (e) => getLocalDateString(new Date(e.createdAt)) === yesterdayStr,
@@ -51,6 +53,29 @@ export async function saveExpense(expense: Expense): Promise<void> {
 
   void storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
   void storageService.save(STORAGE_KEYS.USER, updatedUser);
+
+  // Found-item eval: only fires on the first real-time record of the day.
+  // Both regular expenses and no-spend records qualify as "first meaningful
+  // record." Subsequent records same-day don't reach this branch, so the
+  // once-per-day rule is enforced naturally without a separate gate.
+  if (isFirstRecordToday) {
+    await checkForFoundItem(updatedExpenses, s.recordedDaysCount);
+  }
+}
+
+// No-spend record: a quiet daily mark with amount 0 and category 'no_spend'.
+// Counts toward streak and recorded-day count, and qualifies as the day's
+// first meaningful record for found-item eval. Created via saveExpense so
+// all persistence/streak/eval plumbing stays in one place.
+export async function recordNoSpend(): Promise<void> {
+  const expense: Expense = {
+    id: Date.now().toString(),
+    amount: 0,
+    category: 'no_spend',
+    sobagiEmotion: 'happy',
+    createdAt: new Date().toISOString(),
+  };
+  await saveExpense(expense);
 }
 
 export function updateExpense(

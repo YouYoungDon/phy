@@ -67,6 +67,64 @@ describe('checkForFoundItem', () => {
       expect.any(String),
     );
   });
+
+  it('T3 fires when yesterday had exactly one record, regardless of amount', async () => {
+    // Activity-based trigger: shape of presence (one record) is what matters.
+    // Amount is large here on purpose — a low-amount rule would miss this.
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    const today = new Date().toISOString();
+    const yesterdayBigPurchase = makeExpense({
+      id: '1', amount: 80000, category: 'shopping', createdAt: yesterday,
+    });
+    // Today record so the "recentExpenses.length === 0" early-return doesn't fire.
+    // Use shopping (not cafe/food) and a non-small amount so T4 can't fire and
+    // we're testing T3 in isolation.
+    const todayMid = makeExpense({
+      id: '2', amount: 25000, category: 'shopping', createdAt: today,
+    });
+    await checkForFoundItem([yesterdayBigPurchase, todayMid], 10);
+    expect(storageService.save).toHaveBeenCalledWith(
+      'sobagi-staged-item-id',
+      expect.any(String),
+    );
+  });
+
+  it('T3 also fires when yesterday was a no-spend day (single record, amount 0)', async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    const today = new Date().toISOString();
+    const yesterdayNoSpend = makeExpense({
+      id: '1', amount: 0, category: 'no_spend', createdAt: yesterday,
+    });
+    const todayMid = makeExpense({
+      id: '2', amount: 25000, category: 'shopping', createdAt: today,
+    });
+    await checkForFoundItem([yesterdayNoSpend, todayMid], 10);
+    expect(storageService.save).toHaveBeenCalledWith(
+      'sobagi-staged-item-id',
+      expect.any(String),
+    );
+  });
+
+  it('T3 does NOT fire when yesterday had multiple records', async () => {
+    // Multi-record yesterday is not "quiet presence"; T3 must not catch it.
+    // Today records are mid-amount shopping so T1/T2/T4 cannot fire either.
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    const today = new Date().toISOString();
+    const yesterday1 = makeExpense({
+      id: '1', amount: 25000, category: 'shopping', createdAt: yesterday,
+    });
+    const yesterday2 = makeExpense({
+      id: '2', amount: 30000, category: 'shopping', createdAt: yesterday,
+    });
+    const todayMid = makeExpense({
+      id: '3', amount: 25000, category: 'shopping', createdAt: today,
+    });
+    await checkForFoundItem([yesterday1, yesterday2, todayMid], 10);
+    expect(storageService.save).not.toHaveBeenCalledWith(
+      'sobagi-staged-item-id',
+      expect.any(String),
+    );
+  });
 });
 
 describe('promoteStaged', () => {

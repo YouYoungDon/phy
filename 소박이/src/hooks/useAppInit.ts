@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import * as storageService from '../services/storageService';
-import { promoteStaged, checkForFoundItem } from '../services/foundItemService';
+import { promoteStaged } from '../services/foundItemService';
 import { checkAndDeliverLetters } from '../services/letterService';
 import { checkForPlacement } from '../services/roomPresenceService';
 import { STORAGE_KEYS } from '../constants/storage';
@@ -51,7 +51,10 @@ export function useAppInit(): boolean {
         }
 
         await promoteStaged();
-        await checkForFoundItem(expenses ?? [], recomputedDays);
+        // Found-item eval moved to saveExpense (first record of day).
+        // App init only promotes already-staged items; it does not re-evaluate
+        // triggers, so the eval fires exactly once per calendar day, tied to
+        // the day's first meaningful record (spending or no-spend).
 
         const storedVisitDate = await storageService.load<string>(STORAGE_KEYS.LAST_VISIT_DATE);
         prevVisitDate = storedVisitDate;
