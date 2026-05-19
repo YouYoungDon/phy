@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Expense, ExpenseCategory } from '../../types';
 import { COLORS } from '../../constants/colors';
 
-const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+const CATEGORY_LABELS: Partial<Record<ExpenseCategory, string>> = {
   cafe: '☕ 카페',
   food: '🍚 식비',
   transport: '🚌 교통',
