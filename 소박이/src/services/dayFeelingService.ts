@@ -48,9 +48,9 @@ function linesFor(type: DayFeelingType): [string, ...string[]] {
       ];
     case 'selfcare':
       return [
-        '오늘은 나를 위해 뭔가 산 하루예요 🌸',
-        '작은 선물을 스스로에게 줬어요 ✨',
-        '오늘은 나를 조금 챙긴 하루였어요 🎀',
+        '좋아하는 일에 시간을 쓴 하루예요 🎀',
+        '오늘은 마음이 가는 곳에 머문 하루였어요 ✨',
+        '나만의 시간을 보낸 하루예요 🌸',
       ];
     case 'active':
       return [

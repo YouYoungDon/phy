@@ -23,21 +23,19 @@ export const CATEGORIES: readonly ExpenseCategoryMeta[] = [
   { key: 'no_spend',   label: '무지출',   emoji: '🌿',  inPicker: false },
 ] as const;
 
-export const CATEGORY_BY_TOKEN: Partial<Record<ExpenseCategory, ExpenseCategoryMeta>> =
-  Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
+export const CATEGORY_BY_TOKEN: Record<ExpenseCategory, ExpenseCategoryMeta> =
+  Object.fromEntries(CATEGORIES.map((c) => [c.key, c])) as Record<ExpenseCategory, ExpenseCategoryMeta>;
 
 export const PICKER_CATEGORIES: readonly ExpenseCategoryMeta[] =
   CATEGORIES.filter((c) => c.inPicker);
 
 /**
  * "☕ 카페" — emoji-prefixed full label for in-list rendering (history card,
- * stats records list, monthly top line). Falls back to the raw token when an
- * unknown category sneaks through (shouldn't happen post-migration, but
- * stays defensive).
+ * stats records list, monthly top line).
  */
 export function formatCategoryWithEmoji(token: ExpenseCategory): string {
   const meta = CATEGORY_BY_TOKEN[token];
-  return meta ? `${meta.emoji} ${meta.label}` : token;
+  return `${meta.emoji} ${meta.label}`;
 }
 
 /**
@@ -45,5 +43,5 @@ export function formatCategoryWithEmoji(token: ExpenseCategory): string {
  * already supplies its own visual context.
  */
 export function formatCategoryLabel(token: ExpenseCategory): string {
-  return CATEGORY_BY_TOKEN[token]?.label ?? token;
+  return CATEGORY_BY_TOKEN[token].label;
 }

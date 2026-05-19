@@ -11,7 +11,7 @@ import {
 } from '../src/services/dialogueService';
 import { Expense } from '../src/types';
 
-const makeExpense = (hour = 14, category: Expense['category'] = 'food', daysAgo = 0): Expense => {
+const makeExpense = (hour = 14, category: Expense['category'] = 'cafe', daysAgo = 0): Expense => {
   const d = new Date();
   d.setHours(hour, 0, 0, 0);
   d.setDate(d.getDate() - daysAgo);

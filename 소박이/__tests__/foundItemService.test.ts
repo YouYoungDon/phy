@@ -7,6 +7,7 @@ jest.mock('../src/services/storageService', () => ({
 import * as storageService from '../src/services/storageService';
 import { checkForFoundItem, promoteStaged } from '../src/services/foundItemService';
 import { Expense } from '../src/types';
+import { getLocalDateString } from '../src/utils/date';
 
 const mockLoad = storageService.load as jest.MockedFunction<typeof storageService.load>;
 
@@ -74,13 +75,13 @@ describe('checkForFoundItem', () => {
     const yesterday = new Date(Date.now() - 86400000).toISOString();
     const today = new Date().toISOString();
     const yesterdayBigPurchase = makeExpense({
-      id: '1', amount: 80000, category: 'shopping', createdAt: yesterday,
+      id: '1', amount: 80000, category: 'living', createdAt: yesterday,
     });
     // Today record so the "recentExpenses.length === 0" early-return doesn't fire.
     // Use shopping (not cafe/food) and a non-small amount so T4 can't fire and
     // we're testing T3 in isolation.
     const todayMid = makeExpense({
-      id: '2', amount: 25000, category: 'shopping', createdAt: today,
+      id: '2', amount: 25000, category: 'living', createdAt: today,
     });
     await checkForFoundItem([yesterdayBigPurchase, todayMid], 10);
     expect(storageService.save).toHaveBeenCalledWith(
@@ -96,7 +97,7 @@ describe('checkForFoundItem', () => {
       id: '1', amount: 0, category: 'no_spend', createdAt: yesterday,
     });
     const todayMid = makeExpense({
-      id: '2', amount: 25000, category: 'shopping', createdAt: today,
+      id: '2', amount: 25000, category: 'living', createdAt: today,
     });
     await checkForFoundItem([yesterdayNoSpend, todayMid], 10);
     expect(storageService.save).toHaveBeenCalledWith(
@@ -111,13 +112,13 @@ describe('checkForFoundItem', () => {
     const yesterday = new Date(Date.now() - 86400000).toISOString();
     const today = new Date().toISOString();
     const yesterday1 = makeExpense({
-      id: '1', amount: 25000, category: 'shopping', createdAt: yesterday,
+      id: '1', amount: 25000, category: 'living', createdAt: yesterday,
     });
     const yesterday2 = makeExpense({
-      id: '2', amount: 30000, category: 'shopping', createdAt: yesterday,
+      id: '2', amount: 30000, category: 'living', createdAt: yesterday,
     });
     const todayMid = makeExpense({
-      id: '3', amount: 25000, category: 'shopping', createdAt: today,
+      id: '3', amount: 25000, category: 'living', createdAt: today,
     });
     await checkForFoundItem([yesterday1, yesterday2, todayMid], 10);
     expect(storageService.save).not.toHaveBeenCalledWith(
@@ -134,7 +135,7 @@ describe('promoteStaged', () => {
   });
 
   it('does nothing if lastItemDate is today', async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString(new Date());
     mockLoad.mockImplementation(async (key: string) => {
       if (key === 'sobagi-staged-item-id') return 'f1';
       if (key === 'sobagi-last-item-date') return today;
