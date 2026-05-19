@@ -23,8 +23,8 @@ export const CATEGORIES: readonly ExpenseCategoryMeta[] = [
   { key: 'no_spend',   label: '무지출',   emoji: '🌿',  inPicker: false },
 ] as const;
 
-export const CATEGORY_BY_TOKEN: Record<ExpenseCategory, ExpenseCategoryMeta> =
-  Object.fromEntries(CATEGORIES.map((c) => [c.key, c])) as Record<ExpenseCategory, ExpenseCategoryMeta>;
+export const CATEGORY_BY_TOKEN: Partial<Record<ExpenseCategory, ExpenseCategoryMeta>> =
+  Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
 
 export const PICKER_CATEGORIES: readonly ExpenseCategoryMeta[] =
   CATEGORIES.filter((c) => c.inPicker);
