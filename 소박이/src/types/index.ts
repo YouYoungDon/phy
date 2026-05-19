@@ -1,6 +1,24 @@
 export type SobagiEmotion = 'happy' | 'excited' | 'surprised' | 'sleepy' | 'soft-sad';
 
-export type ExpenseCategory = 'cafe' | 'food' | 'transport' | 'shopping' | 'other' | 'no_spend';
+export type ExpenseCategory =
+  // life-scene tokens (final)
+  | 'cafe'
+  | 'home_meal'
+  | 'dining_out'
+  | 'transport'
+  | 'living'
+  | 'gift'
+  | 'hobby'
+  | 'pet'
+  | 'travel'
+  | 'health'
+  | 'event'
+  | 'allowance'
+  | 'no_spend'
+  // legacy tokens — removed in Task 7 after migration + consumer updates land
+  | 'food'
+  | 'shopping'
+  | 'other';
 
 export interface Expense {
   id: string;
