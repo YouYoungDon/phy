@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { CategorySelector } from '../components/expense/CategorySelector';
+import { MemoSuggestions } from '../components/expense/MemoSuggestions';
 import { saveExpense, recordNoSpend } from '../services/expenseService';
 import { evaluate } from '../services/emotionEngine';
 import { getDialogueTier, selectReactionMessage, detectObservationType, selectObservationMessage } from '../services/dialogueService';
@@ -258,6 +259,11 @@ function RecordScreen() {
         {/* Category */}
         <View style={styles.section}>
           <CategorySelector selected={category} onSelect={setCategory} />
+          <MemoSuggestions
+            category={category}
+            memo={memo}
+            onAppend={setMemo}
+          />
         </View>
 
         {/* User emotion */}
