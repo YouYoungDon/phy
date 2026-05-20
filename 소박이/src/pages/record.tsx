@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { CategorySelector } from '../components/expense/CategorySelector';
+import { MemoSuggestions } from '../components/expense/MemoSuggestions';
 import { saveExpense, recordNoSpend } from '../services/expenseService';
 import { evaluate } from '../services/emotionEngine';
 import { getDialogueTier, selectReactionMessage, detectObservationType, selectObservationMessage } from '../services/dialogueService';
@@ -199,7 +200,7 @@ function RecordScreen() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-        <Text style={styles.pageSubtitle}>오늘의 소비를 기록해요 ✏️</Text>
+        <Text style={styles.pageSubtitle}>오늘을 기록해요 ✏️</Text>
 
         {/* Date selector — horizontally scrollable, max 30 days back, auto-scrolled to today */}
         <ScrollView
@@ -233,7 +234,7 @@ function RecordScreen() {
             onPress={handleNoSpend}
             disabled={!canNoSpend}
           >
-            <Text style={styles.noSpendLabel}>오늘은 무지출이에요</Text>
+            <Text style={styles.noSpendLabel}>오늘은 무지출이에요 🌿</Text>
           </Pressable>
         )}
 
@@ -257,8 +258,12 @@ function RecordScreen() {
 
         {/* Category */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>카테고리</Text>
           <CategorySelector selected={category} onSelect={setCategory} />
+          <MemoSuggestions
+            category={category}
+            memo={memo}
+            onAppend={setMemo}
+          />
         </View>
 
         {/* User emotion */}
@@ -290,7 +295,7 @@ function RecordScreen() {
             style={styles.memoInput}
             value={memo}
             onChangeText={setMemo}
-            placeholder="오늘 소비에 대한 한마디..."
+            placeholder="오늘에 대한 한마디..."
             placeholderTextColor={COLORS.textLight}
             maxLength={60}
             multiline
@@ -306,6 +311,11 @@ function RecordScreen() {
           >
             <Text style={styles.saveButtonLabel}>저장하기</Text>
           </Pressable>
+          {amount === 0 && canNoSpend && (
+            <Text style={styles.saveHelper}>
+              지출이 없는 날은 무지출 기록을 사용할 수 있어요 🌿
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -400,17 +410,15 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   noSpendBtn: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: 'transparent',
     borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   noSpendLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textMuted,
     fontWeight: '500',
     letterSpacing: 0.2,
@@ -501,5 +509,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  saveHelper: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 10,
   },
 });

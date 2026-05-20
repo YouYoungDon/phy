@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, Animated } from 'react-native';
 import { TimeOfDayTint } from '../../services/atmosphereService';
-import { SobagiEmotion } from '../../types';
+import { SobagiEmotion, ExpenseCategory } from '../../types';
 import {
   PhotocardMoodAsset,
   PHOTOCARD_MOOD_URIS,
@@ -11,6 +11,7 @@ import {
   PhotocardSpendingLevel,
   PhotocardWeather,
 } from '../../services/photocardMoodService';
+import { CATEGORY_BY_TOKEN } from '../../constants/categories';
 
 // Public types — exported for callers
 export type PhotocardRecord = {
@@ -19,14 +20,6 @@ export type PhotocardRecord = {
   categoryLabel?: string;
   amount: number;
   memo?: string;
-};
-
-const CATEGORY_ICON: Record<string, string> = {
-  cafe: '☕',
-  food: '🍴',
-  transport: '🚌',
-  shopping: '🛍️',
-  other: '📦',
 };
 
 interface PhotocardViewProps {
@@ -149,7 +142,9 @@ export function PhotocardView({
           {visibleRecords.length > 0 && (
             <View style={styles.recordsBlock}>
               {visibleRecords.map((r, idx) => {
-                const icon = r.category ? CATEGORY_ICON[r.category] ?? '·' : '·';
+                const icon = r.category
+                  ? CATEGORY_BY_TOKEN[r.category as ExpenseCategory]?.emoji ?? '·'
+                  : '·';
                 const label = r.categoryLabel ?? r.category ?? '';
                 const lineText = r.memo ? `${label} · ${r.memo}` : label;
                 return (

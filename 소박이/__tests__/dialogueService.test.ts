@@ -11,7 +11,7 @@ import {
 } from '../src/services/dialogueService';
 import { Expense } from '../src/types';
 
-const makeExpense = (hour = 14, category: Expense['category'] = 'food', daysAgo = 0): Expense => {
+const makeExpense = (hour = 14, category: Expense['category'] = 'cafe', daysAgo = 0): Expense => {
   const d = new Date();
   d.setHours(hour, 0, 0, 0);
   d.setDate(d.getDate() - daysAgo);
@@ -97,7 +97,7 @@ describe('detectObservationType', () => {
     let found = false;
     for (let i = 0; i < 20; i++) {
       const result = detectObservationType({
-        expenses: [makeExpense(14, 'food', 0)],
+        expenses: [makeExpense(14, 'dining_out', 0)],
         lastVisitDate,
         recordedDaysCount: 10,
         savesSinceLastObservation: 10,
@@ -111,11 +111,11 @@ describe('detectObservationType', () => {
   it('never returns an observation type based on expense amounts', () => {
     // Make expenses with varying amounts — should have no effect on observation type
     const cheapExpenses = Array.from({ length: 10 }, (_, i) =>
-      makeExpense(14, 'food', i),
+      makeExpense(14, 'dining_out', i),
     ).map(e => ({ ...e, amount: 100 }));
 
     const expensiveExpenses = Array.from({ length: 10 }, (_, i) =>
-      makeExpense(14, 'food', i),
+      makeExpense(14, 'dining_out', i),
     ).map(e => ({ ...e, amount: 100000 }));
 
     // Run multiple times — observation type should not differ purely due to amount

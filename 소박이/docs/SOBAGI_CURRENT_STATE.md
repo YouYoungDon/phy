@@ -61,46 +61,41 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 ## Latest Handoff
 
 **Agent:** Engineering
-**Date:** 2026-05-19
-**Group completed:** Daily first-record loop + no-spend daily record + amount-based-reward decoupling + no-spend photocard composition
+**Date:** 2026-05-20
+**Group completed:** Memo suggestions + wrapped category chips
 
 ### What changed
-- `src/types/index.ts` — `ExpenseCategory` extended with `'no_spend'`. New literal recognised everywhere `ExpenseCategory` is consumed.
-- `src/services/expenseService.ts` — added `recordNoSpend()` which builds a `{amount: 0, category: 'no_spend', sobagiEmotion: 'happy', createdAt: now}` expense and delegates to `saveExpense` so all streak / recorded-day / persistence plumbing stays in one place. Inside `saveExpense`, the found-item eval is now invoked at the end of the function, gated by `isRealTimeRecord && todayExpenses.length === 0` (first real-time record of the day). Catch-up records for past dates do not eval.
-- `src/hooks/useAppInit.ts` — removed the app-init `checkForFoundItem` call. App init still calls `promoteStaged`, so already-staged items continue to surface on the next-day open. Eval itself is now single-source: it fires exactly once per calendar day, tied to the first-record event.
-- `src/pages/record.tsx` — "오늘은 무지출이에요" button at the top of `/record`, visible only when (a) no record today AND (b) the date chip is set to today. On tap: `recordNoSpend()` → `setEmotion('happy', '오늘은 조용히 머물렀네요 🌿')` → navigate to `/reaction`.
-- `src/services/foundItemService.ts` — T3 trigger replaced. Old: `yesterdayExpenses.reduce(s, e => s + e.amount) < 15000`. New: `yesterdayExpenses.length === 1`. Activity-based ("yesterday was a quiet day, one record only") regardless of amount. Removes synchronized "low-spending → reward" signal across atmosphere / dayFeeling / found-item systems.
-- `src/components/photocard/PhotocardView.tsx` — wrapped the `totalBlock` + its trailing divider in `{amount > 0 && (<>…</>)}`. Records block was already conditional on `visibleRecords.length > 0`. No-spend-only days now collapse both financial blocks, leaving date + mood asset + quote.
-- `src/pages/reaction.tsx` — added `todaySpendingExpenses = todayExpenses.filter(e => e.category !== 'no_spend')`. `todayTotal` and `photocardRecords` derive from this filtered list. A no-spend-only day passes `amount=0` and `records=[]` into PhotocardView, which collapses both financial blocks per the rule above. Local `CATEGORY_LABELS` extended with `no_spend: '무지출'`.
-- `src/pages/stats.tsx` — added `selectedSpendingExpenses` filter; the day-detail spending list, top-category, dayFeeling derivation, and `photocardRecords` all derive from it. Calendar cells where `data.total === 0` (no-spend-only days) now render `🌿` in the existing `dayAmount` slot instead of `"0"`. `CATEGORY_LABELS` extended with `no_spend: '무지출 🌿'`.
-- `src/components/expense/ExpenseCard.tsx` — `CATEGORY_LABELS` extended with `no_spend: '🌿 무지출'`. The `/history` page renders no-spend records via this card, quietly distinguishable from spending.
-- `__tests__/foundItemService.test.ts` — 3 new T3 cases pin the activity-based behavior: (1) fires for a single large-amount yesterday record, (2) fires for a no-spend yesterday, (3) does not fire for a multi-record yesterday.
+- `src/constants/categories.ts` — `ExpenseCategoryMeta` gains `memoSuggestions: string[]`. Each of the 12 scene tokens populated with 5-7 plain Korean hints; `no_spend` gets `[]`.
+- `src/components/expense/CategorySelector.tsx` — chip row switches from horizontal `ScrollView` to a wrapped `View` (`flexDirection: 'row', flexWrap: 'wrap', gap: 10`). All 12 scenes visible at once on standard mobile widths.
+- `src/components/expense/MemoSuggestions.tsx` (new) — outlined-ghost horizontal chip row below the category grid. Reads suggestions from `CATEGORY_BY_TOKEN[category].memoSuggestions`. Renders nothing for `no_spend` (explicit early return) or when the suggestion list is empty.
+- `src/components/expense/MemoSuggestions.tsx` (also exports) — pure `appendMemoSuggestion(memo, suggestion)` helper. Fills empty memos, appends with `', '` separator, skips duplicate tokens, no-ops if the result would exceed 60 chars.
+- `src/pages/record.tsx` — adds the import + renders `<MemoSuggestions category={category} memo={memo} onAppend={setMemo} />` inside the existing category section.
+- `__tests__/memoSuggestions.test.ts` (new, 7 tests).
 
 ### What's now working
-- Daily first-record loop: spending record OR no-spend record (both qualify as "first meaningful record") triggers the found-item eval exactly once per calendar day. Subsequent same-day records do not re-trigger. Already-staged items continue to surface via `promoteStaged` on next-day app open.
-- No-spend daily record: amount 0, category `'no_spend'`, counts toward streak + recordedDaysCount, can trigger the same quiet found-item flow as a normal first record. Surfaces silently in `/history` (with `🌿 무지출` card) and in the `/stats` calendar (as `🌿` marker in the day cell). Does not inflate spending totals (amount 0). Filtered out of all spending-analysis surfaces.
-- T3 reacts to *shape of yesterday's presence* (one quiet touchpoint) — never to amount. The user cannot infer "spent less → got an item."
-- No-spend day photocard collapses to a quiet emotional card. Mood asset + date + "🌱 오늘의 한 줄" + quote. No total block, no records block, no ₩0 line. Matches the philosophy rule (PHILOSOPHY → The Photocard → No-spend day composition).
+- Selecting any scene category surfaces 5-7 quick memo hints in a horizontal row below the chip grid. Tap to fill (empty memo) or append with `', '` (non-empty memo).
+- Tapping the same suggestion twice never duplicates. Tapping when the memo is near full (would push past 60 chars) silently no-ops.
+- Memo field stays freely editable — the user can type, delete, or mix tapped + typed content.
+- All 12 scene tokens are visible at once via the wrap layout; no horizontal scroll on the chip row.
+- `no_spend` surfaces only via the no-spend button on the Record screen and never renders suggestions.
 
 ### Fragile / surprising
-- `useAppInit.checkForFoundItem` removal is structural. A user who recorded yesterday but doesn't record today gets no eval until their next record. Pre-existing semantic of "eval on every app open with the latest expenses snapshot" is gone on purpose — eval is now bound to the *act of recording*, not to *opening the app*. Don't restore the init-time eval; the once-per-day rule depends on saveExpense being the single source.
-- T3 also fires when *yesterday was a no-spend day*. Single-record yesterday qualifies regardless of category. This is intentional — quiet presence is the signal, not the kind of presence.
-- No-spend button uses `selectedDate === todayStr` as a guard so it never surfaces while the user is on a past-date catch-up chip. The "오늘은…" copy would mislead otherwise.
-- The 🌿 calendar marker reuses the `dayAmount` Text style slot (same size, same selected-state styling). Calendar layout is unchanged; only the glyph swaps. If a future user has both spending and a no-spend record on the same day, total > 0 and the amount text wins — 🌿 is only for amount-0 days.
-- Photocard financial blocks gate on `amount > 0`. The leading divider after the date header stays in both branches so the quote block keeps its soft separator. Don't move that divider into the conditional.
-- No new STORAGE_KEYS. No migration concerns. No-spend lives inside the existing `EXPENSES` array.
+- The exported `appendMemoSuggestion` helper is testable but never consumed by `record.tsx`. The component owns the merge internally; the export exists for unit tests. Don't refactor it to be called from the parent.
+- `MEMO_MAX_LENGTH` (60) is defined in `MemoSuggestions.tsx` and mirrors the `maxLength={60}` already on the memo `TextInput` in `record.tsx`. If one changes, the other should too.
+- Wrapped chip layout drops the previous `ScrollView` import from `CategorySelector.tsx`. Don't reintroduce horizontal scrolling for the chip row — the user-facing intent is "all scenes visible at once."
+- The pressed-state on suggestion chips is `opacity: 0.55` only. There is intentionally no persistent selected state — suggestions are hints, not a selection layer.
 
 ### What the next agent must NOT do
-- Don't re-introduce `checkForFoundItem` in `useAppInit`. The once-per-day "first record" semantics depend on saveExpense being the sole eval point.
-- Don't change T3 back to an amount threshold. The decoupling fixes a synchronized low-spending signal across atmosphere / dayFeeling / triggers (PHILOSOPHY → Anti-Pattern List → "Synchronized restraint signaling").
-- Don't render any "₩ 0" line on the photocard for no-spend-only days. The financial-block collapse is the composition.
-- Don't add "saved money" / "successful no-spend" / "achievement" / "streak bonus" framing anywhere in the no-spend flow. Copy stays observational ("오늘은 조용히 머물렀네요 🌿").
-- Don't add no-spend records into spending-analysis surfaces (top category, day-card spending list, photocard records block, monthly totals).
+- Don't store the tapped suggestion separately. The choice exists only as memo text.
+- Don't add analytics on which suggestions are tapped.
+- Don't add a subcategory taxonomy or any second axis on `ExpenseCategory`.
+- Don't add user-editable suggestion lists (every user gets the same static list per category).
+- Don't reintroduce a label heading above the chip row.
+- Don't add a persistent selected state on suggestion chips.
+- Don't change the memo `maxLength={60}` without also updating `MEMO_MAX_LENGTH` in `MemoSuggestions.tsx`.
 
 ### Next
-Quiet-bucket dayFeeling refinement landed. `linesFor('quiet')` in `dayFeelingService.ts` rewritten to time/presence-oriented copy with no financial implication (`'오늘은 잔잔하게 지나갔네요 🌿'` / `'천천히 흘러간 하루였어요 🍃'` / `'조용히 머무른 하루였네요 🌙'`). Threshold lowered from `< 10000` to `< 8000` to break exact equality with `CALM_DAILY_THRESHOLD` (atmosphere overlay) — synchronized thresholds would let users infer "low spending = reward state". A short rationale comment is inline at the threshold check.
-
-Held: weekend leisure → cozy floor items trigger. User explicitly paused this and asked for a QA pass first; QA completed and the dayFeeling decoupling is its only material follow-up. Awaiting explicit unblock before opening the weekend trigger.
+Stats screen evolution remains the next major polish landing — tone review, rhythm summaries, small additive pattern-signal surface, visual density review. Held until product owner re-opens.
 
 ---
 
@@ -169,6 +164,7 @@ sobagi-last-visit-date         → string (YYYY-MM-DD)  gap detection
 sobagi-observation-save-count  → number               cooldown for observation messages
 sobagi-room-placements         → RoomPlacement[]      items currently in the room
 sobagi-pending-placement       → PendingPlacement|null delayed placement (silent settle)
+sobagi-category-migration-done → boolean  one-time flag for legacy category migration
 ```
 
 ---

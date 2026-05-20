@@ -62,10 +62,10 @@ function hasTrigger(expenses: Expense[], today: string, yesterday: string): bool
   // here the same as a single small purchase would.
   if (yesterdayExpenses.length === 1) return true;
 
-  // T4: Small everyday purchase (cafe or food under 6,000 won)
+  // T4: Small everyday purchase (cafe / home_meal / dining_out under 6,000 won)
   if (
     recentExpenses.some(
-      (e) => (e.category === 'cafe' || e.category === 'food') && e.amount < 6000,
+      (e) => (e.category === 'cafe' || e.category === 'home_meal' || e.category === 'dining_out') && e.amount < 6000,
     )
   )
     return true;

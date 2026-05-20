@@ -1,15 +1,8 @@
 import React from 'react';
-import { Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Text, Pressable, View, StyleSheet } from 'react-native';
 import { ExpenseCategory } from '../../types';
+import { PICKER_CATEGORIES } from '../../constants/categories';
 import { COLORS } from '../../constants/colors';
-
-const CATEGORIES: { key: ExpenseCategory; label: string; emoji: string }[] = [
-  { key: 'cafe', label: '카페', emoji: '☕' },
-  { key: 'food', label: '식비', emoji: '🍚' },
-  { key: 'transport', label: '교통', emoji: '🚌' },
-  { key: 'shopping', label: '쇼핑', emoji: '🛍️' },
-  { key: 'other', label: '기타', emoji: '📦' },
-];
 
 interface CategorySelectorProps {
   selected: ExpenseCategory;
@@ -18,12 +11,8 @@ interface CategorySelectorProps {
 
 export function CategorySelector({ selected, onSelect }: CategorySelectorProps) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
-    >
-      {CATEGORIES.map((c) => (
+    <View style={styles.row}>
+      {PICKER_CATEGORIES.map((c) => (
         <Pressable
           key={c.key}
           style={[styles.chip, selected === c.key && styles.chipSelected]}
@@ -35,32 +24,37 @@ export function CategorySelector({ selected, onSelect }: CategorySelectorProps) 
           </Text>
         </Pressable>
       ))}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    gap: 8,
-    paddingVertical: 2,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   chip: {
     flexDirection: 'column',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderRadius: 16,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   chipSelected: {
-    backgroundColor: COLORS.oliveGreen,
-    borderColor: COLORS.oliveDark,
+    backgroundColor: COLORS.woodLight,
+    shadowColor: COLORS.wood,
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   emoji: {
-    fontSize: 20,
+    fontSize: 22,
   },
   label: {
     fontSize: 12,
@@ -68,6 +62,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   labelSelected: {
-    color: '#fff',
+    color: COLORS.text,
   },
 });
