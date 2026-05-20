@@ -62,32 +62,40 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-20
-**Group completed:** Record screen polish (chip warmth, tone copy, quiet no-spend)
+**Group completed:** Memo suggestions + wrapped category chips
 
 ### What changed
-- `src/components/expense/CategorySelector.tsx` — selected chip background `oliveGreen → woodLight`, selected label `white → text`, paddings `16/10 → 18/12`, row `gap 8 → 10`, emoji `20 → 22`, dropped the `oliveDark` border override on selected, added a subtle shadow (iOS) + `elevation: 1` (Android) on the selected chip.
-- `src/pages/record.tsx` — removed the `카테고리` `<Text>` label above the chip row (no replacement heading); memo placeholder `"오늘 소비에 대한 한마디..." → "오늘에 대한 한마디..."`; no-spend label gains a `🌿` hint; no-spend button styles recede to transparent / borderless / tighter padding.
+- `src/constants/categories.ts` — `ExpenseCategoryMeta` gains `memoSuggestions: string[]`. Each of the 12 scene tokens populated with 5-7 plain Korean hints; `no_spend` gets `[]`.
+- `src/components/expense/CategorySelector.tsx` — chip row switches from horizontal `ScrollView` to a wrapped `View` (`flexDirection: 'row', flexWrap: 'wrap', gap: 10`). All 12 scenes visible at once on standard mobile widths.
+- `src/components/expense/MemoSuggestions.tsx` (new) — outlined-ghost horizontal chip row below the category grid. Reads suggestions from `CATEGORY_BY_TOKEN[category].memoSuggestions`. Renders nothing for `no_spend` (explicit early return) or when the suggestion list is empty.
+- `src/components/expense/MemoSuggestions.tsx` (also exports) — pure `appendMemoSuggestion(memo, suggestion)` helper. Fills empty memos, appends with `', '` separator, skips duplicate tokens, no-ops if the result would exceed 60 chars.
+- `src/pages/record.tsx` — adds the import + renders `<MemoSuggestions category={category} memo={memo} onAppend={setMemo} />` inside the existing category section.
+- `__tests__/memoSuggestions.test.ts` (new, 7 tests).
 
 ### What's now working
-- The category chip row reads with warmer, less-stamped selected state. Wood now signals "scene-tagged" while olive remains the primary-action color (save CTA, date chips, emotion chips).
-- The Record screen reads cleaner: no `카테고리` accounting label, no `소비` framing in the placeholder.
-- The no-spend button no longer competes visually with the amount card; it sits as a quiet centered prompt above the form, only when `!hasRecordToday && !isSaving && selectedDate === todayStr`.
+- Selecting any scene category surfaces 5-7 quick memo hints in a horizontal row below the chip grid. Tap to fill (empty memo) or append with `', '` (non-empty memo).
+- Tapping the same suggestion twice never duplicates. Tapping when the memo is near full (would push past 60 chars) silently no-ops.
+- Memo field stays freely editable — the user can type, delete, or mix tapped + typed content.
+- All 12 scene tokens are visible at once via the wrap layout; no horizontal scroll on the chip row.
+- `no_spend` surfaces only via the no-spend button on the Record screen and never renders suggestions.
 
 ### Fragile / surprising
-- The reaction loop is structurally correct and was intentionally NOT modified. Findings documented in the spec (Section 4) as known trade-offs:
-  - No in-flight visual besides dimmed save button. AsyncStorage saves typically <100ms. Adding a spinner would push the screen toward app-form energy.
-  - No-spend button doesn't dim when `isSaving` flips; it relies on `canNoSpend` gating the handler. Sub-1-frame race window, acceptable.
-  - `evaluate` builds a transient partial expense object for emotion evaluation; the stand-in never reaches storage.
+- The exported `appendMemoSuggestion` helper is testable but never consumed by `record.tsx`. The component owns the merge internally; the export exists for unit tests. Don't refactor it to be called from the parent.
+- `MEMO_MAX_LENGTH` (60) is defined in `MemoSuggestions.tsx` and mirrors the `maxLength={60}` already on the memo `TextInput` in `record.tsx`. If one changes, the other should too.
+- Wrapped chip layout drops the previous `ScrollView` import from `CategorySelector.tsx`. Don't reintroduce horizontal scrolling for the chip row — the user-facing intent is "all scenes visible at once."
+- The pressed-state on suggestion chips is `opacity: 0.55` only. There is intentionally no persistent selected state — suggestions are hints, not a selection layer.
 
 ### What the next agent must NOT do
-- Don't reintroduce a label above the chip row. The chip emojis lead the section.
-- Don't add a loading spinner or progress UI to save / no-spend. The restraint is intentional.
-- Don't add a border or card chrome back to the no-spend button.
-- Don't shift category chip selected back to olive — wood is intentional differentiation from primary-action surfaces.
-- Don't change the no-spend visibility gate or the no-spend services.
+- Don't store the tapped suggestion separately. The choice exists only as memo text.
+- Don't add analytics on which suggestions are tapped.
+- Don't add a subcategory taxonomy or any second axis on `ExpenseCategory`.
+- Don't add user-editable suggestion lists (every user gets the same static list per category).
+- Don't reintroduce a label heading above the chip row.
+- Don't add a persistent selected state on suggestion chips.
+- Don't change the memo `maxLength={60}` without also updating `MEMO_MAX_LENGTH` in `MemoSuggestions.tsx`.
 
 ### Next
-Stats screen evolution (separate spec, follow-up landing): tone review, rhythm summaries, small additive pattern-signal surface, visual density review.
+Stats screen evolution remains the next major polish landing — tone review, rhythm summaries, small additive pattern-signal surface, visual density review. Held until product owner re-opens.
 
 ---
 
