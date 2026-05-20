@@ -199,7 +199,7 @@ function RecordScreen() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-        <Text style={styles.pageSubtitle}>오늘의 소비를 기록해요 ✏️</Text>
+        <Text style={styles.pageSubtitle}>오늘을 기록해요 ✏️</Text>
 
         {/* Date selector — horizontally scrollable, max 30 days back, auto-scrolled to today */}
         <ScrollView

@@ -471,7 +471,7 @@ function StatsScreen() {
           {topCategoryThisMonth && (
             <View style={styles.settlementChip}>
               <Text style={styles.settlementChipText}>
-                이번 달은 {formatCategoryWithEmoji(topCategoryThisMonth)}이 제일 많았어요
+                이번 달은 {formatCategoryWithEmoji(topCategoryThisMonth)} · 가장 자주 기록했어요
               </Text>
             </View>
           )}
