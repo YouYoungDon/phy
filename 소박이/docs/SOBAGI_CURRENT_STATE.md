@@ -61,46 +61,33 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 ## Latest Handoff
 
 **Agent:** Engineering
-**Date:** 2026-05-19
-**Group completed:** Life-scene category taxonomy (12 categories + `no_spend` marker)
+**Date:** 2026-05-20
+**Group completed:** Record screen polish (chip warmth, tone copy, quiet no-spend)
 
 ### What changed
-- `src/types/index.ts` — `ExpenseCategory` rewritten as a 13-token union (12 scene categories + `no_spend`). Legacy tokens `food / shopping / other` removed.
-- `src/constants/categories.ts` (new) — single source of truth for category metadata. Exports `CATEGORIES` (full list, ordered), `CATEGORY_BY_TOKEN: Partial<Record<>>` (lookup), `PICKER_CATEGORIES` (excludes `no_spend`), and two formatting helpers: `formatCategoryWithEmoji(token)` ("☕ 카페" — used in history card / stats records / monthly top) and `formatCategoryLabel(token)` ("카페" — bare label for photocard records).
-- `src/services/expenseMigration.ts` (new) — pure `migrateExpenseCategories(expenses)` plus an IO wrapper `runExpenseCategoryMigration()` that is gated by `STORAGE_KEYS.CATEGORY_MIGRATION_DONE` and runs once per install before `useAppInit` hydrates expenses. Idempotent.
-- `src/constants/storage.ts` — added `CATEGORY_MIGRATION_DONE` storage key.
-- `src/components/expense/CategorySelector.tsx` — reads `PICKER_CATEGORIES`; no longer hardcodes the chip list.
-- `src/components/expense/ExpenseCard.tsx`, `src/pages/reaction.tsx`, `src/pages/stats.tsx` — local `CATEGORY_LABELS` (and `PHOTOCARD_CATEGORY_LABELS` in stats) removed; all three consume the shared module's helpers. The stats records list and monthly top line now render "emoji label" (was "label emoji") — small unification for one shared helper. The stats edit picker iterates `PICKER_CATEGORIES` so `no_spend` is no longer selectable when editing a spending record.
-- `src/services/dayFeelingService.ts` — bucket-trigger logic and `buildObservations` updated for the new taxonomy. `warm` now reads `home_meal + dining_out`; `sweet` includes `home_meal / dining_out`; `selfcare` keys on `hobby`. `caffeinated / active / quiet / modest / hard` unchanged in shape.
-- `src/services/foundItemService.ts` — T4 trigger (small everyday purchase under 6,000 KRW) migrated from `cafe || food` to `cafe || home_meal || dining_out`. Discovered while preparing the union cleanup; behavior preserved.
-- `src/services/dialogueService.ts` — `categoryWarm` filter migrated from `cafe || food` to `cafe || home_meal || dining_out`. Same shape preservation.
-- `src/services/__tests__/roomPresenceService.test.ts` — fixtures' "non-cafe category" examples migrated from `'food'` to `'dining_out'`.
-- `src/hooks/useAppInit.ts` — `runExpenseCategoryMigration()` awaits before the parallel storage load so hydrate consumes migrated data.
-- `__tests__/expenseMigration.test.ts` (new, 9 tests), `__tests__/dayFeelingService.test.ts` (new, 14 tests).
+- `src/components/expense/CategorySelector.tsx` — selected chip background `oliveGreen → woodLight`, selected label `white → text`, paddings `16/10 → 18/12`, row `gap 8 → 10`, emoji `20 → 22`, dropped the `oliveDark` border override on selected, added a subtle shadow (iOS) + `elevation: 1` (Android) on the selected chip.
+- `src/pages/record.tsx` — removed the `카테고리` `<Text>` label above the chip row (no replacement heading); memo placeholder `"오늘 소비에 대한 한마디..." → "오늘에 대한 한마디..."`; no-spend label gains a `🌿` hint; no-spend button styles recede to transparent / borderless / tighter padding.
 
 ### What's now working
-- Recording surfaces the 12 life-scene chips in the picker; ordering is cafe → home_meal → dining_out → transport → living → hobby → gift → pet → travel → health → event → allowance.
-- Existing stored expenses with legacy tokens (`food / shopping / other`) are remapped on first app launch: `food → dining_out`, `shopping → living`, `other → living`. Cafe / transport / no_spend pass through. After migration completes once, the flag prevents re-running.
-- DayFeeling buckets react to the new tokens; old `shopping`-keyed `selfcare` is now keyed on `hobby`. The food-trigger logic in `foundItemService.T4` and `dialogueService.categoryWarm` was updated in tandem so behavior is preserved under the new taxonomy.
-- All pages that show category labels (history card, reaction screen, stats list, photocard, monthly top, edit picker) read from one shared module.
+- The category chip row reads with warmer, less-stamped selected state. Wood now signals "scene-tagged" while olive remains the primary-action color (save CTA, date chips, emotion chips).
+- The Record screen reads cleaner: no `카테고리` accounting label, no `소비` framing in the placeholder.
+- The no-spend button no longer competes visually with the amount card; it sits as a quiet centered prompt above the form, only when `!hasRecordToday && !isSaving && selectedDate === todayStr`.
 
 ### Fragile / surprising
-- The `allowance` 🫶 glyph is Unicode 14 (2021). On very old Android builds the emoji may fall back to tofu. Document if it surfaces in user feedback; do not swap unilaterally.
-- Migration writes back to `STORAGE_KEYS.EXPENSES` only when at least one record was remapped, then always sets the `CATEGORY_MIGRATION_DONE` flag. If you ever need to re-run the migration for a single user (debug path), clear the flag — the function is safe to re-run on already-migrated data (no-op return).
-- `CATEGORY_BY_TOKEN` is typed `Partial<Record<>>` rather than full `Record<>` because legacy tokens used to share the union and the type stayed truthful. With the union now clean, this could be tightened to a full `Record<>` in a follow-up, but it doesn't matter functionally — both formatters already guard against undefined.
-- Stats' edit picker now skips `no_spend` — editing a spending record cannot convert it into the no-spend marker. This is the correct behavior; do not "fix" it by adding `no_spend` to `PICKER_CATEGORIES`.
-- `roomPresenceService` `CATEGORY_TRIGGERS.cafe` and `bagItems.m5 머그컵.categoryAffinity: ['cafe']` are unchanged. The cafe token survives the rename, so the mug pattern keeps working.
-- DayFeeling `selfcare` main-line pool still uses "뭔가 산 / 작은 선물 / 나를 챙긴" language inherited from the `shopping`-keyed era. The trigger is now `hobby` (취미) — the observation line (`'좋아하는 일에 시간을 썼어요 🎀'`) matches, but the main pool reads slightly off-tone for the new trigger. Copy refresh is a future concern, not a code fault.
+- The reaction loop is structurally correct and was intentionally NOT modified. Findings documented in the spec (Section 4) as known trade-offs:
+  - No in-flight visual besides dimmed save button. AsyncStorage saves typically <100ms. Adding a spinner would push the screen toward app-form energy.
+  - No-spend button doesn't dim when `isSaving` flips; it relies on `canNoSpend` gating the handler. Sub-1-frame race window, acceptable.
+  - `evaluate` builds a transient partial expense object for emotion evaluation; the stand-in never reaches storage.
 
 ### What the next agent must NOT do
-- Don't reintroduce a hardcoded `CATEGORY_LABELS` map in any consumer. Always read from `src/constants/categories.ts`.
-- Don't treat `no_spend` as a normal expense category. It's a separate daily-presence marker. The picker excludes it; downstream filters that strip it (`reaction.tsx` / `stats.tsx` photocard records, spending totals, top-category) stay as they are.
-- Don't reframe `allowance` as income. 용돈 is a giving scene (parents / kids / someone). Copy and downstream consumers must not invert this.
-- Don't add nested categories, subcategory pickers, or budget UI. The taxonomy is flat by design.
-- Don't change `dayFeeling`'s `selfcare` back to keying on legacy `shopping` — that token no longer exists.
+- Don't reintroduce a label above the chip row. The chip emojis lead the section.
+- Don't add a loading spinner or progress UI to save / no-spend. The restraint is intentional.
+- Don't add a border or card chrome back to the no-spend button.
+- Don't shift category chip selected back to olive — wood is intentional differentiation from primary-action surfaces.
+- Don't change the no-spend visibility gate or the no-spend services.
 
 ### Next
-Held: weekend leisure → cozy floor items implicit trigger (paused earlier). Future room-presence triggers for new tokens (`hobby → ribbons`, `pet → cushion`, `travel → postcard`, `home_meal → kitchen traces`, `gift → wrapping traces`) are out of scope for this landing but become trivial to add now that the tokens exist.
+Stats screen evolution (separate spec, follow-up landing): tone review, rhythm summaries, small additive pattern-signal surface, visual density review.
 
 ---
 

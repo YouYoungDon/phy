@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-20 (Engineering — post-taxonomy QA polish landed)
+**Last updated:** 2026-05-20 (Engineering — record screen polish landed)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -82,6 +82,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Record screen polish** — `CategorySelector` selected chip moves to `woodLight` with subtle shadow + slight breathing-room bumps; `src/pages/record.tsx` removes the `카테고리` label, drops `소비` from the memo placeholder, and recedes the no-spend button from card-peer to a quiet centered prompt with a 🌿 hint. Reaction loop audited only — restraint preserved, no functional edits. (2026-05-20)
 - [x] **Post-taxonomy QA polish** — `PhotocardView.tsx` reads icons from canonical `CATEGORY_BY_TOKEN` (legacy local map removed; all 12 new tokens now resolve their emoji instead of falling back to `·`); settlement chip dropped the hardcoded 이 particle (now joined with `·`, particle-free); `dialogueService.test.ts` legacy `'food'` fixtures → `'dining_out'` (typecheck clean); record screen subtitle `"오늘의 소비를 기록해요 ✏️"` → `"오늘을 기록해요 ✏️"`. Commit `6924d8e`. (2026-05-20)
 - [x] **Life-scene category taxonomy** — `ExpenseCategory` rewritten as 12 scene categories + `no_spend` marker. New `src/constants/categories.ts` is the single source of truth (label/emoji/inPicker). `src/services/expenseMigration.ts` remaps legacy `food → dining_out`, `shopping → living`, `other → living` once per install via `STORAGE_KEYS.CATEGORY_MIGRATION_DONE`. `dayFeelingService` buckets updated (`warm` reads `home_meal + dining_out`; `selfcare` keys on `hobby`). `foundItemService.T4` and `dialogueService.categoryWarm` migrated in tandem. Consumers (CategorySelector, ExpenseCard, reaction, stats) deduplicated against the shared module. 9 + 14 new tests. (2026-05-19)
 - [x] **dayFeeling — `quiet` bucket decoupled from calm-atmosphere** — `dayFeelingService.ts` lines rewritten with time/presence-oriented copy (no financial implication); threshold lowered from `< 10000` to `< 8000` so the quiet dayFeeling and the calm-atmosphere overlay no longer share a boundary. Inline comment explains the decoupling intent. No new tests required (no `dayFeelingService.test.ts` exists). (2026-05-19)
