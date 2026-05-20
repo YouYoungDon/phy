@@ -34,26 +34,30 @@ export function CategorySelector({ selected, onSelect }: CategorySelectorProps) 
 
 const styles = StyleSheet.create({
   row: {
-    gap: 8,
+    gap: 10,
     paddingVertical: 2,
   },
   chip: {
     flexDirection: 'column',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderRadius: 16,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   chipSelected: {
-    backgroundColor: COLORS.oliveGreen,
-    borderColor: COLORS.oliveDark,
+    backgroundColor: COLORS.woodLight,
+    shadowColor: COLORS.wood,
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   emoji: {
-    fontSize: 20,
+    fontSize: 22,
   },
   label: {
     fontSize: 12,
@@ -61,6 +65,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   labelSelected: {
-    color: '#fff',
+    color: COLORS.text,
   },
 });
