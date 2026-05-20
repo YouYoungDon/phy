@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Text, Pressable, View, StyleSheet } from 'react-native';
 import { ExpenseCategory } from '../../types';
 import { PICKER_CATEGORIES } from '../../constants/categories';
 import { COLORS } from '../../constants/colors';
@@ -11,11 +11,7 @@ interface CategorySelectorProps {
 
 export function CategorySelector({ selected, onSelect }: CategorySelectorProps) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
-    >
+    <View style={styles.row}>
       {PICKER_CATEGORIES.map((c) => (
         <Pressable
           key={c.key}
@@ -28,14 +24,15 @@ export function CategorySelector({ selected, onSelect }: CategorySelectorProps) 
           </Text>
         </Pressable>
       ))}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
-    paddingVertical: 2,
   },
   chip: {
     flexDirection: 'column',
