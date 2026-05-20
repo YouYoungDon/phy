@@ -311,6 +311,11 @@ function RecordScreen() {
           >
             <Text style={styles.saveButtonLabel}>저장하기</Text>
           </Pressable>
+          {amount === 0 && canNoSpend && (
+            <Text style={styles.saveHelper}>
+              지출이 없는 날은 무지출 기록을 사용할 수 있어요 🌿
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -504,5 +509,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  saveHelper: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginTop: 10,
   },
 });
