@@ -14,10 +14,14 @@ interface UseRestedAdResult {
 // when the SDK fires the `userEarnedReward` event. Dismissal alone never
 // triggers it. The hook itself never imports business logic; the consumer
 // passes a callback that does whatever grant work is needed.
+// Note: the `error` state is terminal — there is no automatic retry. The TV
+// component handles this by reducing opacity and redirecting taps to a bubble
+// message.
 export function useRestedAd(): UseRestedAdResult {
   const supported = loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
   const [status, setStatus] = useState<RestAdStatus>(supported ? 'loading' : 'unsupported');
   const unregisterRef = useRef<(() => void) | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     if (!supported) return;
@@ -35,6 +39,7 @@ export function useRestedAd(): UseRestedAdResult {
 
     loadOnce();
     return () => {
+      mountedRef.current = false;
       if (unregisterRef.current !== null) unregisterRef.current();
       unregisterRef.current = null;
     };
@@ -46,6 +51,7 @@ export function useRestedAd(): UseRestedAdResult {
     showFullScreenAd({
       options: { adGroupId: REST_AD_GROUP_ID },
       onEvent: (event) => {
+        if (!mountedRef.current) return;
         // The trust signal. dismissed alone is NOT enough.
         if (event.type === 'userEarnedReward') {
           onReward();
@@ -56,9 +62,13 @@ export function useRestedAd(): UseRestedAdResult {
           const unregister = loadFullScreenAd({
             options: { adGroupId: REST_AD_GROUP_ID },
             onEvent: (loadEvent) => {
+              if (!mountedRef.current) return;
               if (loadEvent.type === 'loaded') setStatus('ready');
             },
-            onError: () => setStatus('error'),
+            onError: () => {
+              if (!mountedRef.current) return;
+              setStatus('error');
+            },
           });
           unregisterRef.current = unregister;
         }
@@ -66,7 +76,10 @@ export function useRestedAd(): UseRestedAdResult {
           setStatus('error');
         }
       },
-      onError: () => setStatus('error'),
+      onError: () => {
+        if (!mountedRef.current) return;
+        setStatus('error');
+      },
     });
   };
 
