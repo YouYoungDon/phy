@@ -33,6 +33,10 @@ interface UserStore extends UserState {
   incrementRecordedDays: () => void;
   incrementTotalRecordCount: () => void;
   setStreak: (streak: number) => void;
+  setPebbleCount: (count: number) => void;
+  setRestsToday: (count: number) => void;
+  setLastRestDate: (date: string | null) => void;
+  setLastRestAt: (iso: string | null) => void;
   hydrate: (state: UserState) => void;
 }
 
@@ -42,6 +46,10 @@ export const useUserStore = create<UserStore>((set) => ({
   totalRecordCount: 0,
   recordedDaysCount: 0,
   roomStage: 1,
+  pebbleCount: 0,
+  restsToday: 0,
+  lastRestDate: null,
+  lastRestAt: null,
   incrementRecordedDays: () =>
     set((state) => {
       const newDays = state.recordedDaysCount + 1;
@@ -54,5 +62,9 @@ export const useUserStore = create<UserStore>((set) => ({
   incrementTotalRecordCount: () =>
     set((state) => ({ totalRecordCount: state.totalRecordCount + 1 })),
   setStreak: (streak) => set({ streak }),
+  setPebbleCount: (pebbleCount) => set({ pebbleCount }),
+  setRestsToday: (restsToday) => set({ restsToday }),
+  setLastRestDate: (lastRestDate) => set({ lastRestDate }),
+  setLastRestAt: (lastRestAt) => set({ lastRestAt }),
   hydrate: (state) => set(state),
 }));

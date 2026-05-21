@@ -49,6 +49,10 @@ export async function saveExpense(expense: Expense): Promise<void> {
     totalRecordCount: s.totalRecordCount,
     recordedDaysCount: s.recordedDaysCount,
     roomStage: s.roomStage,
+    pebbleCount: s.pebbleCount,
+    restsToday: s.restsToday,
+    lastRestDate: s.lastRestDate,
+    lastRestAt: s.lastRestAt,
   };
 
   void storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
