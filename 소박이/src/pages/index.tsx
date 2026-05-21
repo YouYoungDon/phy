@@ -19,6 +19,10 @@ import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR } from '../services/atmosphereService';
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
+import { RestTV } from '../components/room/RestTV';
+import { PebbleJar } from '../components/room/PebbleJar';
+import { useRestedAd } from '../hooks/useRestedAd';
+import { getEffectiveRestsToday } from '../services/restService';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -52,6 +56,17 @@ const IDLE_MESSAGES = [
   '오늘 기분은 어때요?',
 ];
 
+// Normalized room coordinates. MAILBOX_POSITION represents the visual
+// location of the mailbox utility icon — the utility stack itself stays
+// pixel-positioned in its existing styles; this constant is the source of
+// truth for room-layer fixtures that anchor below it.
+const MAILBOX_POSITION = { x: 0.12, y: 0.29 } as const;
+const TV_POSITION = {
+  x: MAILBOX_POSITION.x + 0.02,
+  y: MAILBOX_POSITION.y + 0.16,
+};
+const JAR_POSITION = { x: 0.18, y: 0.66 } as const;
+
 function HomeScreen() {
   useAppInit();
 
@@ -61,6 +76,12 @@ function HomeScreen() {
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
+  const pebbleCount = useUserStore((s) => s.pebbleCount);
+  const restsToday = useUserStore((s) => s.restsToday);
+  const lastRestDate = useUserStore((s) => s.lastRestDate);
+  const adState = useRestedAd();
+  const todayStr = getLocalDateString(new Date());
+  const effectiveRestsToday = getEffectiveRestsToday(restsToday, lastRestDate, todayStr);
   const timeOfDayTint = getTimeOfDayTint(new Date().getHours());
   const warmthOpacity = getWarmthOpacity(recordedDaysCount);
   const calmOpacity = getCalmAtmosphereOpacity(expenses, getLocalDateString(new Date()));
@@ -236,6 +257,17 @@ function HomeScreen() {
                 </View>
               );
             })}
+            <RestTV
+              position={TV_POSITION}
+              adStatus={adState.status}
+              effectiveRestsToday={effectiveRestsToday}
+              onPress={() => { /* wired in Task 12 */ }}
+            />
+            <PebbleJar
+              position={JAR_POSITION}
+              pebbleCount={pebbleCount}
+              onPress={() => { /* wired in Task 12 */ }}
+            />
             <View style={styles.header}>
               <View style={styles.levelCard}>
                 <View style={styles.levelRow}>
