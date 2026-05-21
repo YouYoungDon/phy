@@ -81,3 +81,26 @@ export function getCalmAtmosphereOpacity(
   const count = computeCalmDayCount(expenses, today);
   return Math.min(CALM_MAX_OPACITY, count * CALM_PER_DAY_OPACITY);
 }
+
+// ─── Rest-warmth nudge ──────────────────────────────────────────────────────
+//
+// A small warm overlay that appears immediately after a rest watch and fades
+// over 60 minutes. Composes additively with the existing warmth/calm overlays
+// — never replaces them. The 60-minute window persists across app reloads via
+// the stored `lastRestAt`.
+
+export const REST_WARMTH_MAX_OPACITY = 0.08;
+export const REST_WARMTH_FADE_MINUTES = 60;
+
+/**
+ * Pure. Returns the rest-warmth overlay opacity given the current moment and
+ * the ISO timestamp of the most recent rest. Returns 0 when no rest has
+ * happened, the timestamp is in the future, or the 60-minute fade window has
+ * closed. Linear fade from REST_WARMTH_MAX_OPACITY (0.08) to 0.
+ */
+export function getRestWarmthOpacity(now: Date, lastRestAtISO: string | null): number {
+  if (lastRestAtISO === null) return 0;
+  const minsSince = (now.getTime() - Date.parse(lastRestAtISO)) / 60_000;
+  if (minsSince < 0 || minsSince >= REST_WARMTH_FADE_MINUTES) return 0;
+  return REST_WARMTH_MAX_OPACITY * (1 - minsSince / REST_WARMTH_FADE_MINUTES);
+}

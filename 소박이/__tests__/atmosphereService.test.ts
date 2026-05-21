@@ -220,3 +220,41 @@ describe('getCalmAtmosphereOpacity', () => {
     expect(getCalmAtmosphereOpacity(expenses, '2026-05-18')).toBe(CALM_MAX_OPACITY);
   });
 });
+
+import { getRestWarmthOpacity } from '../src/services/atmosphereService';
+
+describe('getRestWarmthOpacity', () => {
+  it('returns 0 when lastRestAt is null', () => {
+    expect(getRestWarmthOpacity(new Date('2026-05-21T12:00:00Z'), null)).toBe(0);
+  });
+
+  it('returns 0.08 immediately after rest (t=0)', () => {
+    const now = new Date('2026-05-21T12:00:00Z');
+    const lastRestAt = now.toISOString();
+    expect(getRestWarmthOpacity(now, lastRestAt)).toBeCloseTo(0.08, 5);
+  });
+
+  it('returns 0.04 halfway through fade (t=30min)', () => {
+    const now = new Date('2026-05-21T12:30:00Z');
+    const lastRestAt = '2026-05-21T12:00:00Z';
+    expect(getRestWarmthOpacity(now, lastRestAt)).toBeCloseTo(0.04, 5);
+  });
+
+  it('returns 0 at fade boundary (t=60min)', () => {
+    const now = new Date('2026-05-21T13:00:00Z');
+    const lastRestAt = '2026-05-21T12:00:00Z';
+    expect(getRestWarmthOpacity(now, lastRestAt)).toBe(0);
+  });
+
+  it('returns 0 past fade window (t=90min)', () => {
+    const now = new Date('2026-05-21T13:30:00Z');
+    const lastRestAt = '2026-05-21T12:00:00Z';
+    expect(getRestWarmthOpacity(now, lastRestAt)).toBe(0);
+  });
+
+  it('returns 0 when lastRestAt is in the future (clock skew)', () => {
+    const now = new Date('2026-05-21T12:00:00Z');
+    const lastRestAt = '2026-05-21T12:30:00Z';
+    expect(getRestWarmthOpacity(now, lastRestAt)).toBe(0);
+  });
+});
