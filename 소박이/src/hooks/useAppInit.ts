@@ -99,11 +99,16 @@ export function useAppInit(): boolean {
         if (userData) {
           // Always recompute recordedDaysCount from expenses for correctness.
           // This also handles users migrating from the old exp-based system.
+          // Default rest fields when absent (legacy users predate them).
           useUserStore.getState().hydrate({
             ...userData,
             recordedDaysCount: recomputedDays,
             level: getLevel(recomputedDays),
             roomStage: getRoomStage(recomputedDays),
+            pebbleCount: userData.pebbleCount ?? 0,
+            restsToday: userData.restsToday ?? 0,
+            lastRestDate: userData.lastRestDate ?? null,
+            lastRestAt: userData.lastRestAt ?? null,
             // exp was removed — strip it from any legacy stored object
           });
         }
