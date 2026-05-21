@@ -21,8 +21,9 @@ import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVER
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
 import { RestTV } from '../components/room/RestTV';
 import { PebbleJar } from '../components/room/PebbleJar';
+import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
-import { getEffectiveRestsToday } from '../services/restService';
+import { getEffectiveRestsToday, grantRest } from '../services/restService';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -98,7 +99,7 @@ function HomeScreen() {
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastIndexRef = useRef(-1);
 
-  type SheetType = 'mailbox' | 'bag';
+  type SheetType = 'mailbox' | 'bag' | 'rest';
   const [activeSheet, setActiveSheet] = useState<SheetType | null>(null);
   const sheetAnim = useRef(new Animated.Value(400)).current;
   const [bagTab, setBagTab] = useState<BagTab>('장신구');
@@ -261,12 +262,33 @@ function HomeScreen() {
               position={TV_POSITION}
               adStatus={adState.status}
               effectiveRestsToday={effectiveRestsToday}
-              onPress={() => { /* wired in Task 12 */ }}
+              onPress={() => {
+                if (effectiveRestsToday >= 2) {
+                  setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
+                  setBubbleVisible(true);
+                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                  return;
+                }
+                if (adState.status === 'error') {
+                  setBubbleMessage('지금은 조용한 채널이 없어요 🌿');
+                  setBubbleVisible(true);
+                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                  return;
+                }
+                openSheet('rest');
+              }}
             />
             <PebbleJar
               position={JAR_POSITION}
               pebbleCount={pebbleCount}
-              onPress={() => { /* wired in Task 12 */ }}
+              onPress={() => {
+                setBubbleMessage(`조약돌 ${pebbleCount}개`);
+                setBubbleVisible(true);
+                if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 2000);
+              }}
             />
             <View style={styles.header}>
               <View style={styles.levelCard}>
@@ -381,6 +403,18 @@ function HomeScreen() {
               </ScrollView>
             )}
           </View>
+        )}
+        {activeSheet === 'rest' && (
+          <RestPrompt
+            adStatus={adState.status}
+            onConfirm={() => {
+              closeSheet();
+              adState.show(() => {
+                void grantRest();
+              });
+            }}
+            onCancel={closeSheet}
+          />
         )}
         {activeSheet === 'bag' && (
           <View>
