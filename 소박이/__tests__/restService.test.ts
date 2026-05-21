@@ -94,3 +94,98 @@ describe('canRest', () => {
     expect(REST_DAILY_CAP).toBe(2);
   });
 });
+
+// ─── grantRest() orchestrator ───────────────────────────────────────────────
+
+jest.mock('../src/services/storageService', () => ({
+  load: jest.fn().mockResolvedValue(null),
+  save: jest.fn().mockResolvedValue(undefined),
+}));
+
+import * as storageService from '../src/services/storageService';
+import { useUserStore } from '../src/store/userStore';
+import { grantRest } from '../src/services/restService';
+import { STORAGE_KEYS } from '../src/constants/storage';
+
+describe('grantRest', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useUserStore.setState({
+      level: 1,
+      streak: 0,
+      totalRecordCount: 0,
+      recordedDaysCount: 0,
+      roomStage: 1,
+      pebbleCount: 0,
+      restsToday: 0,
+      lastRestDate: null,
+      lastRestAt: null,
+    });
+  });
+
+  it('grants 5–20 pebbles within the documented range', async () => {
+    await grantRest();
+    const after = useUserStore.getState().pebbleCount;
+    expect(after).toBeGreaterThanOrEqual(5);
+    expect(after).toBeLessThanOrEqual(20);
+  });
+
+  it('increments restsToday and sets lastRestDate / lastRestAt', async () => {
+    await grantRest();
+    const s = useUserStore.getState();
+    expect(s.restsToday).toBe(1);
+    expect(s.lastRestDate).not.toBeNull();
+    expect(s.lastRestAt).not.toBeNull();
+  });
+
+  it('persists pebble count and dates to storage', async () => {
+    await grantRest();
+    expect(storageService.save).toHaveBeenCalledWith(
+      STORAGE_KEYS.PEBBLE_COUNT,
+      expect.any(Number),
+    );
+    expect(storageService.save).toHaveBeenCalledWith(
+      STORAGE_KEYS.RESTS_TODAY,
+      1,
+    );
+    expect(storageService.save).toHaveBeenCalledWith(
+      STORAGE_KEYS.LAST_REST_DATE,
+      expect.any(String),
+    );
+    expect(storageService.save).toHaveBeenCalledWith(
+      STORAGE_KEYS.LAST_REST_AT,
+      expect.any(String),
+    );
+  });
+
+  it('delivers a letter when its pebble threshold is crossed', async () => {
+    // Starting at 25 with delta in [5, 20] gives newCount in [30, 45].
+    // Threshold 30 is always crossed — deterministic regardless of RNG.
+    useUserStore.setState({ pebbleCount: 25 });
+    (storageService.load as jest.Mock).mockResolvedValueOnce(null);
+    const result = await grantRest();
+    expect(result.lettersDelivered.map((l) => l.id)).toContain('rest1');
+    expect(storageService.save).toHaveBeenCalledWith(
+      STORAGE_KEYS.MAILBOX_DELIVERED_IDS,
+      expect.arrayContaining(['rest1']),
+    );
+  });
+
+  it('does not re-deliver a letter the mailbox already has', async () => {
+    // Same setup as above (always crosses 30), but rest1 already delivered.
+    useUserStore.setState({ pebbleCount: 25 });
+    (storageService.load as jest.Mock).mockResolvedValueOnce(['rest1']);
+    const result = await grantRest();
+    expect(result.lettersDelivered.map((l) => l.id)).not.toContain('rest1');
+  });
+
+  it('uses today (local) as lastRestDate', async () => {
+    const before = new Date();
+    await grantRest();
+    const stored = useUserStore.getState().lastRestDate;
+    const yyyy = before.getFullYear();
+    const mm = String(before.getMonth() + 1).padStart(2, '0');
+    const dd = String(before.getDate()).padStart(2, '0');
+    expect(stored).toBe(`${yyyy}-${mm}-${dd}`);
+  });
+});
