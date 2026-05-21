@@ -30,9 +30,13 @@ export function useRestedAd(): UseRestedAdResult {
       const unregister = loadFullScreenAd({
         options: { adGroupId: REST_AD_GROUP_ID },
         onEvent: (event) => {
+          if (!mountedRef.current) return;
           if (event.type === 'loaded') setStatus('ready');
         },
-        onError: () => setStatus('error'),
+        onError: () => {
+          if (!mountedRef.current) return;
+          setStatus('error');
+        },
       });
       unregisterRef.current = unregister;
     };
