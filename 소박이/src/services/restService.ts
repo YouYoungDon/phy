@@ -1,7 +1,14 @@
-// Pure logic for the rest interaction. No React, no SDK, no storage.
-// The orchestrator `grantRest()` lives in this file too (Task 11) but is
-// only ever called from the `userEarnedReward` callback path — see the
-// boundary comment on grantRest itself.
+// Pure logic for the rest interaction. No React, no SDK, no storage at the
+// helper layer. The orchestrator `grantRest()` lives in this file too and
+// composes the helpers with store writes + storage persistence — it is only
+// ever called from the `userEarnedReward` callback path (see the boundary
+// comment on grantRest itself).
+
+import { useUserStore } from '../store/userStore';
+import * as storageService from './storageService';
+import { STORAGE_KEYS } from '../constants/storage';
+import { REST_LETTERS, RestLetter } from '../constants/restLetters';
+import { getLocalDateString } from '../utils/date';
 
 export const PEBBLE_MIN = 5;
 export const PEBBLE_MAX = 20;
@@ -52,12 +59,6 @@ export function canRest(
   return getEffectiveRestsToday(storedRestsToday, lastRestDate, todayStr) < REST_DAILY_CAP;
 }
 
-import { useUserStore } from '../store/userStore';
-import * as storageService from './storageService';
-import { STORAGE_KEYS } from '../constants/storage';
-import { REST_LETTERS, RestLetter } from '../constants/restLetters';
-import { getLocalDateString } from '../utils/date';
-
 export interface RestGrant {
   pebbleDelta: number;
   newCount: number;
@@ -76,6 +77,10 @@ export interface RestGrant {
  * way to verify the caller). Reviewers enforce it.
  */
 export async function grantRest(): Promise<RestGrant> {
+  // Snapshot state once. Safe because userEarnedReward is serial — the SDK
+  // never fires a second event while this promise is in flight, so the
+  // pre-await read of pebbleCount cannot be invalidated by another
+  // grantRest mid-flight.
   const store = useUserStore.getState();
   const pebbleDelta = computePebbleDelta();
   const oldCount = store.pebbleCount;
