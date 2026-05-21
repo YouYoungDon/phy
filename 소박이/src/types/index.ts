@@ -31,6 +31,10 @@ export interface UserState {
   totalRecordCount: number;
   recordedDaysCount: number;
   roomStage: 1 | 2 | 3 | 4 | 5;
+  pebbleCount: number;
+  restsToday: number;
+  lastRestDate: string | null;
+  lastRestAt: string | null;
 }
 
 export interface EmotionContext {

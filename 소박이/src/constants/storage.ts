@@ -14,4 +14,8 @@ export const STORAGE_KEYS = {
   ROOM_PLACEMENTS: 'sobagi-room-placements',
   PENDING_PLACEMENT: 'sobagi-pending-placement',
   CATEGORY_MIGRATION_DONE: 'sobagi-category-migration-done',
+  PEBBLE_COUNT: 'sobagi-pebble-count',
+  RESTS_TODAY: 'sobagi-rests-today',
+  LAST_REST_DATE: 'sobagi-last-rest-date',
+  LAST_REST_AT: 'sobagi-last-rest-at',
 } as const;
