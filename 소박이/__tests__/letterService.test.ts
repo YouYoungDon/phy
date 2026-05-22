@@ -46,8 +46,11 @@ describe('checkAndDeliverLetters — personal letters', () => {
   });
 
   it('does not re-deliver already-delivered letters', async () => {
+    // 2026-05-16 is inside the seasonal-may-2026 window (May 1–31), so the
+    // pre-staged delivered set must include that letter too — otherwise the
+    // service correctly delivers it and the "no new save" assertion fails.
     mockLoad.mockImplementation(async (key: string) => {
-      if (key === 'sobagi-mailbox-delivered-ids') return ['001'];
+      if (key === 'sobagi-mailbox-delivered-ids') return ['001', 'seasonal-may-2026'];
       return null;
     });
     await checkAndDeliverLetters(0, new Date('2026-05-16'));
@@ -57,7 +60,7 @@ describe('checkAndDeliverLetters — personal letters', () => {
 
   it('does not call save if nothing new to deliver', async () => {
     mockLoad.mockImplementation(async (key: string) => {
-      if (key === 'sobagi-mailbox-delivered-ids') return ['001', 'personal-week1'];
+      if (key === 'sobagi-mailbox-delivered-ids') return ['001', 'personal-week1', 'seasonal-may-2026'];
       return null;
     });
     await checkAndDeliverLetters(7, new Date('2026-05-16'));
