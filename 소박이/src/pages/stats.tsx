@@ -156,6 +156,12 @@ function StatsScreen() {
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
   const [showDayPhotocard, setShowDayPhotocard] = useState(false);
 
+  // Month picker — separate "pickerYear" state so the user can browse years
+  // inside the modal without committing until they tap a month. Reset to
+  // viewYear every time the picker opens.
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+
   const dayRevealAnim = useRef(new Animated.Value(1)).current;
 
   const expensesByDate = useMemo(() => {
@@ -207,6 +213,39 @@ function StatsScreen() {
     if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
     else setViewMonth(m => m + 1);
   };
+
+  // Month-picker handlers — kept inline because they're tightly coupled to
+  // viewYear/viewMonth/selectedDay state and don't need to be reused.
+  const openMonthPicker = useCallback(() => {
+    setPickerYear(viewYear);
+    setShowMonthPicker(true);
+  }, [viewYear]);
+  const closeMonthPicker = useCallback(() => {
+    setShowMonthPicker(false);
+  }, []);
+  const pickerPrevYear = useCallback(() => {
+    setPickerYear(y => y - 1);
+  }, []);
+  const pickerNextYear = useCallback(() => {
+    setPickerYear(y => Math.min(y + 1, today.getFullYear()));
+  }, [today]);
+  // Commit a month selection: jump the calendar and adjust selectedDay safely.
+  // If the previously selected day already lives in the new month, keep it.
+  // Otherwise prefer today (when today falls in the new month) else the 1st.
+  const selectMonth = useCallback((y: number, m: number) => {
+    const newPrefix = `${y}-${String(m + 1).padStart(2, '0')}`;
+    setViewYear(y);
+    setViewMonth(m);
+    if (!selectedDay.startsWith(newPrefix)) {
+      const todayPrefix = todayStr.slice(0, 7);
+      if (todayPrefix === newPrefix) {
+        setSelectedDay(todayStr);
+      } else {
+        setSelectedDay(`${newPrefix}-01`);
+      }
+    }
+    setShowMonthPicker(false);
+  }, [selectedDay, todayStr]);
 
   const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
   const monthLabel = `${viewYear}년 ${viewMonth + 1}월`;
@@ -369,7 +408,9 @@ function StatsScreen() {
             <Pressable onPress={prevMonth} style={styles.navBtn}>
               <Text style={styles.navArrow}>‹</Text>
             </Pressable>
-            <Text style={styles.monthLabel}>{monthLabel}</Text>
+            <Pressable onPress={openMonthPicker} style={styles.monthLabelBtn} hitSlop={8}>
+              <Text style={styles.monthLabel}>{monthLabel}</Text>
+            </Pressable>
             <Pressable onPress={nextMonth} style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]}>
               <Text style={[styles.navArrow, isCurrentMonth && styles.navArrowDisabled]}>›</Text>
             </Pressable>
@@ -600,6 +641,73 @@ function StatsScreen() {
           </View>
         </Pressable>
       )}
+
+      {/* Month picker — opens from the calendar header. Backdrop tap closes
+          without committing; tapping a month chip commits and closes. */}
+      {showMonthPicker && (
+        <Pressable style={styles.monthPickerOverlay} onPress={closeMonthPicker}>
+          <Pressable style={styles.monthPickerCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.monthPickerYearRow}>
+              <Pressable onPress={pickerPrevYear} style={styles.monthPickerArrowBtn} hitSlop={8}>
+                <Text style={styles.monthPickerArrow}>‹</Text>
+              </Pressable>
+              <Text style={styles.monthPickerYearLabel}>{pickerYear}년</Text>
+              <Pressable
+                onPress={pickerNextYear}
+                style={[
+                  styles.monthPickerArrowBtn,
+                  pickerYear >= today.getFullYear() && styles.monthPickerArrowBtnDisabled,
+                ]}
+                hitSlop={8}
+              >
+                <Text
+                  style={[
+                    styles.monthPickerArrow,
+                    pickerYear >= today.getFullYear() && styles.monthPickerArrowDisabled,
+                  ]}
+                >
+                  ›
+                </Text>
+              </Pressable>
+            </View>
+            <View style={styles.monthGrid}>
+              {[0, 1, 2].map((rowIdx) => (
+                <View key={rowIdx} style={styles.monthGridRow}>
+                  {[0, 1, 2, 3].map((colIdx) => {
+                    const m = rowIdx * 4 + colIdx;
+                    const isFuture =
+                      pickerYear > today.getFullYear() ||
+                      (pickerYear === today.getFullYear() && m > today.getMonth());
+                    const isCurrent = pickerYear === viewYear && m === viewMonth;
+                    return (
+                      <Pressable
+                        key={m}
+                        onPress={() => !isFuture && selectMonth(pickerYear, m)}
+                        disabled={isFuture}
+                        style={[
+                          styles.monthChip,
+                          isCurrent && styles.monthChipCurrent,
+                          isFuture && styles.monthChipDisabled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.monthChipText,
+                            isCurrent && styles.monthChipTextCurrent,
+                            isFuture && styles.monthChipTextDisabled,
+                          ]}
+                        >
+                          {m + 1}월
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -633,7 +741,75 @@ const styles = StyleSheet.create({
   navBtnDisabled: { opacity: 0.3 },
   navArrow: { fontSize: 22, color: COLORS.oliveGreen, fontWeight: '600' },
   navArrowDisabled: { color: COLORS.textLight },
+  monthLabelBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
   monthLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+
+  // Month picker overlay — soft Sobagi modal, not a system picker.
+  // 88% width with maxWidth 360 keeps the card comfortable on small phones
+  // (~360pt screens) and stops it sprawling on larger devices.
+  monthPickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(26, 20, 16, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  monthPickerCard: {
+    width: '88%',
+    maxWidth: 360,
+    backgroundColor: COLORS.warmWhite,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    gap: 12,
+  },
+  monthPickerYearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
+    paddingBottom: 2,
+  },
+  monthPickerArrowBtn: { padding: 6 },
+  monthPickerArrowBtnDisabled: { opacity: 0.3 },
+  monthPickerArrow: { fontSize: 20, color: COLORS.oliveGreen, fontWeight: '600' },
+  monthPickerArrowDisabled: { color: COLORS.textLight },
+  monthPickerYearLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  // 4×3 grid built from row containers — chips use `flex: 1` so each row
+  // distributes width evenly regardless of card size, with consistent gaps.
+  // Avoids the percentage-width + `gap` interaction that produced uneven
+  // chips and tall/skinny ratios on-device.
+  monthGrid: { gap: 8 },
+  monthGridRow: { flexDirection: 'row', gap: 8 },
+  monthChip: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.cream,
+  },
+  monthChipCurrent: {
+    backgroundColor: COLORS.oliveGreen,
+  },
+  monthChipDisabled: {
+    opacity: 0.3,
+  },
+  monthChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  monthChipTextCurrent: {
+    color: '#fff',
+  },
+  monthChipTextDisabled: {
+    color: COLORS.textLight,
+  },
   dowRow: { flexDirection: 'row', marginBottom: 4 },
   dowLabel: { flex: 1, textAlign: 'center', fontSize: 11, color: COLORS.textMuted, fontWeight: '500' },
   dowSun: { color: '#C47B7B' },
