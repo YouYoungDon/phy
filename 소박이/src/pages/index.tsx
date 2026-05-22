@@ -17,7 +17,8 @@ import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
-import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR } from '../services/atmosphereService';
+import { REST_LETTERS } from '../constants/restLetters';
+import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
 import { RestTV } from '../components/room/RestTV';
 import { PebbleJar } from '../components/room/PebbleJar';
@@ -36,6 +37,7 @@ function buildLetterLookup(): Map<string, MailboxLetter> {
   const map = new Map<string, MailboxLetter>();
   for (const l of PERSONAL_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
   for (const l of ALL_SEASONAL_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
+  for (const l of REST_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
   return map;
 }
 
@@ -80,6 +82,7 @@ function HomeScreen() {
   const pebbleCount = useUserStore((s) => s.pebbleCount);
   const restsToday = useUserStore((s) => s.restsToday);
   const lastRestDate = useUserStore((s) => s.lastRestDate);
+  const lastRestAt = useUserStore((s) => s.lastRestAt);
   const adState = useRestedAd();
   const todayStr = getLocalDateString(new Date());
   const effectiveRestsToday = getEffectiveRestsToday(restsToday, lastRestDate, todayStr);
@@ -229,6 +232,13 @@ function HomeScreen() {
             )}
             <View
               style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
+              pointerEvents="none"
+            />
+            <View
+              style={[
+                styles.atmosphereOverlay,
+                { backgroundColor: '#E8C070', opacity: getRestWarmthOpacity(new Date(), lastRestAt) },
+              ]}
               pointerEvents="none"
             />
             {calmOpacity > 0 && (
