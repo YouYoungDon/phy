@@ -286,7 +286,7 @@ function RecordScreen() {
 
         {/* User emotion */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>기분은 어때요?</Text>
+          <Text style={styles.sectionLabel}>기분은 어때요? (선택)</Text>
           <View style={styles.emotionRow}>
             {USER_EMOTIONS.map((e) => (
               <Pressable
