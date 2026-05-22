@@ -1,14 +1,10 @@
+jest.mock('../src/services/storageService', () => ({
+  load: jest.fn().mockResolvedValue(null),
+  save: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { Expense } from '../src/types';
 import { selectStatsObservation } from '../src/services/statsObservationService';
-
-// roomPresenceService imports storageService which imports @apps-in-toss/framework.
-// Mock the framework so that pure-logic tests can run without native modules.
-jest.mock('@apps-in-toss/framework', () => ({
-  Storage: {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-  },
-}));
 
 // Helper: build a spending expense at a specific local-date and hour.
 function expense(dateStr: string, hour: number, category: Expense['category'] = 'cafe', amount = 5000): Expense {
@@ -25,7 +21,6 @@ function expense(dateStr: string, hour: number, category: Expense['category'] = 
   };
 }
 
-// 14 distinct cafe days inside the 14-day window (≥3 records, ≥3 distinct days).
 function cafePatternExpenses(today: string): Expense[] {
   // 3 cafe records on 3 different days inside the last 14 days, daytime hours.
   const todayD = new Date(today + 'T12:00:00');
@@ -105,6 +100,11 @@ describe('selectStatsObservation', () => {
     expect(result).toBe('꾸준히 들르고 있어요 🌿');
   });
 
+  it('streak 6 falls into medium-streak tier (boundary below the long-streak threshold)', () => {
+    const result = selectStatsObservation([], 6, TODAY);
+    expect(result).toBe('꾸준히 들르고 있어요 🌿');
+  });
+
   it('returns short-streak observation when streak >= 1', () => {
     const result = selectStatsObservation([], 1, TODAY);
     expect(result).toBe('오늘도 잠깐 들렀네요 🍃');
@@ -118,6 +118,12 @@ describe('selectStatsObservation', () => {
   it('cafe pattern beats long streak (texture wins over consistency)', () => {
     const expenses = cafePatternExpenses(TODAY);
     const result = selectStatsObservation(expenses, 30, TODAY);
+    expect(result).toBe('요즘 카페에 자주 들렀네요 ☕');
+  });
+
+  it('cafe pattern beats calm observation (texture > calm)', () => {
+    const expenses = [...cafePatternExpenses(TODAY), ...calmDayExpenses(TODAY, 4)];
+    const result = selectStatsObservation(expenses, 0, TODAY);
     expect(result).toBe('요즘 카페에 자주 들렀네요 ☕');
   });
 });
