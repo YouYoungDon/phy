@@ -59,6 +59,19 @@ const IDLE_MESSAGES = [
   '오늘 기분은 어때요?',
 ];
 
+const REST_IDLE_MESSAGES = [
+  '잠깐 쉬다 왔어요 🌿',
+  '좋은 채널이었어요 📺',
+  '한 숨 돌리니 좋네요 🌿',
+];
+
+function getIdleMessages(lastRestAtISO: string | null, now: Date): string[] {
+  if (lastRestAtISO === null) return IDLE_MESSAGES;
+  const minsSince = (now.getTime() - Date.parse(lastRestAtISO)) / 60_000;
+  if (minsSince < 0 || minsSince >= 60) return IDLE_MESSAGES;
+  return [...IDLE_MESSAGES, ...REST_IDLE_MESSAGES];
+}
+
 // Normalized room coordinates. MAILBOX_POSITION represents the visual
 // location of the mailbox utility icon — the utility stack itself stays
 // pixel-positioned in its existing styles; this constant is the source of
@@ -210,16 +223,17 @@ function HomeScreen() {
   const handleSobagiTap = useCallback(() => {
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
 
-    let idx = Math.floor(Math.random() * IDLE_MESSAGES.length);
-    if (idx === lastIndexRef.current && IDLE_MESSAGES.length > 1) {
-      idx = (idx + 1) % IDLE_MESSAGES.length;
+    const pool = getIdleMessages(lastRestAt, new Date());
+    let idx = Math.floor(Math.random() * pool.length);
+    if (idx === lastIndexRef.current && pool.length > 1) {
+      idx = (idx + 1) % pool.length;
     }
     lastIndexRef.current = idx;
-    setBubbleMessage(IDLE_MESSAGES[idx] ?? '반가워요 🌿');
+    setBubbleMessage(pool[idx] ?? '반가워요 🌿');
     setBubbleVisible(true);
 
     hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
-  }, []);
+  }, [lastRestAt]);
 
   return (
     <View style={styles.root}>
