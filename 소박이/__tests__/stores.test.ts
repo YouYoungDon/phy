@@ -104,3 +104,57 @@ describe('userStore — incrementRecordedDays', () => {
     expect(useUserStore.getState().roomStage).toBe(1);
   });
 });
+
+describe('userStore — rest fields', () => {
+  beforeEach(() => {
+    useUserStore.setState({
+      level: 1,
+      streak: 0,
+      totalRecordCount: 0,
+      recordedDaysCount: 0,
+      roomStage: 1,
+      pebbleCount: 0,
+      restsToday: 0,
+      lastRestDate: null,
+      lastRestAt: null,
+    });
+  });
+
+  it('setPebbleCount writes the new value', () => {
+    useUserStore.getState().setPebbleCount(42);
+    expect(useUserStore.getState().pebbleCount).toBe(42);
+  });
+
+  it('setRestsToday writes the new value', () => {
+    useUserStore.getState().setRestsToday(1);
+    expect(useUserStore.getState().restsToday).toBe(1);
+  });
+
+  it('setLastRestDate writes the new value', () => {
+    useUserStore.getState().setLastRestDate('2026-05-21');
+    expect(useUserStore.getState().lastRestDate).toBe('2026-05-21');
+  });
+
+  it('setLastRestAt writes the new value', () => {
+    useUserStore.getState().setLastRestAt('2026-05-21T12:00:00Z');
+    expect(useUserStore.getState().lastRestAt).toBe('2026-05-21T12:00:00Z');
+  });
+
+  it('hydrate populates rest fields from a UserState', () => {
+    useUserStore.getState().hydrate({
+      level: 2,
+      streak: 3,
+      totalRecordCount: 10,
+      recordedDaysCount: 7,
+      roomStage: 1,
+      pebbleCount: 55,
+      restsToday: 1,
+      lastRestDate: '2026-05-21',
+      lastRestAt: '2026-05-21T12:00:00Z',
+    });
+    expect(useUserStore.getState().pebbleCount).toBe(55);
+    expect(useUserStore.getState().restsToday).toBe(1);
+    expect(useUserStore.getState().lastRestDate).toBe('2026-05-21');
+    expect(useUserStore.getState().lastRestAt).toBe('2026-05-21T12:00:00Z');
+  });
+});

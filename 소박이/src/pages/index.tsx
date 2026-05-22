@@ -17,8 +17,14 @@ import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
-import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR } from '../services/atmosphereService';
+import { REST_LETTERS } from '../constants/restLetters';
+import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
+import { RestTV } from '../components/room/RestTV';
+import { PebbleJar } from '../components/room/PebbleJar';
+import { RestPrompt } from '../components/room/RestPrompt';
+import { useRestedAd } from '../hooks/useRestedAd';
+import { getEffectiveRestsToday, grantRest } from '../services/restService';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -31,6 +37,7 @@ function buildLetterLookup(): Map<string, MailboxLetter> {
   const map = new Map<string, MailboxLetter>();
   for (const l of PERSONAL_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
   for (const l of ALL_SEASONAL_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
+  for (const l of REST_LETTERS) map.set(l.id, { id: l.id, body: l.body, sig: l.sig });
   return map;
 }
 
@@ -52,6 +59,30 @@ const IDLE_MESSAGES = [
   '오늘 기분은 어때요?',
 ];
 
+const REST_IDLE_MESSAGES = [
+  '잠깐 쉬다 왔어요 🌿',
+  '좋은 채널이었어요 📺',
+  '한 숨 돌리니 좋네요 🌿',
+];
+
+function getIdleMessages(lastRestAtISO: string | null, now: Date): string[] {
+  if (lastRestAtISO === null) return IDLE_MESSAGES;
+  const minsSince = (now.getTime() - Date.parse(lastRestAtISO)) / 60_000;
+  if (minsSince < 0 || minsSince >= 60) return IDLE_MESSAGES;
+  return [...IDLE_MESSAGES, ...REST_IDLE_MESSAGES];
+}
+
+// Normalized room coordinates. MAILBOX_POSITION represents the visual
+// location of the mailbox utility icon — the utility stack itself stays
+// pixel-positioned in its existing styles; this constant is the source of
+// truth for room-layer fixtures that anchor below it.
+const MAILBOX_POSITION = { x: 0.12, y: 0.29 } as const;
+const TV_POSITION = {
+  x: MAILBOX_POSITION.x + 0.02,
+  y: MAILBOX_POSITION.y + 0.16,
+};
+const JAR_POSITION = { x: 0.18, y: 0.66 } as const;
+
 function HomeScreen() {
   useAppInit();
 
@@ -61,6 +92,13 @@ function HomeScreen() {
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
+  const pebbleCount = useUserStore((s) => s.pebbleCount);
+  const restsToday = useUserStore((s) => s.restsToday);
+  const lastRestDate = useUserStore((s) => s.lastRestDate);
+  const lastRestAt = useUserStore((s) => s.lastRestAt);
+  const adState = useRestedAd();
+  const todayStr = getLocalDateString(new Date());
+  const effectiveRestsToday = getEffectiveRestsToday(restsToday, lastRestDate, todayStr);
   const timeOfDayTint = getTimeOfDayTint(new Date().getHours());
   const warmthOpacity = getWarmthOpacity(recordedDaysCount);
   const calmOpacity = getCalmAtmosphereOpacity(expenses, getLocalDateString(new Date()));
@@ -77,7 +115,7 @@ function HomeScreen() {
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastIndexRef = useRef(-1);
 
-  type SheetType = 'mailbox' | 'bag';
+  type SheetType = 'mailbox' | 'bag' | 'rest';
   const [activeSheet, setActiveSheet] = useState<SheetType | null>(null);
   const sheetAnim = useRef(new Animated.Value(400)).current;
   const [bagTab, setBagTab] = useState<BagTab>('장신구');
@@ -185,16 +223,17 @@ function HomeScreen() {
   const handleSobagiTap = useCallback(() => {
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
 
-    let idx = Math.floor(Math.random() * IDLE_MESSAGES.length);
-    if (idx === lastIndexRef.current && IDLE_MESSAGES.length > 1) {
-      idx = (idx + 1) % IDLE_MESSAGES.length;
+    const pool = getIdleMessages(lastRestAt, new Date());
+    let idx = Math.floor(Math.random() * pool.length);
+    if (idx === lastIndexRef.current && pool.length > 1) {
+      idx = (idx + 1) % pool.length;
     }
     lastIndexRef.current = idx;
-    setBubbleMessage(IDLE_MESSAGES[idx] ?? '반가워요 🌿');
+    setBubbleMessage(pool[idx] ?? '반가워요 🌿');
     setBubbleVisible(true);
 
     hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
-  }, []);
+  }, [lastRestAt]);
 
   return (
     <View style={styles.root}>
@@ -207,6 +246,13 @@ function HomeScreen() {
             )}
             <View
               style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
+              pointerEvents="none"
+            />
+            <View
+              style={[
+                styles.atmosphereOverlay,
+                { backgroundColor: '#E8C070', opacity: getRestWarmthOpacity(new Date(), lastRestAt) },
+              ]}
               pointerEvents="none"
             />
             {calmOpacity > 0 && (
@@ -236,6 +282,38 @@ function HomeScreen() {
                 </View>
               );
             })}
+            <RestTV
+              position={TV_POSITION}
+              adStatus={adState.status}
+              effectiveRestsToday={effectiveRestsToday}
+              onPress={() => {
+                if (effectiveRestsToday >= 2) {
+                  setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
+                  setBubbleVisible(true);
+                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                  return;
+                }
+                if (adState.status === 'error') {
+                  setBubbleMessage('지금은 조용한 채널이 없어요 🌿');
+                  setBubbleVisible(true);
+                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                  return;
+                }
+                openSheet('rest');
+              }}
+            />
+            <PebbleJar
+              position={JAR_POSITION}
+              pebbleCount={pebbleCount}
+              onPress={() => {
+                setBubbleMessage(`조약돌 ${pebbleCount}개`);
+                setBubbleVisible(true);
+                if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 2000);
+              }}
+            />
             <View style={styles.header}>
               <View style={styles.levelCard}>
                 <View style={styles.levelRow}>
@@ -349,6 +427,34 @@ function HomeScreen() {
               </ScrollView>
             )}
           </View>
+        )}
+        {activeSheet === 'rest' && (
+          <RestPrompt
+            adStatus={adState.status}
+            onConfirm={() => {
+              closeSheet();
+              adState.show(() => {
+                // grantRest reads/writes the store and persists to storage;
+                // unlike fire-and-forget saves, a rejection here means the
+                // user watched an ad and got nothing. Log instead of dropping.
+                grantRest()
+                  .then((result) => {
+                    // Quiet post-watch line. Shared bubble surface with
+                    // Sobagi tap and the daily-done message; just update text.
+                    setBubbleMessage(
+                      `소박이가 한 숨 돌렸어요 🌿  +${result.pebbleDelta}`,
+                    );
+                    setBubbleVisible(true);
+                    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                    hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
+                  })
+                  .catch((err) => {
+                    if (__DEV__) console.error('[grantRest] failed:', err);
+                  });
+              });
+            }}
+            onCancel={closeSheet}
+          />
         )}
         {activeSheet === 'bag' && (
           <View>

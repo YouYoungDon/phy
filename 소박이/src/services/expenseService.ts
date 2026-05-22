@@ -49,6 +49,10 @@ export async function saveExpense(expense: Expense): Promise<void> {
     totalRecordCount: s.totalRecordCount,
     recordedDaysCount: s.recordedDaysCount,
     roomStage: s.roomStage,
+    pebbleCount: s.pebbleCount,
+    restsToday: s.restsToday,
+    lastRestDate: s.lastRestDate,
+    lastRestAt: s.lastRestAt,
   };
 
   void storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
@@ -64,16 +68,17 @@ export async function saveExpense(expense: Expense): Promise<void> {
 }
 
 // No-spend record: a quiet daily mark with amount 0 and category 'no_spend'.
-// Counts toward streak and recorded-day count, and qualifies as the day's
-// first meaningful record for found-item eval. Created via saveExpense so
-// all persistence/streak/eval plumbing stays in one place.
-export async function recordNoSpend(): Promise<void> {
+// Caller passes the ISO `createdAt` so the same path serves both real-time
+// (today) and retroactive (past-date) no-spend marks. saveExpense's existing
+// `isRealTimeRecord` check keeps past-date marks from advancing streak or
+// triggering found-item eval — past no-spend stays quiet by construction.
+export async function recordNoSpend(createdAt: string): Promise<void> {
   const expense: Expense = {
     id: Date.now().toString(),
     amount: 0,
     category: 'no_spend',
     sobagiEmotion: 'happy',
-    createdAt: new Date().toISOString(),
+    createdAt,
   };
   await saveExpense(expense);
 }

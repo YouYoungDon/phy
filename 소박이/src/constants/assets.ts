@@ -21,6 +21,10 @@ export const UTILITY_ICON_URIS: Record<'bag' | 'mailbox', string> = {
   mailbox: `${CDN}/sobaki_post.png`,
 };
 
+export const ROOM_FURNITURE_URIS: Record<'tv', string> = {
+  tv: `${CDN}/sobaki_tv.png`,
+};
+
 export type PhotocardMoodAsset =
   | 'photocard_1' | 'photocard_2' | 'photocard_3' | 'photocard_4' | 'photocard_5'
   | 'photocard_6' | 'photocard_7' | 'photocard_8' | 'photocard_9' | 'photocard_10';

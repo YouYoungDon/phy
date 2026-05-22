@@ -111,18 +111,31 @@ function RecordScreen() {
   const amount = parseInt(amountText.replace(/,/g, ''), 10) || 0;
   const canSave = amount > 0 && !isSaving;
 
-  // The no-spend button is the only way to mark a calendar day with zero
-  // spending. It only surfaces when there's nothing recorded today yet AND
-  // the user is on the "today" date chip — past-date catch-up has its own
-  // flow and the button's "오늘은…" copy would be misleading there.
-  const hasRecordToday = getTodayExpenses().length > 0;
-  const canNoSpend = !hasRecordToday && !isSaving && selectedDate === todayStr;
+  // No-spend marks a calendar day as quietly passed. Available for today and
+  // any past date the user is reviewing, as long as that day has no record
+  // yet. Future dates are excluded (UI doesn't surface them, but the guard
+  // is defensive). saveExpense already keeps past-date marks from advancing
+  // streak or triggering found-item eval, so past no-spend stays quiet.
+  const isSelectedDateToday = selectedDate === todayStr;
+  const hasRecordOnSelectedDate = expenses.some(
+    (e) => getLocalDateString(new Date(e.createdAt)) === selectedDate,
+  );
+  const canNoSpend =
+    !hasRecordOnSelectedDate && !isSaving && selectedDate <= todayStr;
 
   const handleNoSpend = async () => {
     if (!canNoSpend) return;
     setIsSaving(true);
-    await recordNoSpend();
-    setEmotion('happy', '오늘은 조용히 머물렀네요 🌿');
+    const createdAt = isSelectedDateToday
+      ? new Date().toISOString()
+      : localDateToISOString(selectedDate);
+    await recordNoSpend(createdAt);
+    setEmotion(
+      'happy',
+      isSelectedDateToday
+        ? '오늘은 조용히 머물렀네요 🌿'
+        : '조용히 지나간 하루였네요 🌙',
+    );
     navigation.navigate('/reaction');
   };
 
@@ -227,14 +240,19 @@ function RecordScreen() {
           })}
         </ScrollView>
 
-        {/* No-spend option — only visible when nothing has been recorded today */}
+        {/* No-spend option — visible whenever the selected day has no record
+            yet (and isn't a future date). Copy adapts to today vs past. */}
         {canNoSpend && (
           <Pressable
             style={styles.noSpendBtn}
             onPress={handleNoSpend}
             disabled={!canNoSpend}
           >
-            <Text style={styles.noSpendLabel}>오늘은 무지출이에요 🌿</Text>
+            <Text style={styles.noSpendLabel}>
+              {isSelectedDateToday
+                ? '오늘은 무지출이에요 🌿'
+                : '이날은 조용히 지나갔어요 🌿'}
+            </Text>
           </Pressable>
         )}
 
