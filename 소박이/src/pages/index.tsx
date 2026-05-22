@@ -410,7 +410,12 @@ function HomeScreen() {
             onConfirm={() => {
               closeSheet();
               adState.show(() => {
-                void grantRest();
+                // grantRest reads/writes the store and persists to storage;
+                // unlike fire-and-forget saves, a rejection here means the
+                // user watched an ad and got nothing. Log instead of dropping.
+                grantRest().catch((err) => {
+                  if (__DEV__) console.error('[grantRest] failed:', err);
+                });
               });
             }}
             onCancel={closeSheet}
