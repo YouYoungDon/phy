@@ -61,41 +61,64 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 ## Latest Handoff
 
 **Agent:** Engineering
-**Date:** 2026-05-20
-**Group completed:** Memo suggestions + wrapped category chips
+**Date:** 2026-05-22
+**Group completed:** 쉬어가기 TV — soft rewarded-ad system
 
 ### What changed
-- `src/constants/categories.ts` — `ExpenseCategoryMeta` gains `memoSuggestions: string[]`. Each of the 12 scene tokens populated with 5-7 plain Korean hints; `no_spend` gets `[]`.
-- `src/components/expense/CategorySelector.tsx` — chip row switches from horizontal `ScrollView` to a wrapped `View` (`flexDirection: 'row', flexWrap: 'wrap', gap: 10`). All 12 scenes visible at once on standard mobile widths.
-- `src/components/expense/MemoSuggestions.tsx` (new) — outlined-ghost horizontal chip row below the category grid. Reads suggestions from `CATEGORY_BY_TOKEN[category].memoSuggestions`. Renders nothing for `no_spend` (explicit early return) or when the suggestion list is empty.
-- `src/components/expense/MemoSuggestions.tsx` (also exports) — pure `appendMemoSuggestion(memo, suggestion)` helper. Fills empty memos, appends with `', '` separator, skips duplicate tokens, no-ops if the result would exceed 60 chars.
-- `src/pages/record.tsx` — adds the import + renders `<MemoSuggestions category={category} memo={memo} onAppend={setMemo} />` inside the existing category section.
-- `__tests__/memoSuggestions.test.ts` (new, 7 tests).
+- `src/services/restService.ts` (new) — pure helpers (`computePebbleDelta` 5-20, `findCrossedLetterThresholds`, `getEffectiveRestsToday`, `canRest`) plus the `grantRest()` orchestrator. `grantRest` is the only writer of pebble state, `restsToday`, `lastRestDate`/`lastRestAt`, and rest-letter delivery; its block comment names the `userEarnedReward`-only caller contract.
+- `src/hooks/useRestedAd.ts` (new) — wraps AppsInToss `loadFullScreenAd`/`showFullScreenAd` lifecycle. Returns `{ status, show(onReward) }`. The `onReward` callback fires exclusively in the `userEarnedReward` SDK event; `dismissed` and `failedToShow` never reach it. All 6 SDK callback paths are guarded with a `mountedRef` so post-unmount state writes are suppressed.
+- `src/services/atmosphereService.ts` — gains `getRestWarmthOpacity(now, lastRestAtISO)` (linear fade `0.08 → 0` over 60 min) and constants `REST_WARMTH_MAX_OPACITY` / `REST_WARMTH_FADE_MINUTES`. Composes additively with the existing day-count warmth and calm overlays.
+- `src/components/room/RestTV.tsx` (new) — presentational TV sprite using the `sobaki_tv.png` asset. 4-state opacity (`0.85 / 0.55 / 0.35 / 0.35` for available / loading / done / error). Returns `null` when `adStatus === 'unsupported'` — no fallback messaging. Daily-cap branch uses the `REST_DAILY_CAP` constant, not a magic number.
+- `src/components/room/PebbleJar.tsx` (new) — presentational `🫙` sprite with 4 opacity+scale fill stages keyed off `pebbleCount` (0-9 / 10-49 / 50-199 / 200+).
+- `src/components/room/RestPrompt.tsx` (new) — bottom-sheet body. Title `소박이랑 잠깐 쉬어갈까요? 📺` + body copy + `다음에` / `쉬어가기` buttons. Primary disabled until `adStatus === 'ready'`, with a `준비 중이에요 🌿` hint shown otherwise.
+- `src/constants/restLetters.ts` (new) — 5 rest-themed letters keyed by `triggerPebbles` (30 / 100 / 250 / 500 / 1000).
+- `src/constants/ads.ts` (new) — `REST_AD_GROUP_ID` (dev test ID for now; swap to production ID before release).
+- `src/constants/assets.ts` — adds `ROOM_FURNITURE_URIS` export (currently `{ tv }`) for in-world furniture, separate from utility-icon overlays.
+- `src/constants/storage.ts` — 4 new keys: `PEBBLE_COUNT`, `RESTS_TODAY`, `LAST_REST_DATE`, `LAST_REST_AT`.
+- `src/types/index.ts` — `UserState` gains 4 fields: `pebbleCount: number`, `restsToday: number`, `lastRestDate: string | null`, `lastRestAt: string | null`.
+- `src/store/userStore.ts` — 4 new initial values, 4 new primitive setters. `hydrate` semantics unchanged.
+- `src/services/expenseService.ts` — `updatedUser` literal in `saveExpense` now includes the 4 new rest fields so persisted UserState stays complete.
+- `src/hooks/useAppInit.ts` — hydrate call defaults the 4 new fields via `??` for legacy users predating them.
+- `src/pages/index.tsx` — renders `<RestTV />` and `<PebbleJar />` in the room layer; manages a new `'rest'` sheet branch alongside `'mailbox'`/`'bag'`; merges `REST_LETTERS` into `LETTER_LOOKUP`; adds the new rest-warmth overlay; mixes `REST_IDLE_MESSAGES` into Sobagi's idle pool for 60 min after a watch; shows a post-watch bubble `소박이가 한 숨 돌렸어요 🌿  +N`. Three position constants `MAILBOX_POSITION`/`TV_POSITION`/`JAR_POSITION` — `TV_POSITION` is derived from `MAILBOX_POSITION + { x: 0.02, y: 0.16 }` so the two visually cluster on the room's left. Bag/mailbox utility-icon positions untouched.
+- `__tests__/restService.test.ts` (new, 21 tests covering both pure helpers and `grantRest` orchestration).
+- `__tests__/atmosphereService.test.ts` — 6 new tests for `getRestWarmthOpacity`.
+- `__tests__/stores.test.ts` — 5 new tests for the userStore rest setters + hydrate.
 
 ### What's now working
-- Selecting any scene category surfaces 5-7 quick memo hints in a horizontal row below the chip grid. Tap to fill (empty memo) or append with `', '` (non-empty memo).
-- Tapping the same suggestion twice never duplicates. Tapping when the memo is near full (would push past 60 chars) silently no-ops.
-- Memo field stays freely editable — the user can type, delete, or mix tapped + typed content.
-- All 12 scene tokens are visible at once via the wrap layout; no horizontal scroll on the chip row.
-- `no_spend` surfaces only via the no-spend button on the Record screen and never renders suggestions.
+- Tapping the TV sprite (when `effectiveRestsToday < 2` and `adStatus === 'ready'`) opens the rest prompt. Confirming kicks off the rewarded ad. Watching to completion grants 5-20 pebbles, refreshes Sobagi's idle line pool for 60 min, fades a warm overlay across the room, and at hidden pebble thresholds delivers a soft letter into the existing mailbox.
+- Dismissing the ad without earning the reward grants nothing — no pebbles, no warmth, no `restsToday` increment.
+- The TV opacity reflects 4 states (available / loading / done-for-today / error). Tap on a done-for-today TV shows `오늘은 충분히 쉬었어요 🌿`; tap on an error TV shows `지금은 조용한 채널이 없어요 🌿`.
+- The jar opacity steps through 4 fill stages as pebbles accumulate. Tap shows `조약돌 N개` for 2 seconds.
+- Day rollover is handled lazily — `canRest`/`getEffectiveRestsToday` always normalize against today, so a user who watched twice yesterday sees a fresh available TV today without a separate reset job.
+- On environments where the SDK reports `isSupported() === false`, `<RestTV />` returns `null` — the TV is simply not in the room. No fallback prompt, no apology message.
+- The mailbox renders rest letters identically to personal/seasonal letters — same red-dot indicator, same expand/collapse, same card layout. Zero UI changes to the mailbox sheet itself.
 
 ### Fragile / surprising
-- The exported `appendMemoSuggestion` helper is testable but never consumed by `record.tsx`. The component owns the merge internally; the export exists for unit tests. Don't refactor it to be called from the parent.
-- `MEMO_MAX_LENGTH` (60) is defined in `MemoSuggestions.tsx` and mirrors the `maxLength={60}` already on the memo `TextInput` in `record.tsx`. If one changes, the other should too.
-- Wrapped chip layout drops the previous `ScrollView` import from `CategorySelector.tsx`. Don't reintroduce horizontal scrolling for the chip row — the user-facing intent is "all scenes visible at once."
-- The pressed-state on suggestion chips is `opacity: 0.55` only. There is intentionally no persistent selected state — suggestions are hints, not a selection layer.
+- `grantRest()` is the only writer of pebble/rest state. There must be exactly ONE call site in `src/pages/index.tsx` (inside `RestPrompt.onConfirm` → `adState.show(onReward)`). Future engineers MUST NOT add a second call site (debug menus, "test pebble grant" buttons, etc.). The block comment on `grantRest` documents the contract; reviewers enforce it.
+- The SDK's `event.data.unitAmount` is intentionally ignored — pebbles are always 5-20 from our own RNG inside `computePebbleDelta`. The SDK event is the trust signal that a watch completed, nothing more.
+- The warmth overlay reads `getRestWarmthOpacity(new Date(), lastRestAt)` fresh on every render — pure function returning 0-0.08, no state churn. Don't memoize without measuring.
+- The 5 rest letters use the existing `MAILBOX_DELIVERED_IDS` storage key for delivery state. There is NO separate "rest letters delivered" key — they mix into the same dedupe set.
+- `lastRestDate` is the `YYYY-MM-DD` of the last rest; `lastRestAt` is the ISO timestamp of the same event. They're separate so the daily-cap check can use string compare while the warmth fade can use millisecond math. Both update atomically in `grantRest()`.
+- The TV anchors to a `MAILBOX_POSITION = { x: 0.12, y: 0.29 }` constant. The mailbox utility icon itself stays pixel-positioned in the existing utility stack — the constant exists only as a source of truth for room-layer fixtures that anchor below it. If the utility stack ever moves, update `MAILBOX_POSITION` to match.
+- Rest progression is intentionally independent from `streak`, `level`, `roomStage`, and `recordedDaysCount`. `grantRest` writes only the 4 rest fields. Don't link them later — the philosophy is "pebbles never gate progression."
+- TODO marker in `restService.ts:grantRest`: when `pebbleCount` crosses 500/1500/3000 the system should deliver a rare ambient item to the room. Hook exists, item pool and delivery shape are not defined yet.
 
 ### What the next agent must NOT do
-- Don't store the tapped suggestion separately. The choice exists only as memo text.
-- Don't add analytics on which suggestions are tapped.
-- Don't add a subcategory taxonomy or any second axis on `ExpenseCategory`.
-- Don't add user-editable suggestion lists (every user gets the same static list per category).
-- Don't reintroduce a label heading above the chip row.
-- Don't add a persistent selected state on suggestion chips.
-- Don't change the memo `maxLength={60}` without also updating `MEMO_MAX_LENGTH` in `MemoSuggestions.tsx`.
+- Don't add a second `grantRest()` call site. Don't import `grantRest` outside `index.tsx`.
+- Don't grant pebbles on the SDK's `dismissed` or `failedToShow` events. The hook already filters; don't relax.
+- Don't add a fallback prompt or banner when `adStatus === 'unsupported'`. The TV is silently absent — by design.
+- Don't add a pebble-spending UI of any kind. Pebbles accumulate forever; that's the entire affordance.
+- Don't add push notifications for "rest available today" or "letter waiting." The TV sprite is the only signal.
+- Don't add streak rewards, multipliers, or "watch 2 today for bonus" framing. Hard cap of 2 per day, no extra surface.
+- Don't link rest to `streak`/`level`/`roomStage`/`recordedDaysCount`. The four rest fields are isolated state.
+- Don't trust `event.data.unitAmount` from the SDK. Pebble grant size is owned by `computePebbleDelta`.
+- Don't change the trust boundary by inlining `grantRest` into `useRestedAd`. The hook must remain business-logic-free.
+
+### Pre-existing test failures (unchanged)
+- `__tests__/letterService.test.ts` — 2 cases ("does not re-deliver" / "does not call save if nothing new") fail at HEAD. Confirmed present at the rest-TV base commit `156f51c` before any task touched the tree. Not introduced by this work — a seasonal-letter window now overlaps the test's pinned `2026-05-16` date.
 
 ### Next
-Stats screen evolution remains the next major polish landing — tone review, rhythm summaries, small additive pattern-signal surface, visual density review. Held until product owner re-opens.
+Stats screen evolution remains the next major polish landing — tone review, rhythm summaries, small additive pattern-signal surface, visual density review. Held until product owner re-opens. Rest-TV follow-ups (rare-item delivery at 500/1500/3000 pebbles, on-device small-phone visual QA, swap dev `REST_AD_GROUP_ID` for production ID before release) tracked in `SOBAGI_NEXT_PRIORITIES.md`.
 
 ---
 
@@ -125,6 +148,11 @@ Stats screen evolution remains the next major polish landing — tone review, rh
 | Bag new-item amber dot | `src/pages/index.tsx`, `src/constants/storage.ts` |
 | Room presence — silent ambient placement (B/A/C paths, drift, auto-settle) | `src/services/roomPresenceService.ts`, `src/hooks/useAppInit.ts`, `src/pages/index.tsx` |
 | summaryCard boundary dissolve | `src/pages/index.tsx` |
+| Memo suggestions (5-7 hints per category, append with `', '`, 60-char cap) | `src/components/expense/MemoSuggestions.tsx`, `src/constants/categories.ts` |
+| Wrapped category chip layout (all 12 scene tokens visible at once) | `src/components/expense/CategorySelector.tsx` |
+| Retrospective no-spend records (past dates, copy adapts to today vs past) | `src/pages/record.tsx`, `src/services/expenseService.ts` |
+| Save-helper for 0원 amount (gentle pointer to no-spend flow) | `src/pages/record.tsx` |
+| 쉬어가기 TV — soft rewarded-ad system (5-20 pebble grant, 60-min warmth fade, rest letters at 30/100/250/500/1000 thresholds, jar with 4 fill stages, 2-per-day cap, daily reset via `effectiveRestsToday`) | `src/services/restService.ts`, `src/hooks/useRestedAd.ts`, `src/components/room/RestTV.tsx`, `src/components/room/PebbleJar.tsx`, `src/components/room/RestPrompt.tsx`, `src/constants/restLetters.ts`, `src/constants/ads.ts`, `src/pages/index.tsx` |
 
 ### Planned (designed, not built)
 
@@ -165,6 +193,10 @@ sobagi-observation-save-count  → number               cooldown for observation
 sobagi-room-placements         → RoomPlacement[]      items currently in the room
 sobagi-pending-placement       → PendingPlacement|null delayed placement (silent settle)
 sobagi-category-migration-done → boolean  one-time flag for legacy category migration
+sobagi-pebble-count            → number               accumulates forever (rest TV reward)
+sobagi-rests-today             → number               0-2, normalized via effectiveRestsToday
+sobagi-last-rest-date          → string (YYYY-MM-DD)  day-rollover anchor for rests-today
+sobagi-last-rest-at            → ISO string           drives 60-min rest-warmth fade
 ```
 
 ---
