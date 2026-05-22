@@ -437,9 +437,20 @@ function HomeScreen() {
                 // grantRest reads/writes the store and persists to storage;
                 // unlike fire-and-forget saves, a rejection here means the
                 // user watched an ad and got nothing. Log instead of dropping.
-                grantRest().catch((err) => {
-                  if (__DEV__) console.error('[grantRest] failed:', err);
-                });
+                grantRest()
+                  .then((result) => {
+                    // Quiet post-watch line. Shared bubble surface with
+                    // Sobagi tap and the daily-done message; just update text.
+                    setBubbleMessage(
+                      `소박이가 한 숨 돌렸어요 🌿  +${result.pebbleDelta}`,
+                    );
+                    setBubbleVisible(true);
+                    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                    hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
+                  })
+                  .catch((err) => {
+                    if (__DEV__) console.error('[grantRest] failed:', err);
+                  });
               });
             }}
             onCancel={closeSheet}
