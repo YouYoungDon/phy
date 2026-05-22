@@ -31,18 +31,11 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 - [ ] **Rest-TV: swap dev ad group ID for production** — `src/constants/ads.ts` exports `REST_AD_GROUP_ID = 'ait.dev.43daa14da3ae487b'` (the AppsInToss dev test ID). Before release, replace with the production rewarded ad group ID issued in the AppsInToss console. One-line change.
 - [ ] **Rest-TV: rare ambient item delivery at 500/1500/3000 pebbles** — hook exists in `restService.grantRest` as a TODO marker; item pool and delivery shape need a separate spec. Out of scope of the initial rest-TV landing.
 - [ ] **Rest-TV: on-device visual QA on small phones** — verify TV+mailbox cluster, jar fill stages, and post-watch bubble all read calmly on iPhone SE-class widths. Code-level dimensional QA passed; live-device check pending.
-- [ ] **`letterService` test failures — seasonal window drift** — `__tests__/letterService.test.ts` "does not re-deliver already-delivered letters" and "does not call save if nothing new to deliver" fail on HEAD. Tests pin `new Date('2026-05-16')` and assume only personal letters fire; a seasonal letter now overlaps that window, so `save` is called when the test expects silence. Decide: pin the test date to a non-seasonal window, or guard `checkAndDeliverLetters` to skip seasonal delivery when the personal track is already saturated. Pre-existing, unrelated to taxonomy work. Surfaced 2026-05-20 during post-QA test run, still present after rest-TV landing.
-- [ ] **Warmth color fix in PhotocardView** (one-line) — `PhotocardView.tsx` line 76: `'#C87941'` → `'#E8C070'`; card atmosphere must match HomeScreen room at same moment
-- [ ] **Copy review: `"잘 기록해뒀어요"`** (Tier 1 happy pool) — replace "잘" with "조용히"; borderline praise anti-pattern
-- [ ] **Copy review: `"오늘도 수고했어요"`** (IDLE_MESSAGES) — "수고했어요" evaluates effort; replace with observational alternative
 - [ ] **Photocard: add time-of-day label at card top** — date (top-left) + time-of-day icon (아침☀️ / 낮🌤 / 저녁🌅 / 밤🌙, top-right); derives from `currentHour` already available in `reaction.tsx`; adds "snapshot of a moment" specificity
 - [ ] **Photocard: add "Sobagi" signature** — small muted label between `quotePanel` and `contextStrip`; authorial anchor per spec
 - [ ] **Photocard: guard early dismiss during animation** — add `isRevealing` state in `reaction.tsx`; disable `photocardModal onPress` for first 1800ms so the reveal animation always plays fully
-- [ ] **Photocard: remove `fontStyle: italic` from quoteText** — italic + quotation marks reads as formal caption; Sobagi's voice should feel spoken, not typeset
-- [ ] **Guard DayFeelingCard for future dates** — render only for `dateStr <= todayStr`
 - [ ] **Softening settlement section** — large bold monetary totals compete with emotional tone; reduce weight, soften copy
 - [ ] **Trend graph bars tappable** — tap a bar to select that day in calendar
-- [ ] **`(선택)` label on emotion picker** — parity with memo field
 - [ ] **Android keyboard behavior** — investigate whether save button is accessible
 - [ ] **Floating hearts pacing** — charming on record #1, noise by record #30; reduce or remove after N records
 
@@ -85,6 +78,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Small-win backlog sweep** — `(선택)` label parity on emotion picker (`record.tsx`), `letterService` seasonal-window test fix (pre-stage `seasonal-may-2026` in the dedup tests — 11/11 pass), two copy reviews: `"잘 기록해뒀어요" → "여기 남겨뒀어요"` (dialogue Tier 1 happy) and `"오늘도 수고했어요" → "오늘도 들렀네요"` (IDLE_MESSAGES). Verified stale (already addressed in earlier work): PhotocardView warmth color, photocard italic removal, DayFeelingCard future-date guard (no longer rendered). Commits `5d0bf88` / `f7aa61f` / `493c762`. (2026-05-22)
 - [x] **쉬어가기 TV — soft rewarded-ad system** — small TV sprite in the room paired with a pebble jar that fills across 4 stages. Watching a rewarded ad grants 5-20 pebbles (`computePebbleDelta`), nudges room warmth for 60 min (`getRestWarmthOpacity` linear fade), refreshes Sobagi's idle line pool, and at hidden pebble thresholds (30/100/250/500/1000) delivers a soft letter into the existing mailbox. `grantRest()` is the sole writer of pebble state — invoked exclusively from `useRestedAd.show`'s `userEarnedReward` callback; `dismissed` and `failedToShow` grant nothing. 2-per-day cap normalized via `effectiveRestsToday` (no separate daily-reset job). When `loadFullScreenAd.isSupported()` is false, the TV sprite never renders — no fallback messaging. 15 implementation tasks across 6 phases, 32 new tests (atmosphereService, restService, stores). Commits `2554b89` → `2b9321d`. (2026-05-22)
 - [x] **Retrospective no-spend records** — `recordNoSpend(createdAt)` accepts ISO timestamp from caller; `canNoSpend` relaxed to `selectedDate <= todayStr && no record on that date`. Past dates use copy `이날은 조용히 지나갔어요 🌿` (button) and `조용히 지나간 하루였네요 🌙` (reaction); today's copy unchanged. `saveExpense.isRealTimeRecord` already handles past-date semantics — streak/found-item eval skip retroactive records. (2026-05-20)
 - [x] **0원 save-helper** — when amount is 0 and `canNoSpend` is true, a quiet line below the disabled save button reads `지출이 없는 날은 무지출 기록을 사용할 수 있어요 🌿`. Save logic unchanged. (2026-05-20)
