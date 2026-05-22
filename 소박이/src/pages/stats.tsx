@@ -11,6 +11,8 @@ import { PhotocardView, PhotocardRecord } from '../components/photocard/Photocar
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
 import { PICKER_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel } from '../constants/categories';
+import { selectStatsObservation } from '../services/statsObservationService';
+import { MonthPresenceRow } from '../components/stats/MonthPresenceRow';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -179,6 +181,56 @@ function StatsScreen() {
     return (Object.entries(counts) as [ExpenseCategory, number][])
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
   }, [expenses, viewYear, viewMonth]);
+
+  // Distinct local-date days with ANY record (spending OR no-spend) in the
+  // current calendar week (Sun–Sat) anchored on `today`.
+  const weekVisitDays = useMemo(() => {
+    const t = new Date(todayStr + 'T12:00:00');
+    const weekStart = new Date(t);
+    weekStart.setDate(t.getDate() - t.getDay()); // Sunday
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6); // Saturday
+    const startStr = getLocalDateString(weekStart);
+    const endStr = getLocalDateString(weekEnd);
+    const days = new Set<string>();
+    for (const e of expenses) {
+      const d = getLocalDateString(new Date(e.createdAt));
+      if (d >= startStr && d <= endStr) days.add(d);
+    }
+    return days.size;
+  }, [expenses, todayStr]);
+
+  // Distinct local-date days with ANY record in the current view month.
+  const monthVisitDays = useMemo(() => {
+    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    const days = new Set<string>();
+    for (const e of expenses) {
+      const d = getLocalDateString(new Date(e.createdAt));
+      if (d.startsWith(prefix)) days.add(d);
+    }
+    return days.size;
+  }, [expenses, viewYear, viewMonth]);
+
+  const cadenceLines: string[] = useMemo(() => {
+    if (monthVisitDays === 0) {
+      return ['이번 달은 아직 비어있어요 🌿'];
+    }
+    if (weekVisitDays === 0) {
+      return [
+        '이번 주는 아직 비어있어요 🌿',
+        `이번 달은 ${monthVisitDays}일 다녀갔어요`,
+      ];
+    }
+    return [
+      `이번 주엔 ${weekVisitDays}번 들렀어요`,
+      `이번 달은 ${monthVisitDays}일 다녀갔어요`,
+    ];
+  }, [weekVisitDays, monthVisitDays]);
+
+  const observation = useMemo(
+    () => selectStatsObservation(expenses, streak, todayStr),
+    [expenses, streak, todayStr],
+  );
 
   // Photocard data — derived from the selected day's spending records only.
   // A no-spend-only day has no spending feeling to surface.
@@ -384,39 +436,33 @@ function StatsScreen() {
           </Pressable>
         )}
 
-        {/* Settlement */}
+        {/* Observation block — replaces 결산. No title; three groups flow. */}
         <View style={styles.settlementSection}>
-          <Text style={styles.settlementTitle}>결산</Text>
-          <View style={styles.settlementRow}>
-            <View style={styles.settlementItem}>
-              <Text style={styles.settlementLabel}>이번 주</Text>
-              <Text style={styles.settlementValue}>{weeklyTotal.toLocaleString()}원</Text>
-            </View>
-            <View style={styles.settlementDivider} />
-            <View style={styles.settlementItem}>
-              <Text style={styles.settlementLabel}>{viewMonth + 1}월 전체</Text>
-              <Text style={styles.settlementValue}>{monthlyTotal.toLocaleString()}원</Text>
-            </View>
-          </View>
+          {cadenceLines.map((line) => (
+            <Text key={line} style={styles.cadenceLine}>{line}</Text>
+          ))}
 
-          {topCategoryThisMonth && (
+          {monthVisitDays > 0 && topCategoryThisMonth && (
             <View style={styles.settlementChip}>
               <Text style={styles.settlementChipText}>
-                이번 달은 {formatCategoryWithEmoji(topCategoryThisMonth)} · 가장 자주 기록했어요
+                {formatCategoryWithEmoji(topCategoryThisMonth)} · 가장 자주 기록한 장면
               </Text>
             </View>
           )}
 
-          <View style={styles.streakRow}>
-            <Text style={styles.streakText}>
-              {streak >= 3
-                ? '요즘 자주 들르고 있네요 🌿'
-                : streak >= 1
-                  ? '오늘도 잠깐 들렀네요 🍃'
-                  : '가끔씩 들러도 괜찮아요 🌿'}
-            </Text>
-          </View>
+          {monthVisitDays > 0 && (
+            <Text style={styles.observationLine}>{observation}</Text>
+          )}
         </View>
+
+        {/* Month presence row — soft trace of this month, not a chart */}
+        <MonthPresenceRow
+          viewYear={viewYear}
+          viewMonth={viewMonth}
+          daysInMonth={daysInMonth}
+          expensesByDate={expensesByDate}
+          todayStr={todayStr}
+        />
 
       </ScrollView>
 
@@ -708,7 +754,7 @@ const styles = StyleSheet.create({
   dayNumFuture: { color: COLORS.textLight },
   daySun: { color: '#C47B7B' },
   daySat: { color: '#7B9BC4' },
-  dayAmount: { fontSize: 9, color: COLORS.oliveGreen, marginTop: 1, height: 12, lineHeight: 12 },
+  dayAmount: { fontSize: 9, color: COLORS.textMuted, marginTop: 1, height: 12, lineHeight: 12 },
   dayAmountSelected: { color: 'rgba(255,255,255,0.85)' },
   dayAmountPlaceholder: { height: 12 },
 
@@ -806,12 +852,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 1,
   },
-  settlementTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
-  settlementRow: { flexDirection: 'row', alignItems: 'center' },
-  settlementItem: { flex: 1, alignItems: 'center' },
-  settlementLabel: { fontSize: 12, color: COLORS.textMuted, marginBottom: 4 },
-  settlementValue: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  settlementDivider: { width: 1, height: 36, backgroundColor: COLORS.border },
   settlementChip: {
     backgroundColor: COLORS.surface,
     borderRadius: 20,
@@ -820,8 +860,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   settlementChipText: { fontSize: 12, color: COLORS.textMuted, lineHeight: 16 },
-  streakRow: { marginTop: 2 },
-  streakText: { fontSize: 13, color: COLORS.oliveGreen, lineHeight: 18 },
+  cadenceLine: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  observationLine: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 10,
+  },
 
   // Photocard modal
   photocardModal: {
