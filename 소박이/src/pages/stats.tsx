@@ -28,92 +28,6 @@ function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
-function fmtAmt(n: number): string {
-  return n.toLocaleString('ko-KR');
-}
-
-// ─── Trend graph ─────────────────────────────────────────────────────────────
-
-const TREND_BAR_MAX = 72;
-const Y_AXIS_W = 52;
-const TREND_LABEL_DAYS = new Set([1, 8, 15, 22, 29]);
-
-interface TrendGraphProps {
-  viewYear: number;
-  viewMonth: number;
-  daysInMonth: number;
-  expensesByDate: Record<string, { total: number }>;
-}
-
-function MonthTrendGraph({ viewYear, viewMonth, daysInMonth, expensesByDate }: TrendGraphProps) {
-  const days = useMemo(() => {
-    return Array.from({ length: daysInMonth }, (_, i) => {
-      const day = i + 1;
-      const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      return { day, dateStr, total: expensesByDate[dateStr]?.total ?? 0 };
-    });
-  }, [viewYear, viewMonth, daysInMonth, expensesByDate]);
-
-  const maxTotal = useMemo(() => {
-    let m = 0;
-    for (const d of days) if (d.total > m) m = d.total;
-    return m > 0 ? m : 1;
-  }, [days]);
-
-  const midTotal = Math.round(maxTotal / 2);
-
-  return (
-    <View style={trendStyles.card}>
-      <Text style={trendStyles.title}>이달의 흐름</Text>
-      <View style={trendStyles.wrapper}>
-        <View style={trendStyles.yAxis}>
-          <Text style={trendStyles.yLabel}>{fmtAmt(maxTotal)}</Text>
-          <Text style={trendStyles.yLabel}>{fmtAmt(midTotal)}</Text>
-          <Text style={trendStyles.yLabel}>0</Text>
-        </View>
-
-        <View style={{ flex: 1 }}>
-          <View style={trendStyles.barArea}>
-            <View style={[trendStyles.guideLine, { top: 0 }]} />
-            <View style={[trendStyles.guideLine, { top: TREND_BAR_MAX / 2 }]} />
-            <View style={[trendStyles.guideLine, { bottom: 0 }]} />
-
-            <View style={trendStyles.barsRow}>
-              {days.map(({ day, total }) => {
-                const hasData = total > 0;
-                const barHeight = hasData
-                  ? Math.max(Math.round((total / maxTotal) * TREND_BAR_MAX), 8)
-                  : 2;
-                return (
-                  <View key={day} style={trendStyles.barColumn}>
-                    <View
-                      style={[
-                        trendStyles.bar,
-                        { height: barHeight },
-                        hasData ? trendStyles.barFilled : trendStyles.barEmpty,
-                      ]}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={trendStyles.xRow}>
-            {days.map(({ day }) => (
-              <View key={day} style={trendStyles.xCell}>
-                <Text style={trendStyles.xLabel}>
-                  {TREND_LABEL_DAYS.has(day) ? String(day) : ''}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 // ─── Day expense list ─────────────────────────────────────────────────────────
 
 function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (expense: Expense) => void }) {
@@ -253,30 +167,6 @@ function StatsScreen() {
   const selectedData = expensesByDate[selectedDay] ?? null;
   const selectedDt = new Date(selectedDay + 'T00:00:00');
   const selectedLabel = `${selectedDt.getMonth() + 1}월 ${selectedDt.getDate()}일`;
-
-  const weeklyTotal = useMemo(() => {
-    const d = new Date(today);
-    const dow = d.getDay();
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - ((dow + 6) % 7));
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    const monStr = getLocalDateString(monday);
-    const sunStr = getLocalDateString(sunday);
-    return expenses
-      .filter((e) => {
-        const ds = getLocalDateString(new Date(e.createdAt));
-        return ds >= monStr && ds <= sunStr;
-      })
-      .reduce((s, e) => s + e.amount, 0);
-  }, [expenses]);
-
-  const monthlyTotal = useMemo(() => {
-    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
-    return expenses
-      .filter((e) => getLocalDateString(new Date(e.createdAt)).startsWith(prefix))
-      .reduce((s, e) => s + e.amount, 0);
-  }, [expenses, viewYear, viewMonth]);
 
   const topCategoryThisMonth = useMemo(() => {
     const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
@@ -528,13 +418,6 @@ function StatsScreen() {
           </View>
         </View>
 
-        {/* Trend graph */}
-        <MonthTrendGraph
-          viewYear={viewYear}
-          viewMonth={viewMonth}
-          daysInMonth={daysInMonth}
-          expensesByDate={expensesByDate}
-        />
       </ScrollView>
 
       <BottomTabs activeRoute="/stats" />
@@ -1105,97 +988,5 @@ const styles = StyleSheet.create({
   editDeleteNoText: {
     fontSize: 12,
     color: COLORS.textLight,
-  },
-});
-
-const trendStyles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.warmWhite,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 14,
-    shadowColor: COLORS.wood,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-    marginBottom: 14,
-  },
-  wrapper: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  yAxis: {
-    width: Y_AXIS_W,
-    height: TREND_BAR_MAX,
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  yLabel: {
-    fontSize: 9,
-    color: COLORS.textLight,
-    textAlign: 'right',
-  },
-  barArea: {
-    height: TREND_BAR_MAX,
-    position: 'relative',
-  },
-  guideLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: COLORS.border,
-    opacity: 0.6,
-  },
-  barsRow: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 1.5,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: '100%',
-  },
-  bar: {
-    width: '100%',
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
-  },
-  barFilled: {
-    backgroundColor: COLORS.oliveGreen,
-    opacity: 0.65,
-  },
-  barEmpty: {
-    backgroundColor: COLORS.border,
-    borderRadius: 2,
-  },
-  xRow: {
-    flexDirection: 'row',
-    marginTop: 3,
-    marginLeft: 0,
-  },
-  xCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  xLabel: {
-    fontSize: 9,
-    color: COLORS.textLight,
-    textAlign: 'center',
-    height: 13,
-    lineHeight: 13,
   },
 });
