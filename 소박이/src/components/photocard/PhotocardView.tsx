@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, Animated } from 'react-native';
 import { TimeOfDayTint } from '../../services/atmosphereService';
-import { SobagiEmotion, ExpenseCategory, RecordKind } from '../../types';
+import { SobagiEmotion, ExpenseCategory } from '../../types';
 import {
   PhotocardMoodAsset,
   PHOTOCARD_MOOD_URIS,
@@ -12,22 +12,10 @@ import {
   PhotocardWeather,
 } from '../../services/photocardMoodService';
 import { CATEGORY_BY_TOKEN } from '../../constants/categories';
+import { PhotocardRecord } from './photocardGrouping';
 
-// Public types — exported for callers
-export type PhotocardRecord = {
-  id?: string;
-  category?: string;
-  categoryLabel?: string;
-  amount: number;
-  memo?: string;
-  /**
-   * Optional. When omitted, the amount column always renders (legacy
-   * behavior). When set to 'income' and amount is 0, the amount column
-   * is hidden to avoid rendering "₩ 0" for an income record with no
-   * amount entered.
-   */
-  kind?: RecordKind;
-};
+// Re-export so existing callers continue to import from PhotocardView
+export type { PhotocardRecord } from './photocardGrouping';
 
 interface PhotocardViewProps {
   // Content
