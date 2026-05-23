@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-22 (Engineering — 쉬어가기 TV soft rewarded-ad system landed)
+**Last updated:** 2026-05-23 (Engineering — Stats screen evolution landed)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -34,8 +34,6 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 - [ ] **Photocard: add time-of-day label at card top** — date (top-left) + time-of-day icon (아침☀️ / 낮🌤 / 저녁🌅 / 밤🌙, top-right); derives from `currentHour` already available in `reaction.tsx`; adds "snapshot of a moment" specificity
 - [ ] **Photocard: add "Sobagi" signature** — small muted label between `quotePanel` and `contextStrip`; authorial anchor per spec
 - [ ] **Photocard: guard early dismiss during animation** — add `isRevealing` state in `reaction.tsx`; disable `photocardModal onPress` for first 1800ms so the reveal animation always plays fully
-- [ ] **Softening settlement section** — large bold monetary totals compete with emotional tone; reduce weight, soften copy
-- [ ] **Trend graph bars tappable** — tap a bar to select that day in calendar
 - [ ] **Android keyboard behavior** — investigate whether save button is accessible
 - [ ] **Floating hearts pacing** — charming on record #1, noise by record #30; reduce or remove after N records
 
@@ -78,6 +76,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Stats screen evolution** — 결산 block replaced by 3-group observation surface (cadence lines → top-scene chip → single rotating observation from `selectStatsObservation`). `MonthTrendGraph` removed; `MonthPresenceRow` (single-row presence-dot trace) added. Calendar amount color softened from `oliveGreen` → `textMuted`. New service `statsObservationService.ts` (7-branch priority chain). 12 new tests. No new storage keys. All preserved: calendar grid, month nav, edit/delete sheet, photocard entry, selected-day list. (2026-05-23)
 - [x] **Small-win backlog sweep** — `(선택)` label parity on emotion picker (`record.tsx`), `letterService` seasonal-window test fix (pre-stage `seasonal-may-2026` in the dedup tests — 11/11 pass), two copy reviews: `"잘 기록해뒀어요" → "여기 남겨뒀어요"` (dialogue Tier 1 happy) and `"오늘도 수고했어요" → "오늘도 들렀네요"` (IDLE_MESSAGES). Verified stale (already addressed in earlier work): PhotocardView warmth color, photocard italic removal, DayFeelingCard future-date guard (no longer rendered). Commits `5d0bf88` / `f7aa61f` / `493c762`. (2026-05-22)
 - [x] **쉬어가기 TV — soft rewarded-ad system** — small TV sprite in the room paired with a pebble jar that fills across 4 stages. Watching a rewarded ad grants 5-20 pebbles (`computePebbleDelta`), nudges room warmth for 60 min (`getRestWarmthOpacity` linear fade), refreshes Sobagi's idle line pool, and at hidden pebble thresholds (30/100/250/500/1000) delivers a soft letter into the existing mailbox. `grantRest()` is the sole writer of pebble state — invoked exclusively from `useRestedAd.show`'s `userEarnedReward` callback; `dismissed` and `failedToShow` grant nothing. 2-per-day cap normalized via `effectiveRestsToday` (no separate daily-reset job). When `loadFullScreenAd.isSupported()` is false, the TV sprite never renders — no fallback messaging. 15 implementation tasks across 6 phases, 32 new tests (atmosphereService, restService, stores). Commits `2554b89` → `2b9321d`. (2026-05-22)
 - [x] **Retrospective no-spend records** — `recordNoSpend(createdAt)` accepts ISO timestamp from caller; `canNoSpend` relaxed to `selectedDate <= todayStr && no record on that date`. Past dates use copy `이날은 조용히 지나갔어요 🌿` (button) and `조용히 지나간 하루였네요 🌙` (reaction); today's copy unchanged. `saveExpense.isRealTimeRecord` already handles past-date semantics — streak/found-item eval skip retroactive records. (2026-05-20)
