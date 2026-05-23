@@ -4,6 +4,14 @@ export interface ExpenseCategoryMeta {
   key: ExpenseCategory;
   label: string;
   emoji: string;
+  /**
+   * Whether this token shows in a generic category picker. Originally used
+   * to exclude `no_spend` (the daily-presence marker). After sub-spec A,
+   * picker pools are derived from `SPENDING_CATEGORIES` / `INCOME_CATEGORIES`
+   * + the explicit `no_spend` exclusion in `GENERAL_SPENDING_CATEGORIES`, so
+   * this field is currently inert. Reserved for future picker-visibility
+   * decisions (sub-spec B/C may use it).
+   */
   inPicker: boolean;
   memoSuggestions: string[];
   kind: RecordKind;
@@ -39,12 +47,19 @@ export const CATEGORY_BY_TOKEN: Record<ExpenseCategory, ExpenseCategoryMeta> =
 export const SPENDING_CATEGORIES: readonly ExpenseCategoryMeta[] =
   CATEGORIES.filter((c) => c.kind === 'spending');
 
+/** All spending categories except `no_spend` (the daily-presence marker). Suitable for the spending picker. */
 export const GENERAL_SPENDING_CATEGORIES: readonly ExpenseCategoryMeta[] =
   SPENDING_CATEGORIES.filter((c) => c.key !== 'no_spend');
 
 export const INCOME_CATEGORIES: readonly ExpenseCategoryMeta[] =
   CATEGORIES.filter((c) => c.kind === 'income');
 
+/**
+ * Returns the kind for a category. Authoritative for `Expense.kind` resolution.
+ * Falls back to 'spending' for unknown/legacy tokens (e.g., a rolled-back app
+ * version's category appearing in storage) rather than throwing — hydration
+ * is forgiving by design.
+ */
 export function kindForCategory(c: ExpenseCategory): RecordKind {
   return CATEGORY_BY_TOKEN[c]?.kind ?? 'spending';
 }
