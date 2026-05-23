@@ -102,7 +102,7 @@ function StatsScreen() {
   // top-category, or dayFeeling derivations. Calendar totals are unaffected
   // because no-spend amount is 0.
   const selectedSpendingExpenses = useMemo(
-    () => selectedExpenses.filter((e) => e.category !== 'no_spend'),
+    () => selectedExpenses.filter((e) => e.category !== 'no_spend' && e.kind !== 'income'),
     [selectedExpenses],
   );
 
@@ -175,6 +175,7 @@ function StatsScreen() {
     const counts: Partial<Record<ExpenseCategory, number>> = {};
     for (const e of expenses) {
       if (e.category === 'no_spend') continue;
+      if (e.kind === 'income') continue;
       if (!getLocalDateString(new Date(e.createdAt)).startsWith(prefix)) continue;
       counts[e.category] = (counts[e.category] ?? 0) + 1;
     }
@@ -248,6 +249,7 @@ function StatsScreen() {
       categoryLabel: formatCategoryLabel(e.category),
       amount: e.amount,
       memo: e.memo,
+      kind: e.kind,
     })),
     [selectedSpendingExpenses],
   );
