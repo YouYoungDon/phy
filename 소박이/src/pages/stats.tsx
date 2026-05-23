@@ -10,7 +10,7 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
-import { GENERAL_SPENDING_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel } from '../constants/categories';
+import { GENERAL_SPENDING_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthPresenceRow } from '../components/stats/MonthPresenceRow';
 
@@ -103,6 +103,11 @@ function StatsScreen() {
   // because no-spend amount is 0.
   const selectedSpendingExpenses = useMemo(
     () => selectedExpenses.filter((e) => e.category !== 'no_spend' && e.kind !== 'income'),
+    [selectedExpenses],
+  );
+
+  const selectedIncomeExpenses = useMemo(
+    () => selectedExpenses.filter((e) => e.kind === 'income'),
     [selectedExpenses],
   );
 
@@ -428,6 +433,23 @@ function StatsScreen() {
               <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
             </View>
             <ExpenseList expenses={selectedSpendingExpenses} onPress={openEdit} />
+            {selectedIncomeExpenses.length > 0 && (
+              <View style={styles.incomeSection}>
+                <Text style={styles.incomeSectionTitle}>들어온 기록</Text>
+                {selectedIncomeExpenses.map((r) => {
+                  const cat = CATEGORY_BY_TOKEN[r.category];
+                  return (
+                    <Pressable key={r.id} style={styles.incomeRow} onPress={() => openEdit(r)}>
+                      <Text style={styles.incomeIcon}>{cat?.emoji ?? '·'}</Text>
+                      <Text style={styles.incomeLabel}>{cat?.label ?? r.category}</Text>
+                      {r.amount > 0 && (
+                        <Text style={styles.incomeAmount}>{r.amount.toLocaleString()}원</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
         )}
 
@@ -825,6 +847,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textLight,
     marginLeft: 4,
+  },
+
+  // Income section
+  incomeSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  incomeSectionTitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  incomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  incomeIcon: {
+    fontSize: 16,
+    width: 28,
+    textAlign: 'center',
+  },
+  incomeLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+    marginLeft: 4,
+  },
+  incomeAmount: {
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
 
   // Photocard entry button
