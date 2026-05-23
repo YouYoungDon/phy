@@ -1,4 +1,4 @@
-import { Expense, ExpenseCategory, UserState } from '../types';
+import { Expense, ExpenseCategory, UserState, RecordKind } from '../types';
 import * as storageService from './storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { useExpenseStore } from '../store/expenseStore';
@@ -86,7 +86,7 @@ export async function recordNoSpend(createdAt: string): Promise<void> {
 
 export function updateExpense(
   id: string,
-  patch: { amount: number; category: ExpenseCategory; memo?: string },
+  patch: { amount: number; category: ExpenseCategory; memo?: string; kind: RecordKind },
 ): void {
   useExpenseStore.getState().updateExpense(id, patch);
   void storageService.save(STORAGE_KEYS.EXPENSES, useExpenseStore.getState().expenses);

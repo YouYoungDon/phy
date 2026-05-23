@@ -10,7 +10,7 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
-import { GENERAL_SPENDING_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
+import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthPresenceRow } from '../components/stats/MonthPresenceRow';
 
@@ -298,6 +298,11 @@ function StatsScreen() {
   const [editSheetBottom, setEditSheetBottom] = useState(0);
   const editSheetAnim = useRef(new Animated.Value(500)).current;
 
+  const editingExpensePool = useMemo(() => {
+    if (!editingExpense) return GENERAL_SPENDING_CATEGORIES;
+    return editingExpense.kind === 'income' ? INCOME_CATEGORIES : GENERAL_SPENDING_CATEGORIES;
+  }, [editingExpense]);
+
   useEffect(() => {
     if (editingExpense === null) return;
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -333,6 +338,7 @@ function StatsScreen() {
       amount: parsed,
       category: editCategory,
       memo: editMemo.trim() || undefined,
+      kind: kindForCategory(editCategory),
     });
     closeEdit();
   }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
@@ -526,7 +532,7 @@ function StatsScreen() {
 
         <Text style={styles.editFieldLabel}>분류</Text>
         <View style={styles.editCategoryRow}>
-          {GENERAL_SPENDING_CATEGORIES.map((c) => (
+          {editingExpensePool.map((c) => (
             <Pressable
               key={c.key}
               style={[styles.editCatPill, editCategory === c.key && styles.editCatPillActive]}
