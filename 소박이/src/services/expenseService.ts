@@ -76,6 +76,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
 export async function recordNoSpend(createdAt: string): Promise<void> {
   const expense: Expense = {
     id: Date.now().toString(),
+    kind: 'spending',
     amount: 0,
     category: 'no_spend',
     sobagiEmotion: 'happy',

@@ -83,6 +83,7 @@ function StatsScreen() {
   const expensesByDate = useMemo(() => {
     const map: Record<string, { total: number; count: number; categories: ExpenseCategory[] }> = {};
     for (const e of expenses) {
+      if (e.kind === 'income') continue;
       const d = getLocalDateString(new Date(e.createdAt));
       if (!map[d]) map[d] = { total: 0, count: 0, categories: [] };
       map[d].total += e.amount;
