@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, Animated } from 'react-native';
 import { TimeOfDayTint } from '../../services/atmosphereService';
-import { SobagiEmotion, ExpenseCategory } from '../../types';
+import { SobagiEmotion, ExpenseCategory, RecordKind } from '../../types';
 import {
   PhotocardMoodAsset,
   PHOTOCARD_MOOD_URIS,
@@ -20,6 +20,13 @@ export type PhotocardRecord = {
   categoryLabel?: string;
   amount: number;
   memo?: string;
+  /**
+   * Optional. When omitted, the amount column always renders (legacy
+   * behavior). When set to 'income' and amount is 0, the amount column
+   * is hidden to avoid rendering "₩ 0" for an income record with no
+   * amount entered.
+   */
+  kind?: RecordKind;
 };
 
 interface PhotocardViewProps {
@@ -153,7 +160,9 @@ export function PhotocardView({
                     <View style={styles.recordRow}>
                       <Text style={styles.recordIcon}>{icon}</Text>
                       <Text style={styles.recordLine} numberOfLines={1}>{lineText}</Text>
-                      <Text style={styles.recordAmount}>₩ {r.amount.toLocaleString('ko-KR')}</Text>
+                      {(r.kind !== 'income' || r.amount > 0) && (
+                        <Text style={styles.recordAmount}>₩ {r.amount.toLocaleString('ko-KR')}</Text>
+                      )}
                     </View>
                   </View>
                 );

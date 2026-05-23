@@ -120,6 +120,7 @@ function SobagiReactionScreen() {
     categoryLabel: formatCategoryLabel(e.category),
     amount: e.amount,
     memo: e.memo,
+    kind: e.kind,
   }));
 
   const handleClose = useCallback(() => {
