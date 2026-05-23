@@ -62,33 +62,36 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-23
-**Group completed:** Stats screen evolution
+**Group:** Income record data model (sub-spec A of "Income records" decomposition)
 
 ### What changed
-- `src/services/statsObservationService.ts` (new) — `selectStatsObservation(expenses, streak, todayStr)`: 7-branch priority chain: cafe pattern → night activity → calm days → streak tier 3 (21+) → streak tier 2 (7+) → streak tier 1 (2+) → default. Returns a single rotating observation string.
-- `src/components/stats/MonthPresenceRow.tsx` (new) — single-row dot trace showing presence vs absence across the current view month. Replaces `MonthTrendGraph`. Accepts `viewYear`, `viewMonth`, `daysInMonth`, `expensesByDate`, `todayStr`; no chart layout, no axes, no amounts.
-- `src/pages/stats.tsx` — settlement/결산 block replaced by a 3-group observation block: cadence lines (week/month visit counts) → top-scene chip (most-recorded category) → single rotating observation line from `selectStatsObservation`. `MonthTrendGraph` import/render removed; `MonthPresenceRow` added. Calendar `dayAmount` color softened from `COLORS.oliveGreen` to `COLORS.textMuted`.
-- `__tests__/statsObservationService.test.ts` (new) — 12 tests covering all 7 branches and edge cases.
+- **Type:** `RecordKind` ('spending' | 'income') added to `src/types/index.ts`; `Expense.kind?: RecordKind` (optional, hydration-filled)
+- **Categories:** 5 new income tokens in `src/constants/categories.ts` — `salary` 💼, `bonus` ✨, `refund` 🧾, `received_gift` 💝, `received_allowance` 🤲; `ExpenseCategoryMeta.kind` field added to all entries
+- **Registry helpers:** `kindForCategory`, `SPENDING_CATEGORIES`, `GENERAL_SPENDING_CATEGORIES`, `INCOME_CATEGORIES` exported from `categories.ts`; `PICKER_CATEGORIES` removed
+- **Hydration:** `normalizeExpense` in `expenseService.ts` applied at `useAppInit` read path; corrects missing/mismatched kind silently, does not mutate storage
+- **Record screen:** kind toggle ("쓴 기록" / "들어온 기록"), picker swaps on toggle, amount optional for income, save path derives `kind` from category via `kindForCategory`, hardcodes `sobagiEmotion='happy'` for income records
+- **Photocard interim patch:** `PhotocardRecord.kind?` field added to `PhotocardView.tsx`; amount column hides for `kind==='income' && amount===0`; `reaction.tsx` and `stats.tsx` callers pass `kind` through
+- **Stats:** `selectedIncomeExpenses` memo; quiet read-only income section in day card; day card outer condition is `(selectedSpendingExpenses.length > 0 || selectedIncomeExpenses.length > 0)`; `selectedSpendingExpenses` and `topCategoryThisMonth` exclude income; edit sheet picker pool derives from `editingExpense.kind`; `commitEdit` re-derives kind via `kindForCategory(editCategory)`
+- **Store + service:** `ExpensePatch.kind: RecordKind` required in `expenseStore.ts`; `updateExpense` writes `kind` field
 
 ### What's now working
-- Stats screen no longer shows monetary totals in the settlement section. The 결산 block is replaced by observational rhythm text that reflects visiting patterns, not spending amounts.
-- The presence row gives a quiet visual summary of the month without chart mechanics (no axes, no bar heights, no tap-to-select on bars).
-- The top-scene chip surfaces the most-recorded life scene using the 12-category scene language (e.g. `☕ 카페 · 가장 자주 기록한 장면`), not a spending total.
-- Calendar amount color is now muted (`COLORS.textMuted`) rather than olive — the calendar reads as a presence grid, not a spending ledger.
+- Income records can be created via the record screen toggle, persist across restarts (hydration sets kind)
+- Income records appear in stats day card as a quiet read-only section; tap to edit via existing sheet (kind is re-derived from edited category on commit)
+- Photocard renders income records without "₩ 0" awkwardness
+- Existing spending save/reaction/edit/no-spend flows untouched
 
 ### Preserved (regression-confirmed)
-- Calendar grid: 6×7 cells, `styles.cell/cellSelected/cellToday`, future-cell tap guard, `🌿` glyph on no-spend days.
-- Month navigation: `prevMonth`/`nextMonth` handlers and month-picker modal unchanged.
-- Selected-day expense list: `<ExpenseList expenses={selectedSpendingExpenses} onPress={openEdit} />`, filter `category !== 'no_spend'`, day card title + total unchanged.
-- Photocard entry button: conditional `{selectedSpendingExpenses.length > 0 && <Pressable ...>}` unchanged.
-- Edit/delete sheet: animated translateY, keyboard listeners, `openEdit`/`closeEdit`/`commitEdit`/`commitDelete`, all state unchanged.
-- Day photocard modal: `showDayPhotocard` state + `<PhotocardView>` JSX unchanged.
+- No-spend marker flow (`recordNoSpend`, `hasRecordOnSelectedDate`, `canNoSpend`)
+- Spending save → reaction → photocard
+- Calendar grid, month nav, edit sheet, photocard entry button (spending-only)
+- `selectStatsObservation`, `MonthPresenceRow`, cadence-line memos
+- `weekVisitDays` / `monthVisitDays` count income days as presence (per spec)
 
 ### No new storage keys
-No storage keys were added, removed, or renamed. All 3 new source files are stateless.
+No storage keys were added, removed, or renamed.
 
 ### Next
-Rest-TV follow-ups (rare-item delivery at 500/1500/3000 pebbles, on-device small-phone visual QA, swap dev `REST_AD_GROUP_ID` for production ID before release) tracked in `SOBAGI_NEXT_PRIORITIES.md`.
+Sub-spec B (Photocard 3-way layout) → Sub-spec C (system integration: emotion engine, dialogue, pebble triggers, presence detectors, calendar/MonthPresenceRow income treatment, allowance memory note update).
 
 ---
 
@@ -124,6 +127,7 @@ Rest-TV follow-ups (rare-item delivery at 500/1500/3000 pebbles, on-device small
 | Save-helper for 0원 amount (gentle pointer to no-spend flow) | `src/pages/record.tsx` |
 | 쉬어가기 TV — soft rewarded-ad system (5-20 pebble grant, 60-min warmth fade, rest letters at 30/100/250/500/1000 thresholds, jar with 4 fill stages, 2-per-day cap, daily reset via `effectiveRestsToday`) | `src/services/restService.ts`, `src/hooks/useRestedAd.ts`, `src/components/room/RestTV.tsx`, `src/components/room/PebbleJar.tsx`, `src/components/room/RestPrompt.tsx`, `src/constants/restLetters.ts`, `src/constants/ads.ts`, `src/pages/index.tsx` |
 | Stats screen evolution — 결산 block replaced by 3-group observation (cadence lines → top-scene chip → rotating observation); MonthTrendGraph → MonthPresenceRow; calendar amount color softened; `selectStatsObservation` 7-branch chain | `src/pages/stats.tsx`, `src/services/statsObservationService.ts`, `src/components/stats/MonthPresenceRow.tsx` |
+| Income record data model (sub-spec A) — `RecordKind` type; 5 income category tokens; `kindForCategory` / `INCOME_CATEGORIES` / `GENERAL_SPENDING_CATEGORIES` registry helpers; `normalizeExpense` hydration; record screen kind toggle; photocard `kind?` interim patch; stats income section + filter exclusions; `ExpensePatch.kind` required | `src/types/index.ts`, `src/constants/categories.ts`, `src/services/expenseService.ts`, `src/hooks/useAppInit.ts`, `src/pages/record.tsx`, `src/pages/stats.tsx`, `src/pages/reaction.tsx`, `src/components/photocard/PhotocardView.tsx`, `src/store/expenseStore.ts` |
 
 ### Planned (designed, not built)
 
