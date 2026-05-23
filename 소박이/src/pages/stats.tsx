@@ -423,18 +423,26 @@ function StatsScreen() {
           </View>
         </View>
 
-        {/* Selected day expense list — only renders if the day had actual spending.
-            No-spend-only days exist in the underlying data and the calendar, but
-            don't surface a spending detail card. */}
-        {selectedSpendingExpenses.length > 0 && (
+        {/* Selected day card — renders when the day has any record (spending or income).
+            No-spend-only days still don't surface a card (they're calendar-only). */}
+        {(selectedSpendingExpenses.length > 0 || selectedIncomeExpenses.length > 0) && (
           <View style={styles.dayCard}>
             <View style={styles.dayCardHeader}>
               <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
-              <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
+              {selectedSpendingExpenses.length > 0 && (
+                <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
+              )}
             </View>
-            <ExpenseList expenses={selectedSpendingExpenses} onPress={openEdit} />
+            {selectedSpendingExpenses.length > 0 && (
+              <ExpenseList expenses={selectedSpendingExpenses} onPress={openEdit} />
+            )}
             {selectedIncomeExpenses.length > 0 && (
-              <View style={styles.incomeSection}>
+              <View
+                style={[
+                  styles.incomeSection,
+                  selectedSpendingExpenses.length === 0 && styles.incomeSectionStandalone,
+                ]}
+              >
                 <Text style={styles.incomeSectionTitle}>들어온 기록</Text>
                 {selectedIncomeExpenses.map((r) => {
                   const cat = CATEGORY_BY_TOKEN[r.category];
@@ -881,6 +889,11 @@ const styles = StyleSheet.create({
   incomeAmount: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  incomeSectionStandalone: {
+    borderTopWidth: 0,
+    paddingTop: 0,
+    marginTop: 8,
   },
 
   // Photocard entry button
