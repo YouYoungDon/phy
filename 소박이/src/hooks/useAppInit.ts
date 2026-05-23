@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Image } from 'react-native';
 import * as storageService from '../services/storageService';
 import { runExpenseCategoryMigration } from '../services/expenseMigration';
+import { normalizeExpense } from '../services/expenseService';
 import { promoteStaged } from '../services/foundItemService';
 import { checkAndDeliverLetters } from '../services/letterService';
 import { checkForPlacement } from '../services/roomPresenceService';
@@ -93,9 +94,10 @@ export function useAppInit(): boolean {
           storageService.load<string>(STORAGE_KEYS.LAST_EMOTION),
         ]);
 
-        if (expenses) useExpenseStore.getState().hydrate(expenses);
+        const normalized = expenses ? expenses.map(normalizeExpense) : null;
+        if (normalized) useExpenseStore.getState().hydrate(normalized);
 
-        const recomputedDays = expenses ? computeRecordedDaysCount(expenses) : 0;
+        const recomputedDays = normalized ? computeRecordedDaysCount(normalized) : 0;
         if (userData) {
           // Always recompute recordedDaysCount from expenses for correctness.
           // This also handles users migrating from the old exp-based system.
@@ -130,7 +132,7 @@ export function useAppInit(): boolean {
             ? (lastEmotionRaw as SobagiEmotion)
             : 'happy';
 
-        await checkForPlacement(emotion, recomputedDays, prevVisitDate, expenses ?? []);
+        await checkForPlacement(emotion, recomputedDays, prevVisitDate, normalized ?? []);
 
         useEmotionStore.setState({
           currentEmotion: emotion,

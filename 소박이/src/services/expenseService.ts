@@ -5,6 +5,7 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
 import { getLocalDateString } from '../utils/date';
 import { checkForFoundItem } from './foundItemService';
+import { kindForCategory } from '../constants/categories';
 
 export async function saveExpense(expense: Expense): Promise<void> {
   const expenseStore = useExpenseStore.getState();
@@ -94,4 +95,18 @@ export function updateExpense(
 export function deleteExpense(id: string): void {
   useExpenseStore.getState().deleteExpense(id);
   void storageService.save(STORAGE_KEYS.EXPENSES, useExpenseStore.getState().expenses);
+}
+
+/**
+ * Hydration normalization. Applied at read time only — does NOT mutate
+ * storage. Ensures `expense.kind` always reflects the category-derived
+ * truth, regardless of what was stored. Forgiving: missing kind → derived,
+ * mismatched kind → corrected, no throw.
+ */
+export function normalizeExpense(raw: Expense): Expense {
+  const derivedKind = kindForCategory(raw.category);
+  return {
+    ...raw,
+    kind: derivedKind,
+  };
 }
