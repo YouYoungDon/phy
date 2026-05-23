@@ -10,7 +10,7 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
-import { PICKER_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel } from '../constants/categories';
+import { GENERAL_SPENDING_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthPresenceRow } from '../components/stats/MonthPresenceRow';
 
@@ -494,7 +494,7 @@ function StatsScreen() {
 
         <Text style={styles.editFieldLabel}>분류</Text>
         <View style={styles.editCategoryRow}>
-          {PICKER_CATEGORIES.map((c) => (
+          {GENERAL_SPENDING_CATEGORIES.map((c) => (
             <Pressable
               key={c.key}
               style={[styles.editCatPill, editCategory === c.key && styles.editCatPillActive]}

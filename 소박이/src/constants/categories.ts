@@ -36,8 +36,18 @@ export const CATEGORIES: readonly ExpenseCategoryMeta[] = [
 export const CATEGORY_BY_TOKEN: Record<ExpenseCategory, ExpenseCategoryMeta> =
   Object.fromEntries(CATEGORIES.map((c) => [c.key, c])) as Record<ExpenseCategory, ExpenseCategoryMeta>;
 
-export const PICKER_CATEGORIES: readonly ExpenseCategoryMeta[] =
-  CATEGORIES.filter((c) => c.inPicker);
+export const SPENDING_CATEGORIES: readonly ExpenseCategoryMeta[] =
+  CATEGORIES.filter((c) => c.kind === 'spending');
+
+export const GENERAL_SPENDING_CATEGORIES: readonly ExpenseCategoryMeta[] =
+  SPENDING_CATEGORIES.filter((c) => c.key !== 'no_spend');
+
+export const INCOME_CATEGORIES: readonly ExpenseCategoryMeta[] =
+  CATEGORIES.filter((c) => c.kind === 'income');
+
+export function kindForCategory(c: ExpenseCategory): RecordKind {
+  return CATEGORY_BY_TOKEN[c]?.kind ?? 'spending';
+}
 
 /**
  * "☕ 카페" — emoji-prefixed full label for in-list rendering (history card,
