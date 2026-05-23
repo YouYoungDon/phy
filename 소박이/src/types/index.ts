@@ -1,6 +1,16 @@
 export type SobagiEmotion = 'happy' | 'excited' | 'surprised' | 'sleepy' | 'soft-sad';
 
+/**
+ * Distinguishes outgoing-money records (spending) from incoming-money records
+ * (income). The authoritative source of truth is `kindForCategory(category)`
+ * from the registry. `Expense.kind` is a denormalized cache for fast filtering
+ * and may be absent in legacy records — hydration repairs missing or
+ * mismatched values at read time.
+ */
+export type RecordKind = 'spending' | 'income';
+
 export type ExpenseCategory =
+  // outgoing scenes
   | 'cafe'
   | 'home_meal'
   | 'dining_out'
@@ -13,16 +23,29 @@ export type ExpenseCategory =
   | 'health'
   | 'event'
   | 'allowance'
-  | 'no_spend';
+  | 'no_spend'
+  // incoming scenes (new in sub-spec A)
+  | 'salary'
+  | 'bonus'
+  | 'refund'
+  | 'received_gift'
+  | 'received_allowance';
 
 export interface Expense {
   id: string;
+  /**
+   * Denormalized convenience cache. Authoritative source is
+   * `kindForCategory(category)` from the registry. Optional because legacy
+   * records pre-dating sub-spec A do not have this field; hydration fills it
+   * in at read time. New records (post sub-spec A) always set this explicitly.
+   */
+  kind?: RecordKind;
   amount: number;
   category: ExpenseCategory;
-  userEmotion?: string;   // emoji the user selected
+  userEmotion?: string;
   memo?: string;
   sobagiEmotion: SobagiEmotion;
-  createdAt: string;      // ISO string, local time used for display
+  createdAt: string;
 }
 
 export interface UserState {
@@ -40,5 +63,5 @@ export interface UserState {
 export interface EmotionContext {
   isFirstRecordToday: boolean;
   currentStreak: number;
-  currentHour: number;    // 0–23, device local time
+  currentHour: number;
 }
