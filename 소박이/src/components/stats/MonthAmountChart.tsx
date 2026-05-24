@@ -6,6 +6,9 @@ import { barHeightFor, selectMaxTotal } from './monthAmountChart.helpers';
 const BAR_MAX = 72;
 const MIN_BAR = 8;
 const Y_AXIS_W = 48;
+// Sparse x-axis labels — chosen after on-device dogfooding (all-31 at 8px read
+// too dense on small phones). Every bar still renders; only labels are thinned.
+const LABEL_DAYS = new Set([1, 5, 10, 15, 20, 25, 30]);
 
 interface MonthAmountChartProps {
   viewYear: number;
@@ -92,15 +95,12 @@ export function MonthAmountChart({
             </View>
           </View>
 
-          {/* Label every day 1..N (per the "show all dates" request) at a small
-              font. Fallback if this reads too dense/noisy on-device: label only
-              a sparse set — e.g. new Set([1, 5, 10, 15, 20, 25, 30]) — or every
-              other day. That's a manual tuning step after dogfooding, not
-              branching logic here. */}
+          {/* Sparse labels (1/5/10/15/20/25/30) per on-device readability. Every
+              bar still renders; only the labels are thinned to breathe. */}
           <View style={styles.xRow}>
             {days.map(({ day }) => (
               <View key={day} style={styles.xCell}>
-                <Text style={styles.xLabel} numberOfLines={1}>{day}</Text>
+                <Text style={styles.xLabel} numberOfLines={1}>{LABEL_DAYS.has(day) ? String(day) : ''}</Text>
               </View>
             ))}
           </View>
