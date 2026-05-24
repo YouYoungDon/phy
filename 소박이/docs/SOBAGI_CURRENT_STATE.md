@@ -62,7 +62,25 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-24
-**Group:** Sub-spec C post-QA polish sweep (5 fixes on top of the C landing)
+**Group:** Stress-test hardening sweep (9 fixes — robustness/overflow/race audit)
+
+### What changed (stress-test sweep)
+- **Bug A — delete recompute** (`expenseService.deleteExpense`, `userStore`): deleting a record now recomputes `recordedDaysCount`, `streak`, and `totalRecordCount` from the remaining expenses + persists. Previously deletion left level/tier/streak inflated until the next app init. New `setRecordedDaysCount` / `setTotalRecordCount` store actions.
+- **Bug B — calendar amount overflow** (`stats.tsx`): `dayAmount` cell clamped to `numberOfLines={1}` + tail ellipsis so max-input totals (9,999,999,999) can't wrap and bloat the grid.
+- **Bug C — double-save race** (`record.tsx`): `isSavingRef` synchronous guard on `handleSave`/`handleNoSpend` prevents a fast double-tap from slipping a second save past the async `isSaving` state.
+- **Bug D — income row UX** (`stats.tsx`): income rows in the day card gained a divider between rows + a chevron, matching the spending list's edit affordance.
+- **Edge E — id collisions** (`utils/id.ts`): `generateExpenseId()` (timestamp + 6 random base36) replaces `Date.now().toString()` so same-ms saves can't collide.
+- **Edge F — storage durability** (`storageService`): `save` retries a transient write failure once and returns a success boolean; `saveExpense` awaits the EXPENSES/USER writes instead of fire-and-forget. Serialization failures aren't retried.
+- **Edge G — foreground refresh** (`useAppInit`): an `AppState` 'active' listener refreshes the visit-date anchor when the app returns from background across a day boundary (the one-time init won't re-run). Does not re-trigger found-item/placement/letter logic.
+- **Edge H — timezone stability** (`Expense.localDate` + `expenseLocalDate` helper): records capture their local calendar date at creation; all 27 day-grouping read sites route through the helper (prefers `localDate`, falls back to `createdAt`-derived for legacy). Behavior-preserving for non-travelers; stabilizes a record's day across tz changes.
+- **Edge I — midnight race** (`emotionStore.lastKind`): the reaction title's kind is carried on the emotion store at save time rather than re-derived from `getTodayExpenses()`, so a midnight rollover between save and reaction render can't mis-resolve it.
+
+### Test count
+**17 suites · 285 tests · all green.** (+5 expenseLocalDate, +3 storageService over the post-QA sweep's 277.)
+
+---
+
+### Earlier handoff (sub-spec C post-QA polish sweep — 5 fixes)
 
 ### What changed (post-C sweep)
 - **Bug fix — calm-day income contamination** (`src/services/atmosphereService.ts`): `computeCalmDayCount` now filters `kind === 'income'` before computing daily totals. Previously, a large salary deposit could push a low-spending day above the 10,000 KRW calm threshold, and an income-only day with no spending could falsely count as calm. Affected two surfaces: `getCalmAtmosphereOpacity` (HomeScreen brightening) and `selectStatsObservation`'s calm branch. +4 regression tests covering the contamination paths.
