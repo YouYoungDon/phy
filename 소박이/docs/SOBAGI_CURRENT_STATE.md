@@ -104,7 +104,7 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 No storage keys were added, removed, or renamed.
 
 ### Next
-Sub-spec C — emotion engine income-aware branches (remove sub-spec A's `'happy'` hardcode), income-specific dialogue pool, pebble jar policy on income save, calendar/MonthPresenceRow income glyph, room-presence detectors income consideration, `selectStatsObservation` income awareness, `allowance` policy memo update, optional income `memoSuggestions`.
+Sub-spec C is **scoped and ready for engineering.** Spec: `docs/superpowers/specs/2026-05-24-income-system-integration-design.md`. Plan: `docs/superpowers/plans/2026-05-24-income-system-integration.md`. 9 tasks across emotion engine, dialogue pool, MonthPresenceRow, night-pattern detector, stats observation, and memory hygiene. Baseline for engineering: HEAD `13b3691`, 16 suites · 250 tests green.
 
 ---
 

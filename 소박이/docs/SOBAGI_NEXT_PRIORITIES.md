@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-24 (Engineering — Photocard 3-way layout sub-spec B landed)
+**Last updated:** 2026-05-24 (Design — sub-spec C spec + plan ready for engineering)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -16,7 +16,7 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 ## Up next (ordered by priority)
 
 - [x] ~~**Photocard 3-way redesign (sub-spec B)**~~ — landed 2026-05-24. Spec at `docs/superpowers/specs/2026-05-23-photocard-3-way-design.md`, plan at `docs/superpowers/plans/2026-05-23-photocard-3-way.md`. See `SOBAGI_CURRENT_STATE.md` for handoff and `Recently completed` below for commit list.
-- [ ] **Income record system integration (sub-spec C)** — emotion engine income-aware branch (remove sub-spec A's `'happy'` hardcode); income-specific dialogue pool; pebble jar policy on income save; calendar/MonthPresenceRow income glyph; room-presence detectors income consideration; `selectStatsObservation` income awareness; update `allowance` policy memo to reflect narrowed lock; optional income `memoSuggestions`. Note: memory file `feedback_sobagi_allowance_giving_scene.md` update is pending (controller responsibility).
+- [ ] **Income record system integration (sub-spec C)** — **READY FOR ENGINEERING.** Spec at `docs/superpowers/specs/2026-05-24-income-system-integration-design.md`, plan at `docs/superpowers/plans/2026-05-24-income-system-integration.md`. 9 tasks; baseline HEAD `13b3691`. Key decisions locked: 2-rule `evaluateIncome` (hour ≥ 22 → `'sleepy'`, else → `'happy'`; amount/streak/first-of-day explicitly ignored, with negative tests); `INCOME_REACTION_POOLS` kind-gated; no pebble grants on income; no new emotion token; `MonthPresenceRow` income-only days render `●`; `hasNightPattern` filters income; `selectStatsObservation` gains one quiet income branch at ≥ 2 income days in 30. Memory file `feedback_sobagi_allowance_giving_scene.md` narrowing is Task 8 (controller, in plan).
 
 ---
 
