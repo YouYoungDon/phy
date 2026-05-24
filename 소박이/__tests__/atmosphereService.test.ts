@@ -1,5 +1,5 @@
 import {
-  getTimeOfDayTint,
+  getTimeOfDayBackgroundKey,
   getWarmthOpacity,
   computeCalmDayCount,
   getCalmAtmosphereOpacity,
@@ -9,49 +9,38 @@ import {
 } from '../src/services/atmosphereService';
 import { Expense } from '../src/types';
 
-describe('getTimeOfDayTint', () => {
-  it('returns null for morning hours (baseline)', () => {
-    expect(getTimeOfDayTint(7)).toBeNull();
-    expect(getTimeOfDayTint(9)).toBeNull();
-    expect(getTimeOfDayTint(11)).toBeNull();
+describe('getTimeOfDayBackgroundKey', () => {
+  it('returns morning for 5 <= h < 12', () => {
+    expect(getTimeOfDayBackgroundKey(5)).toBe('morning');
+    expect(getTimeOfDayBackgroundKey(8)).toBe('morning');
+    expect(getTimeOfDayBackgroundKey(11)).toBe('morning');
   });
 
-  it('returns cool blue for dawn (5–6)', () => {
-    const tint = getTimeOfDayTint(5);
-    expect(tint).not.toBeNull();
-    expect(tint!.color).toBe('#C8D4E8');
-    expect(tint!.opacity).toBe(0.07);
+  it('returns afternoon for 12 <= h < 17', () => {
+    expect(getTimeOfDayBackgroundKey(12)).toBe('afternoon');
+    expect(getTimeOfDayBackgroundKey(14)).toBe('afternoon');
+    expect(getTimeOfDayBackgroundKey(16)).toBe('afternoon');
   });
 
-  it('returns golden for afternoon (12–16)', () => {
-    const tint = getTimeOfDayTint(14);
-    expect(tint).not.toBeNull();
-    expect(tint!.color).toBe('#F5E8C0');
+  it('returns evening for 17 <= h < 21', () => {
+    expect(getTimeOfDayBackgroundKey(17)).toBe('evening');
+    expect(getTimeOfDayBackgroundKey(19)).toBe('evening');
+    expect(getTimeOfDayBackgroundKey(20)).toBe('evening');
   });
 
-  it('returns amber for evening (17–20)', () => {
-    const tint = getTimeOfDayTint(18);
-    expect(tint).not.toBeNull();
-    expect(tint!.color).toBe('#E8C070');
-    expect(tint!.opacity).toBe(0.09);
+  it('returns latenight for 21 <= h < 24 and 0 <= h < 5', () => {
+    expect(getTimeOfDayBackgroundKey(21)).toBe('latenight');
+    expect(getTimeOfDayBackgroundKey(23)).toBe('latenight');
+    expect(getTimeOfDayBackgroundKey(0)).toBe('latenight');
+    expect(getTimeOfDayBackgroundKey(3)).toBe('latenight');
+    expect(getTimeOfDayBackgroundKey(4)).toBe('latenight');
   });
 
-  it('returns dark for night (21–4)', () => {
-    expect(getTimeOfDayTint(22)!.color).toBe('#2A3048');
-    expect(getTimeOfDayTint(0)!.color).toBe('#2A3048');
-    expect(getTimeOfDayTint(4)!.color).toBe('#2A3048');
-  });
-
-  it('covers hour 12 as afternoon (boundary)', () => {
-    expect(getTimeOfDayTint(12)!.color).toBe('#F5E8C0');
-  });
-
-  it('covers hour 17 as evening (boundary)', () => {
-    expect(getTimeOfDayTint(17)!.color).toBe('#E8C070');
-  });
-
-  it('covers hour 21 as night (boundary)', () => {
-    expect(getTimeOfDayTint(21)!.color).toBe('#2A3048');
+  it('covers every boundary hour exactly once', () => {
+    expect(getTimeOfDayBackgroundKey(4)).toBe('latenight');  // just below morning
+    expect(getTimeOfDayBackgroundKey(11)).toBe('morning');   // just below afternoon
+    expect(getTimeOfDayBackgroundKey(16)).toBe('afternoon'); // just below evening
+    expect(getTimeOfDayBackgroundKey(20)).toBe('evening');   // just below latenight
   });
 });
 
