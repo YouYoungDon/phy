@@ -1,9 +1,19 @@
 import { SobagiEmotion } from '../types';
 
-const CDN = 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@ffd169c1e2cf370768506179f0e1be1b6386ec3a/assets';
+const CDN = 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@d940b2c41d269ec842aaf127c3c334df5e7ad000/assets';
 
 export const ROOM_BACKGROUND_URIS: Partial<Record<1 | 2 | 3 | 4 | 5, string>> = {
   1: `${CDN}/room_stage1.png`,
+};
+
+export const ROOM_TIME_BACKGROUND_URIS: Record<
+  'morning' | 'afternoon' | 'evening' | 'latenight',
+  string
+> = {
+  morning: `${CDN}/sobaki_stage_morning.png`,
+  afternoon: `${CDN}/sobaki_stage_afternoon.png`,
+  evening: `${CDN}/sobaki_stage_evening.png`,
+  latenight: `${CDN}/sobaki_stage_latenight.png`,
 };
 
 export const SOBAGI_DEFAULT_URI = `${CDN}/sobaki.png`;
