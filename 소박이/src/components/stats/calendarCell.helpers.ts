@@ -6,17 +6,17 @@ export type CalendarViewMode = 'spending' | 'income' | 'both';
 
 export type CellDisplay =
   | { kind: 'blank' }
-  | { kind: 'leaf' }                              // 🌿 quiet / no-spend day
-  | { kind: 'amount'; amount: number; compact?: boolean };  // spending (쓴 기록), compact 만 income (들어온 기록), or combined movement (함께)
+  | { kind: 'leaf' }                 // 🌿 quiet / no-spend day
+  | { kind: 'amount'; amount: number };  // spending (쓴 기록), income (들어온 기록), or combined movement (함께) — all full comma
 
 export function selectCalendarCellContent(
   mode: CalendarViewMode,
   d: { spendingTotal: number; incomeTotal: number; hasRecord: boolean },
 ): CellDisplay {
   if (mode === 'income') {
-    // Income amounts (esp. salary) are large; compact to 만 units so they never
-    // truncate in the ~50px cell. Spending cells keep full numbers.
-    return d.incomeTotal > 0 ? { kind: 'amount', amount: d.incomeTotal, compact: true } : { kind: 'blank' };
+    // 들어온 기록 — income total as a full comma-formatted number (same as the
+    // spending and 함께 views). Days with no income → blank.
+    return d.incomeTotal > 0 ? { kind: 'amount', amount: d.incomeTotal } : { kind: 'blank' };
   }
   if (mode === 'both') {
     // 함께 보기 — one calm combined-movement number (spending + income, full
@@ -29,16 +29,4 @@ export function selectCalendarCellContent(
   // 'spending' (default) — byte-identical to current behavior
   if (!d.hasRecord) return { kind: 'blank' };
   return d.spendingTotal === 0 ? { kind: 'leaf' } : { kind: 'amount', amount: d.spendingTotal };
-}
-
-// Compact 만-unit label for space-constrained income cells (들어온 기록 view).
-// >= 10000 → 만 with up to one decimal (3,000,000 → "300만", 72,000 → "7.2만");
-// below that the value is ≤ 4 digits and shown as-is. Pure; no toLocaleString
-// so it's deterministic under the test runner.
-export function formatCompactAmount(n: number): string {
-  if (n >= 10000) {
-    const man = Math.round((n / 10000) * 10) / 10;
-    return `${man}만`;
-  }
-  return String(n);
 }

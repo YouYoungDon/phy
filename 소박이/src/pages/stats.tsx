@@ -16,7 +16,7 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthAmountChart } from '../components/stats/MonthAmountChart';
-import { selectCalendarCellContent, formatCompactAmount, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
+import { selectCalendarCellContent, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -80,7 +80,7 @@ function DayAmountSlot({ cell, isSelected }: { cell: CellDisplay; isSelected: bo
     case 'amount':
       return (
         <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
-          {cell.compact ? formatCompactAmount(cell.amount) : cell.amount.toLocaleString('ko-KR')}
+          {cell.amount.toLocaleString('ko-KR')}
         </Text>
       );
   }
