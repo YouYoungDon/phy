@@ -6,7 +6,7 @@ import { useUserStore } from '../store/userStore';
 import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
-import { parseAmountInput } from '../utils/amount';
+import { parseAmountInput, formatAmountInput } from '../utils/amount';
 import { amountValidForKind } from '../utils/recordValidation';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
@@ -350,7 +350,7 @@ function StatsScreen() {
 
   const openEdit = useCallback((expense: Expense) => {
     setEditingExpense(expense);
-    setEditAmount(String(expense.amount));
+    setEditAmount(formatAmountInput(String(expense.amount)));
     setEditCategory(expense.category);
     setEditMemo(expense.memo ?? '');
     setDeleteConfirm(false);
@@ -597,7 +597,7 @@ function StatsScreen() {
         <TextInput
           style={styles.editAmountInput}
           value={editAmount}
-          onChangeText={setEditAmount}
+          onChangeText={(t) => setEditAmount(formatAmountInput(t))}
           keyboardType="number-pad"
           placeholder="0"
           placeholderTextColor={COLORS.textLight}

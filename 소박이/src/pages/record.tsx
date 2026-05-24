@@ -32,7 +32,7 @@ import {
 import { BottomTabs } from '../components/common/BottomTabs';
 import { getLocalDateString, localDateToISOString, expenseLocalDate } from '../utils/date';
 import { generateExpenseId } from '../utils/id';
-import { parseAmountInput } from '../utils/amount';
+import { parseAmountInput, formatAmountInput } from '../utils/amount';
 import {
   incomeRecordHasIntent,
   amountValidForKind,
@@ -385,11 +385,11 @@ function RecordScreen() {
             ref={amountInputRef}
             style={styles.amountInput}
             value={amountText}
-            onChangeText={setAmountText}
+            onChangeText={(t) => setAmountText(formatAmountInput(t))}
             placeholder={recordKind === 'income' ? '금액 (선택)' : '금액을 입력해요'}
             placeholderTextColor={COLORS.textLight}
             keyboardType="numeric"
-            maxLength={10}
+            maxLength={13}
             onFocus={() => { focusedFieldRef.current = 'amount'; }}
           />
         </Pressable>
