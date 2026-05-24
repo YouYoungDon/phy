@@ -351,12 +351,18 @@ function StatsScreen() {
   const commitEdit = useCallback(() => {
     if (!editingExpense) return;
     const parsed = parseInt(editAmount.replace(/[^0-9]/g, ''), 10);
-    if (isNaN(parsed) || parsed <= 0) return;
+    if (isNaN(parsed)) return;
+    // Income records may legitimately carry amount=0 (matches the save flow's
+    // `금액 (선택)` affordance). Spending records still require a positive
+    // amount — they're meaningful only when there's something to record.
+    const nextKind = kindForCategory(editCategory);
+    if (nextKind !== 'income' && parsed <= 0) return;
+    if (parsed < 0) return;
     persistUpdateExpense(editingExpense.id, {
       amount: parsed,
       category: editCategory,
       memo: editMemo.trim() || undefined,
-      kind: kindForCategory(editCategory),
+      kind: nextKind,
     });
     closeEdit();
   }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
