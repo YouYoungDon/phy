@@ -170,6 +170,46 @@ describe('computeCalmDayCount', () => {
     ];
     expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(0);
   });
+
+  // ─── Income decoupling (post-sub-spec-C calm-day fix) ──────────────────────
+  // Income records must not contaminate the calm-day signal. A large salary
+  // deposit cannot invalidate a low-spending day, and an income-only day with
+  // no spending does not count as calm. See sub-spec C §7 + the original
+  // QA-pass deviation that surfaced this.
+
+  it('does NOT let a large income inflate a low-spending day above the threshold', () => {
+    const expenses: Expense[] = [
+      makeExpense({ id: 's', amount: 5000, category: 'cafe',   kind: 'spending', createdAt: '2026-05-17T10:00:00' }),
+      makeExpense({ id: 'i', amount: 3_000_000, category: 'salary', kind: 'income',   createdAt: '2026-05-17T11:00:00' }),
+    ];
+    // Spending only = 5,000 → calm. Income excluded.
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(1);
+  });
+
+  it('does NOT count an income-only day as calm (no spending happened)', () => {
+    const expenses: Expense[] = [
+      makeExpense({ id: 'i', amount: 100, category: 'refund', kind: 'income', createdAt: '2026-05-17T10:00:00' }),
+    ];
+    // Spending total = 0 → fails the `total > 0` check → not calm.
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(0);
+  });
+
+  it('treats a day with only large income (no spending) as neutral, not calm', () => {
+    const expenses: Expense[] = [
+      makeExpense({ id: 'i', amount: 5_000_000, category: 'salary', kind: 'income', createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(0);
+  });
+
+  it('counts a no-spend day correctly (no_spend is kind=spending, amount=0)', () => {
+    // No-spend records have amount 0, so they do NOT make a day calm
+    // (the strict `total > 0` check still excludes them). This preserves
+    // the existing "absence is neutral" rule for no-spend-only days.
+    const expenses: Expense[] = [
+      makeExpense({ id: 'n', amount: 0, category: 'no_spend', kind: 'spending', createdAt: '2026-05-17T10:00:00' }),
+    ];
+    expect(computeCalmDayCount(expenses, '2026-05-18')).toBe(0);
+  });
 });
 
 describe('getCalmAtmosphereOpacity', () => {

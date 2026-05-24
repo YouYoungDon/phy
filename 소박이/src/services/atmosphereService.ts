@@ -42,8 +42,13 @@ export const CALM_OVERLAY_COLOR = '#FFF5E6'; // warm white — never cool
 
 /**
  * Pure. Returns the count of local calendar days within the last `windowDays`
- * (anchored at `today`) where the user recorded but the daily total stayed
- * strictly below `dailyThreshold`. Days with no records are NOT counted.
+ * (anchored at `today`) where the user recorded but the daily SPENDING total
+ * stayed strictly below `dailyThreshold`. Days with no records are NOT counted.
+ *
+ * Income records are excluded from the daily total — a large salary deposit
+ * does not invalidate a low-spending day, and an income-only day with no
+ * spending does not count as a calm day. Aligns with the decoupling rule in
+ * `feedback_sobagi_decoupled_signals.md` and sub-spec C §7.
  */
 export function computeCalmDayCount(
   expenses: Expense[],
@@ -56,6 +61,7 @@ export function computeCalmDayCount(
 
   const totalsByDay = new Map<string, number>();
   for (const e of expenses) {
+    if (e.kind === 'income') continue;
     const ts = new Date(e.createdAt).getTime();
     if (ts < cutoffMs || ts > todayMs + 24 * 60 * 60 * 1000) continue;
     const day = getLocalDateString(new Date(e.createdAt));
