@@ -214,7 +214,12 @@ describe('selectReactionMessage — income kind gate', () => {
 });
 
 describe('INCOME_REACTION_POOLS — vocabulary guards', () => {
-  const BANNED = ['수입', '수익', '보상', '축하', '벌었', '입금', '잔액', '통장', '저축', '리워드', '매출'];
+  const BANNED = [
+    '수입', '수익', '매출', '입금',
+    '보상', '리워드', '축하', '잘했어요', '성공',
+    '잔액', '통장', '저축', '모았어요',
+    '벌었',
+  ];
   const BANNED_EMOJI = ['💵', '💰', '💴'];
 
   it('contains no banned vocabulary or currency emoji in any tier', () => {
