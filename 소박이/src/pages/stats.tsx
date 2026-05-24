@@ -15,6 +15,7 @@ import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteEx
 import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthAmountChart } from '../components/stats/MonthAmountChart';
+import { selectCalendarCellContent, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -23,6 +24,12 @@ export const Route = createRoute('/stats', {
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+
+const CALENDAR_VIEW_MODES: { mode: CalendarViewMode; label: string }[] = [
+  { mode: 'spending', label: '쓴 기록' },
+  { mode: 'income', label: '들어온 기록' },
+  { mode: 'both', label: '함께 보기' },
+];
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -60,6 +67,35 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
   );
 }
 
+// Renders the calendar cell's amount/marker slot from a CellDisplay descriptor.
+// Module-level (uses module `styles`); kept here so the grid map stays readable.
+function DayAmountSlot({ cell, isSelected }: { cell: CellDisplay; isSelected: boolean }) {
+  const textStyle = [styles.dayAmount, isSelected && styles.dayAmountSelected];
+  switch (cell.kind) {
+    case 'blank':
+      return <View style={styles.dayAmountPlaceholder} />;
+    case 'leaf':
+      return <Text style={textStyle} numberOfLines={1}>🌿</Text>;
+    case 'incomeMarker':
+      return <Text style={textStyle} numberOfLines={1}>🍃</Text>;
+    case 'amount':
+      return (
+        <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
+          {cell.amount.toLocaleString('ko-KR')}
+        </Text>
+      );
+    case 'amountWithIncome':
+      return (
+        <View style={styles.dayAmountRow}>
+          <Text style={[...textStyle, styles.dayAmountFlex]} numberOfLines={1} ellipsizeMode="tail">
+            {cell.amount.toLocaleString('ko-KR')}
+          </Text>
+          <Text style={[styles.dayAmountLeaf, isSelected && styles.dayAmountSelected]}>·🍃</Text>
+        </View>
+      );
+  }
+}
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 function StatsScreen() {
@@ -73,6 +109,7 @@ function StatsScreen() {
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
   const [showDayPhotocard, setShowDayPhotocard] = useState(false);
+  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>('spending');
 
   // Month picker — separate "pickerYear" state so the user can browse years
   // inside the modal without committing until they tap a month. Reset to
@@ -88,17 +125,19 @@ function StatsScreen() {
     categories: ExpenseCategory[];
     hasRecord: boolean;
     hasOnlyNoSpend: boolean;
+    incomeTotal: number;
   };
 
   const expensesByDate = useMemo(() => {
     const map: Record<string, DayAccum> = {};
     for (const e of expenses) {
       const d = expenseLocalDate(e);
-      if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true };
+      if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true, incomeTotal: 0 };
       map[d].hasRecord = true;
       if (e.category !== 'no_spend') map[d].hasOnlyNoSpend = false;
-      // income counts as presence (hasRecord above) but not toward day total
-      if (e.kind === 'income') continue;
+      // income counts as presence (hasRecord above) + feeds the income view's
+      // per-day total, but never the spending `total`.
+      if (e.kind === 'income') { map[d].incomeTotal += e.amount; continue; }
       map[d].total += e.amount;
       map[d].count += 1;
       map[d].categories.push(e.category);
@@ -399,8 +438,26 @@ function StatsScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>소소한 기록</Text>
-        <Text style={styles.headerSub}>이번 달을 조용히 돌아봐요</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerTitleCol}>
+            <Text style={styles.headerTitle}>소소한 기록</Text>
+            <Text style={styles.headerSub}>이번 달을 조용히 돌아봐요</Text>
+          </View>
+          <View style={styles.viewToggle}>
+            {CALENDAR_VIEW_MODES.map(({ mode, label }) => (
+              <Pressable
+                key={mode}
+                style={[styles.viewPill, calendarViewMode === mode && styles.viewPillActive]}
+                onPress={() => setCalendarViewMode(mode)}
+                hitSlop={4}
+              >
+                <Text style={[styles.viewPillText, calendarViewMode === mode && styles.viewPillTextActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -460,33 +517,14 @@ function StatsScreen() {
                       ]}>
                         {day}
                       </Text>
-                      {data ? (
-                        data.total === 0 ? (
-                          // No-spend-only day: render a quiet leaf instead of "0".
-                          // Same slot/size as the amount text, just a different glyph,
-                          // so the calendar layout stays untouched.
-                          <Text
-                            style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}
-                            numberOfLines={1}
-                          >
-                            🌿
-                          </Text>
-                        ) : (
-                          // numberOfLines={1} + ellipsis prevents very large totals
-                          // (max-allowed input is 9,999,999,999) from wrapping and
-                          // bloating the calendar cell height. ~50pt cell width can't
-                          // fit 13+ chars at fontSize 9 without truncation.
-                          <Text
-                            style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                          >
-                            {data.total.toLocaleString('ko-KR')}
-                          </Text>
-                        )
-                      ) : (
-                        <View style={styles.dayAmountPlaceholder} />
-                      )}
+                      <DayAmountSlot
+                        cell={selectCalendarCellContent(calendarViewMode, {
+                          spendingTotal: data?.total ?? 0,
+                          incomeTotal: data?.incomeTotal ?? 0,
+                          hasRecord: !!data,
+                        })}
+                        isSelected={isSelected}
+                      />
                     </Pressable>
                   );
                 })}
@@ -773,6 +811,37 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
   headerSub: { fontSize: 13, color: COLORS.textMuted },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerTitleCol: {
+    flex: 1,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  viewPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  viewPillActive: {
+    backgroundColor: COLORS.surface,
+  },
+  viewPillText: {
+    fontSize: 11,
+    color: COLORS.textLight,
+  },
+  viewPillTextActive: {
+    color: COLORS.oliveDark,
+    fontWeight: '600',
+  },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 16, paddingTop: 8 },
 
@@ -902,6 +971,21 @@ const styles = StyleSheet.create({
   dayAmount: { fontSize: 9, color: COLORS.textMuted, marginTop: 1, height: 12, lineHeight: 12 },
   dayAmountSelected: { color: 'rgba(255,255,255,0.85)' },
   dayAmountPlaceholder: { height: 12 },
+  dayAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 12,
+    maxWidth: '100%',
+  },
+  dayAmountFlex: {
+    flexShrink: 1,
+  },
+  dayAmountLeaf: {
+    fontSize: 9,
+    marginLeft: 1,
+    color: COLORS.textMuted,
+  },
 
   // Day card
   dayCard: {
