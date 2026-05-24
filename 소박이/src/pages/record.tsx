@@ -86,6 +86,10 @@ function RecordScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const focusedFieldRef = useRef<'amount' | 'memo' | null>(null);
   const memoSectionYRef = useRef(0);
+  // Ref-based double-tap guard. setState is async — between two fast taps,
+  // the closure-captured `canSave` can still be true, so the state-based
+  // disabled check alone isn't sufficient to prevent a double-save.
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -145,6 +149,8 @@ function RecordScreen() {
 
   const handleNoSpend = async () => {
     if (!canNoSpend) return;
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     const createdAt = isSelectedDateToday
       ? new Date().toISOString()
@@ -161,6 +167,8 @@ function RecordScreen() {
 
   const handleSave = async () => {
     if (!canSave) return;
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     // `isFirstRecordToday` drives the 'surprised' welcome on the spending
     // chain. Income records are excluded so that a salary deposit logged at
