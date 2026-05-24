@@ -13,6 +13,7 @@ import { getDialogueTier } from '../services/dialogueService';
 import { formatCategoryLabel } from '../constants/categories';
 import { RecordKind } from '../types';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
@@ -180,6 +181,17 @@ function SobagiReactionScreen() {
     setShowPhotocardModal(false);
   }, []);
 
+  // Android hardware back: while the photocard modal is open it must close the
+  // modal first rather than popping the route. Active only while the modal is
+  // open — when it's closed the default route-back behavior is left untouched.
+  // During the reveal we swallow back (same as the disabled backdrop tap) so it
+  // neither closes the modal nor pops the route mid-develop. No-op on iOS.
+  const handleAndroidBack = useCallback(() => {
+    if (isRevealing) return;
+    closePhotocard();
+  }, [isRevealing, closePhotocard]);
+  useAndroidBack(showPhotocardModal, handleAndroidBack);
+
   useEffect(() => {
     // Auto-dismiss at 3500ms — always runs. Cancelled only when the
     // photocard button reveal supersedes it.
@@ -214,30 +226,43 @@ function SobagiReactionScreen() {
   }, [handleClose, dateHasSpending]);
 
   return (
-    <Pressable style={styles.container} onPress={handleClose}>
-      <Text style={styles.title}>{getReactionTitle(currentEmotion, tier, latestKind)}</Text>
+    <View style={styles.container}>
+      {/* Backdrop — only the empty background returns home. The content card and
+          controls sit above it and absorb their own taps, so the reaction
+          visual itself never dismisses by accident (manual check #2). */}
+      <Pressable style={styles.backdrop} onPress={handleClose} />
 
-      <View style={styles.heartsRow}>
-        <FloatingHeart emoji="❤️" delay={0} offset={0} />
-        <FloatingHeart emoji="🧡" delay={220} offset={0} />
-        <FloatingHeart emoji="💛" delay={440} offset={0} />
-      </View>
+      {/* Centered reaction card — absorbs its own presses, so tapping the title,
+          hearts, or Sobagi does NOT close; only the surrounding background
+          (the backdrop behind it) does. */}
+      <Pressable style={styles.card} onPress={() => {}}>
+        <Text style={styles.title}>{getReactionTitle(currentEmotion, tier, latestKind)}</Text>
 
-      <SobagiReaction
-        emotion={currentEmotion}
-        message={currentMessage}
-        imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
-      />
+        <View style={styles.heartsRow}>
+          <FloatingHeart emoji="❤️" delay={0} offset={0} />
+          <FloatingHeart emoji="🧡" delay={220} offset={0} />
+          <FloatingHeart emoji="💛" delay={440} offset={0} />
+        </View>
 
-      {/* Hint — fades out as photocard button fades in */}
+        <SobagiReaction
+          emotion={currentEmotion}
+          message={currentMessage}
+          imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
+        />
+      </Pressable>
+
+      {/* Hint — pointer-transparent; taps fall through to the backdrop. */}
       <Animated.View style={[styles.hintWrapper, { opacity: hintOpacity }]} pointerEvents="none">
         <Text style={styles.hint}>화면을 탭하면 홈으로</Text>
       </Animated.View>
 
-      {/* Photocard button section — fades in after 1000ms */}
+      {/* Photocard button section — sibling of the backdrop, fades in after
+          1000ms. `box-none` lets taps in the surrounding gaps fall through to
+          the backdrop (still closes), while the buttons capture their own
+          presses and never bubble to handleClose. */}
       <Animated.View
         style={[styles.photocardSection, { opacity: photocardBtnAnim }]}
-        pointerEvents={photocardBtnVisible ? 'auto' : 'none'}
+        pointerEvents={photocardBtnVisible ? 'box-none' : 'none'}
       >
         <Pressable style={styles.photocardBtn} onPress={openPhotocard}>
           <Text style={styles.photocardBtnText}>포토카드 생성</Text>
@@ -247,10 +272,12 @@ function SobagiReactionScreen() {
         </Pressable>
       </Animated.View>
 
-      {/* Photocard modal — full-screen dark overlay */}
+      {/* Photocard modal — full-screen dark overlay. Backdrop and card are
+          separated: only the backdrop Pressable closes; the card absorbs its
+          own presses (stopPropagation) so tapping the card never closes. */}
       {showPhotocardModal && (
         <Pressable style={styles.photocardModal} onPress={isRevealing ? undefined : closePhotocard}>
-          <View style={styles.cardArea}>
+          <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
             <PhotocardView
               quote={currentMessage}
               dateStr={dateStr}
@@ -265,15 +292,16 @@ function SobagiReactionScreen() {
               style={[StyleSheet.absoluteFillObject, styles.revealOverlay, { opacity: revealAnim }]}
               pointerEvents="none"
             />
-          </View>
+          </Pressable>
 
-          {/* Visual close affordance — tapping anywhere on modal also closes */}
+          {/* Visual close affordance — pointer-transparent, so taps fall through
+              to the backdrop Pressable and close. */}
           <View style={styles.closeHint} pointerEvents="none">
             <Text style={styles.closeHintText}>✕</Text>
           </View>
         </Pressable>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -284,6 +312,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  card: {
+    alignItems: 'center',
   },
   title: {
     fontSize: 22,
