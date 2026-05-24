@@ -62,6 +62,116 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-24
+**Group:** Time-of-day home backgrounds
+
+The static home-room background and the `getTimeOfDayTint` color wash were replaced by four time-of-day background paintings (morning / afternoon / evening / latenight), each already lit for its hour. The background now carries the time-of-day feeling the faint tint used to only hint at.
+
+### What changed
+- **Pure resolver** (`src/services/atmosphereService.ts`): new `getTimeOfDayBackgroundKey(hour)` → `morning` (5–12) / `afternoon` (12–17) / `evening` (17–21) / `latenight` (else, 21–5). `getTimeOfDayTint` and its tests removed; the `TimeOfDayTint` type is kept (still a `PhotocardView` prop, currently unused at any call site).
+- **Asset map** (`src/constants/assets.ts`): CDN pin → `d940b2c`; new `ROOM_TIME_BACKGROUND_URIS` maps the four keys to `sobaki_stage_{morning,afternoon,evening,latenight}.png`. `ROOM_BACKGROUND_URIS` (old `room_stage1.png`) kept as an export but now unused everywhere — clean-up candidate.
+- **Home wiring** (`src/pages/index.tsx`): resolves the current bucket's URI at render and passes it to `RoomBackground` for all stages; the tint-overlay `<View>` is removed. Warmth / rest-warmth / calm overlays + bottom fade unchanged.
+- **Prefetch** (`src/hooks/useAppInit.ts`): now prefetches the current time-of-day background (one image, same cost as before) instead of `room_stage1`, so the home background still loads warm. Crossing a bucket boundary mid-session cold-loads once via the lazy fallback.
+
+### Direction
+Same single centered room, lit for the hour. No new objects / labels / controls; consistent with `project_sobagi_spatial_identity` + `feedback_sobagi_restraint_over_visibility`. Background resolves at render time (no timer) — matches how warmth/calm already recompute.
+
+### Preserved (regression-confirmed)
+All warmth/calm/rest atmosphere overlays + bottom fade, room placements, every non-home surface. No storage changes.
+
+### No new storage keys
+
+### Test count
+**24 suites · 356 tests · all green.** `atmosphereService.test.ts` swaps the `getTimeOfDayTint` block for a `getTimeOfDayBackgroundKey` block (every bucket + each boundary hour).
+
+### Next
+Device-test the four backgrounds across the day. Same backlog (Rest-TV prod ad ID, photocard polish, Android keyboard, G1–G5 dogfooding calls). Optional: drop the now-unused `ROOM_BACKGROUND_URIS` export.
+
+---
+
+### Earlier handoff (Pre-dogfooding hardening pass)
+
+**Agent:** Engineering
+**Date:** 2026-05-24
+**Group:** Pre-dogfooding hardening pass (record-system stabilization, 7 fixes)
+
+A Codex QA pass found real integration gaps in the record→reaction→persistence path. This was stabilization, not feature work. Seven fixes landed; the headline is that **today-context leakage is eliminated** — reaction, photocard, first-record emotion, and streak excitement now follow the saved record's date, not "today".
+
+### What changed
+- **#1 Reaction/photocard follow the record date** (`emotionStore.ts`, `reaction.tsx`, `record.tsx`): `emotionStore` gains `lastRecordDate` (set at save, same pattern as `lastKind`). The reaction screen filters expenses by it (not `getTodayExpenses()`) for both the photocard records and the "has spending → show button" gate, and labels the photocard with that date. Time badge shows only for today saves. Today saves are byte-identical to before.
+- **#2 Today-only emotional escalation** (`emotionEngine.ts`, `record.tsx`): new pure `buildEmotionContext`. Today → `{ isFirstRecordToday from today's non-income count, streak, now-hour }`. Past-date → `{ isFirstRecordToday:false, currentStreak:0, currentHour: record's hour }` — so a back-dated save can never resolve to `'surprised'` (welcome) or `'excited'` (streak). See `feedback_sobagi_temporal_escalation.md` + PHILOSOPHY "Emotional Escalation Belongs to Today".
+- **#3 Income-intent guard** (`utils/recordValidation.ts` new, `record.tsx`): income amount stays optional, but a fully-default save (salary + 0 + no memo + no emotion) is blocked. Requires one intent signal — amount / memo / emotion / category≠salary. Disabled button + gentle hint. Not strict validation; see `feedback_sobagi_income_intent_guard.md` + PHILOSOPHY "Recording Intent Over Friction".
+- **#4 Record screen reset on successful save** (`record.tsx`): `resetForm()` clears kind/amount/category/memo/date and the `isSavingRef` latch after a successful save — fixes stale-state-on-re-entry and a latent bug where a retained screen would block all future saves.
+- **#5 Save-failure durability** (`expenseService.ts`, `record.tsx`): `saveExpense`/`recordNoSpend` return `boolean`. On EXPENSES-write failure the optimistic in-memory mutation is rolled back (so a retry can't duplicate) and the caller shows a gentle error + stays put instead of navigating to a reaction for a record that won't survive restart.
+- **#6 Create/edit amount parity** (`stats.tsx`, `record.tsx`, `recordValidation.ts`): both paths share `parseAmountInput` + `amountValidForKind` (income ≥0, spending >0). Blank income edit now saves 0; blank spending edit shows a disabled button + hint instead of the old silent no-op.
+- **#7 Strict amount parser** (`utils/amount.ts`): `parseAmountInput` strips commas + trims, then accepts only `^[0-9]+$` else 0. `123abc`/`1원`/`12.5`/`-3` → 0 (was lenient prefix-parse). Also closes the negative-income edge.
+
+### Direction — two product principles
+Both are now in PHILOSOPHY + operational memory: **(1)** emotional escalation belongs to today — past-date records are quiet catch-up, never false celebration; **(2)** recording intent over friction — income amount optional, but the lightest gate prevents accidental ghost records (never a validation wall).
+
+### Preserved (regression-confirmed)
+Today-save behavior (escalation, photocard, dialogue), monthly settlement line, calendar grid + cell totals, day-card income section + per-record amount hiding, no-spend / reaction / edit flows, hydration normalize (both kind directions), types, storage.
+
+### No new storage keys
+
+### Test count
+**21 suites · 324 tests · all green.** New: `recordValidation.test.ts` (intent + amount-validity), `expenseServiceSave.test.ts` (boolean return + rollback + no-duplicate retry); extended `amount.test.ts` (strict pasted/junk cases) and `emotionEngine.test.ts` (`buildEmotionContext` today vs past-date).
+
+### Next
+Same backlog as before (Rest-TV prod ad ID, photocard polish, Android keyboard, on-device chart x-label density) plus the G1–G5 record-type product calls (decide via dogfooding, not pre-emptive patches).
+
+---
+
+### Earlier handoff (Monthly settlement + readability)
+
+**Agent:** Engineering
+**Date:** 2026-05-24
+**Group:** Monthly settlement line + Stats chart readability + income 0원 default
+
+### What changed
+- **Monthly settlement line** (`src/pages/stats.tsx`): a quiet line under the centered month label in the calendar card showing two separate totals — `쓴 돈 {지출 합계}원 · 들어온 돈 {수입 합계}원`. New `monthSettlement` memo sums the view month (income via `kind === 'income'`, spending otherwise; `no_spend` is amount 0 so harmless). Both totals always shown, including `0원`. No net / balance / 차액 — two independent numbers, body color, no card/border/heading.
+- **Chart y-axis full numbers** (`src/components/stats/MonthAmountChart.tsx`): y-labels now `toLocaleString()` (e.g. `72,000`) instead of `fmtAmt` 만/천 compaction. `Y_AXIS_W` 52→60 with a `numberOfLines={1}` truncation guard for extreme values. `fmtAmt` deleted from the helpers and its 5 unit tests removed.
+- **Chart x-axis all-day labels** (`src/components/stats/MonthAmountChart.tsx`): every day 1..N is labelled at fontSize 8 (was weekly 1/8/15/22/29). In-code note documents the sparse-label fallback if it reads too dense on-device.
+- **Record income 0원 default** (`src/pages/record.tsx`): the income-mode amount hero now shows `0원` when empty (was blank). Amount parse extracted to a tested helper `src/utils/amount.ts` (`parseAmountInput` — always returns a number; blank/junk → 0, so a raw string can never reach `Expense.amount`). Income stays optional / 0-saveable; no validation pressure.
+
+### Direction — scoped policy exception
+The settlement line shows an **income total** for the first time. This is a deliberate, **scoped** reversal of the no-income-totals rule, limited to that one quiet line: still no balance / net / 순수익 / 차액 / comparison anywhere, and per-record display surfaces still hide `월급 0원` (stats income row + photocard). See `docs/superpowers/specs/2026-05-24-monthly-settlement-and-readability-design.md` and memory `feedback_sobagi_allowance_giving_scene.md`.
+
+### Preserved (regression-confirmed)
+Observation block (cadence lines + top-scene chip + observation line), calendar grid + daily cell totals (still spending-only), month nav/picker, day-card income section + photocard per-record amount-hiding (no `월급 0원`), no-spend / reaction / edit flows, income save/edit, types, storage.
+
+### Known risk
+All-day x-labels at 8px may read dense on small phones — fallback (sparse `1 / 5 / 10 / 15 / 20 / 25 / 30` or every-other) is documented in-code for an on-device tuning pass.
+
+### No new storage keys
+
+### Test count
+**19 suites · 301 tests · all green.** (Net +1 over the 300 baseline: +6 new `amount` tests / +1 suite, −5 removed `fmtAmt` tests.)
+
+### Next
+Rest-TV production ad group ID swap; photocard small polish (time-of-day label / Sobagi signature / early-dismiss guard); Android keyboard verification; on-device chart x-label density check (apply sparse fallback if needed); two product items from the income-system handoff for review.
+
+---
+
+### Earlier handoff (Stats amount chart)
+
+**Agent:** Engineering
+**Date:** 2026-05-24
+**Group:** Stats amount chart
+
+### What changed (amount chart)
+- **`MonthPresenceRow` → `MonthAmountChart`** (`src/components/stats/MonthAmountChart.tsx`): the bottom graph on the Stats screen became a spending bar chart. x = day of month; y = daily spending total. (y-axis labels later switched from `fmtAmt` compaction to full comma numbers — see Latest Handoff.) Today and selected-day bars highlighted. Tap-to-select wired to `selectedDay` / `setSelectedDay` in `stats.tsx`.
+- **New helpers** (`src/components/stats/monthAmountChart.helpers.ts`): pure functions `barHeightFor`, `selectMaxTotal` (and originally `fmtAmt`, since removed) — no React, no SDK, no storage.
+- **`MonthPresenceRow.tsx` deleted**: file removed; no references remain in `src/`.
+
+### Direction (amount chart)
+Conscious reversal of the 2026-05-22 stats-evolution "no Y-axis / no tappable presence row / bar trend graph gone" decision, scoped to the Stats bottom graph only. See amendment note in `docs/superpowers/specs/2026-05-22-stats-evolution-design.md`. The rest of the app identity (cozy companion, quiet income, no finance dashboard) is unchanged.
+
+---
+
+### Earlier handoff (stress-test hardening sweep — 9 fixes)
+
+**Agent:** Engineering
+**Date:** 2026-05-24
 **Group:** Stress-test hardening sweep (9 fixes — robustness/overflow/race audit)
 
 ### What changed (stress-test sweep)
@@ -154,7 +264,7 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 
 | System | Location |
 |---|---|
-| HomeScreen room + atmosphere overlays | `src/pages/index.tsx`, `src/services/atmosphereService.ts` |
+| HomeScreen room (time-of-day backgrounds) + atmosphere overlays | `src/pages/index.tsx`, `src/services/atmosphereService.ts`, `src/constants/assets.ts` |
 | Sobagi character (float + spring pop) | `src/components/SobagiCharacter.tsx` |
 | Tap-to-talk speech bubble (12 idle messages) | `src/pages/index.tsx` |
 | Level chip + progress bar | `src/pages/index.tsx` |
@@ -179,7 +289,7 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 | Retrospective no-spend records (past dates, copy adapts to today vs past) | `src/pages/record.tsx`, `src/services/expenseService.ts` |
 | Save-helper for 0원 amount (gentle pointer to no-spend flow) | `src/pages/record.tsx` |
 | 쉬어가기 TV — soft rewarded-ad system (5-20 pebble grant, 60-min warmth fade, rest letters at 30/100/250/500/1000 thresholds, jar with 4 fill stages, 2-per-day cap, daily reset via `effectiveRestsToday`) | `src/services/restService.ts`, `src/hooks/useRestedAd.ts`, `src/components/room/RestTV.tsx`, `src/components/room/PebbleJar.tsx`, `src/components/room/RestPrompt.tsx`, `src/constants/restLetters.ts`, `src/constants/ads.ts`, `src/pages/index.tsx` |
-| Stats screen evolution — 결산 block replaced by 3-group observation (cadence lines → top-scene chip → rotating observation); MonthTrendGraph → MonthPresenceRow; calendar amount color softened; `selectStatsObservation` 7-branch chain | `src/pages/stats.tsx`, `src/services/statsObservationService.ts`, `src/components/stats/MonthPresenceRow.tsx` |
+| Stats screen evolution — 결산 block replaced by 3-group observation (cadence lines → top-scene chip → rotating observation); monthly settlement line under the month label (`쓴 돈` / `들어온 돈`, two separate totals, scoped income-total exception); MonthTrendGraph → MonthPresenceRow → MonthAmountChart (bar chart, x=day all-day labels, y=spending full-comma labels, tap-to-select; `fmtAmt` removed); calendar amount color softened; `selectStatsObservation` 7-branch chain | `src/pages/stats.tsx`, `src/services/statsObservationService.ts`, `src/components/stats/MonthAmountChart.tsx`, `src/components/stats/monthAmountChart.helpers.ts` |
 | Income record system (sub-specs A/B/C) — `RecordKind` type; 5 income category tokens; `kindForCategory` / `INCOME_CATEGORIES` / `GENERAL_SPENDING_CATEGORIES` helpers; `normalizeExpense` hydration; record screen kind toggle; photocard 3-way grouped layout (쓴 기록 / 들어온 기록 / 무지출, `totalBlock` removed); `todayHasSpending` gate on reaction screen; `evaluateIncome` 2-rule subroutine (hour ≥ 22 → `'sleepy'`, else → `'happy'`); `INCOME_REACTION_POOLS` kind-gated dialogue (3 tiers × 3 lines); `MonthPresenceRow` income-only days render `●`; `hasNightPattern` filters income timestamps; `selectStatsObservation` income branch (`들어온 일이 종종 있었어요 🍃` at ≥ 2 income days in 30) | `src/types/index.ts`, `src/constants/categories.ts`, `src/constants/dialogue.ts`, `src/services/expenseService.ts`, `src/services/emotionEngine.ts`, `src/services/dialogueService.ts`, `src/services/roomPresenceService.ts`, `src/services/statsObservationService.ts`, `src/hooks/useAppInit.ts`, `src/pages/record.tsx`, `src/pages/stats.tsx`, `src/pages/reaction.tsx`, `src/components/photocard/PhotocardView.tsx`, `src/components/photocard/photocardGrouping.ts`, `src/components/stats/MonthPresenceRow.tsx`, `src/store/expenseStore.ts` |
 
 ### Planned (designed, not built)
@@ -236,7 +346,6 @@ sobagi-last-rest-at            → ISO string           drives 60-min rest-warmt
 - Dialogue tier transitions are hard thresholds — tone shifts abruptly at day 7 and day 30
 
 ### Technical
-- Pre-existing TS error in `_404.tsx` — not blocking, not recently introduced
 - Android keyboard behavior in record.tsx unverified
 
 ---

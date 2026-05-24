@@ -9,21 +9,20 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getNextThreshold } from '../store/userStore';
-import { useAppInit } from '../hooks/useAppInit';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { COLORS } from '../constants/colors';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS } from '../constants/assets';
+import { ROOM_TIME_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS, ROOM_FURNITURE_URIS } from '../constants/assets';
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
-import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
+import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
-import { RestTV } from '../components/room/RestTV';
 import { PebbleJar } from '../components/room/PebbleJar';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
 
 export const Route = createRoute('/', {
@@ -72,20 +71,10 @@ function getIdleMessages(lastRestAtISO: string | null, now: Date): string[] {
   return [...IDLE_MESSAGES, ...REST_IDLE_MESSAGES];
 }
 
-// Normalized room coordinates. MAILBOX_POSITION represents the visual
-// location of the mailbox utility icon — the utility stack itself stays
-// pixel-positioned in its existing styles; this constant is the source of
-// truth for room-layer fixtures that anchor below it.
-const MAILBOX_POSITION = { x: 0.12, y: 0.29 } as const;
-const TV_POSITION = {
-  x: MAILBOX_POSITION.x + 0.02,
-  y: MAILBOX_POSITION.y + 0.16,
-};
+// Normalized room coordinate for the pebble jar fixture.
 const JAR_POSITION = { x: 0.18, y: 0.66 } as const;
 
 function HomeScreen() {
-  useAppInit();
-
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const roomStage = useUserStore((s) => s.roomStage);
   const level = useUserStore((s) => s.level);
@@ -99,7 +88,7 @@ function HomeScreen() {
   const adState = useRestedAd();
   const todayStr = getLocalDateString(new Date());
   const effectiveRestsToday = getEffectiveRestsToday(restsToday, lastRestDate, todayStr);
-  const timeOfDayTint = getTimeOfDayTint(new Date().getHours());
+  const timeBackgroundUri = ROOM_TIME_BACKGROUND_URIS[getTimeOfDayBackgroundKey(new Date().getHours())];
   const warmthOpacity = getWarmthOpacity(recordedDaysCount);
   const calmOpacity = getCalmAtmosphereOpacity(expenses, getLocalDateString(new Date()));
 
@@ -108,11 +97,12 @@ function HomeScreen() {
     return expenses.filter((e) => expenseLocalDate(e) === todayStr);
   }, [expenses]);
 
-  // Spending only — income records and no-spend markers don't count toward
-  // the day's spending total, so a salary-only day reads ₩0, not the salary.
-  const todayTotal = todayExpenses
-    .filter((e) => e.kind !== 'income' && e.category !== 'no_spend')
-    .reduce((sum, e) => sum + e.amount, 0);
+  // Spending only — income records and no-spend markers aren't spending, so
+  // they don't count toward the day's total and don't surface an amount row.
+  const todaySpendingRecords = todayExpenses.filter(
+    (e) => e.kind !== 'income' && e.category !== 'no_spend',
+  );
+  const todayTotal = todaySpendingRecords.reduce((sum, e) => sum + e.amount, 0);
 
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleMessage, setBubbleMessage] = useState('');
@@ -218,6 +208,19 @@ function HomeScreen() {
     });
   }, [sheetAnim]);
 
+  // Android hardware back closes an open overlay before falling through to
+  // navigation. A selected bag/found item collapses back to the grid first;
+  // otherwise the whole sheet closes. No-op when nothing is open (and on iOS).
+  const handleAndroidBack = useCallback(() => {
+    if (selectedBagItem !== null || selectedFoundItem !== null) {
+      setSelectedBagItem(null);
+      setSelectedFoundItem(null);
+      return;
+    }
+    if (activeSheet !== null) closeSheet();
+  }, [selectedBagItem, selectedFoundItem, activeSheet, closeSheet]);
+  useAndroidBack(activeSheet !== null, handleAndroidBack);
+
   useEffect(() => {
     return () => {
       if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
@@ -241,13 +244,7 @@ function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
-            {timeOfDayTint !== null && (
-              <View
-                style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
-                pointerEvents="none"
-              />
-            )}
+      <RoomBackground stage={roomStage} backgroundUri={timeBackgroundUri}>
             <View
               style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
               pointerEvents="none"
@@ -286,28 +283,6 @@ function HomeScreen() {
                 </View>
               );
             })}
-            <RestTV
-              position={TV_POSITION}
-              adStatus={adState.status}
-              effectiveRestsToday={effectiveRestsToday}
-              onPress={() => {
-                if (effectiveRestsToday >= 2) {
-                  setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
-                  setBubbleVisible(true);
-                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
-                  return;
-                }
-                if (adState.status === 'error') {
-                  setBubbleMessage('지금은 조용한 채널이 없어요 🌿');
-                  setBubbleVisible(true);
-                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
-                  return;
-                }
-                openSheet('rest');
-              }}
-            />
             <PebbleJar
               position={JAR_POSITION}
               pebbleCount={pebbleCount}
@@ -373,11 +348,55 @@ function HomeScreen() {
                 </Pressable>
                 <Text style={styles.utilityLabel}>우편함</Text>
               </View>
+              <View style={styles.utilityItem}>
+                <Pressable
+                  style={styles.utilityBtn}
+                  onPress={() => {
+                    if (effectiveRestsToday >= 2) {
+                      setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
+                      setBubbleVisible(true);
+                      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                      hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                      return;
+                    }
+                    if (adState.status === 'unsupported') {
+                      setBubbleMessage('아직 준비 중이에요 🌿');
+                      setBubbleVisible(true);
+                      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                      hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                      return;
+                    }
+                    if (adState.status === 'error') {
+                      setBubbleMessage('지금은 조용한 채널이 없어요 🌿');
+                      setBubbleVisible(true);
+                      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                      hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                      return;
+                    }
+                    openSheet('rest');
+                  }}
+                >
+                  {({ pressed }) => (
+                    <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                      <Image
+                        source={{ uri: ROOM_FURNITURE_URIS.tv }}
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                </Pressable>
+                <Text style={styles.utilityLabel}>티비</Text>
+              </View>
             </View>
           </RoomBackground>
 
       <View style={styles.summaryCard}>
-        <DailySummary totalAmount={todayTotal} recordCount={todayExpenses.length} />
+        <DailySummary
+          totalAmount={todayTotal}
+          recordCount={todayExpenses.length}
+          spendingCount={todaySpendingRecords.length}
+        />
       </View>
 
       <BottomTabs activeRoute="/" />

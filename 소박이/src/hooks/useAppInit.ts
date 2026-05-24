@@ -11,9 +11,10 @@ import { VALID_EMOTIONS, EMOTION_MESSAGES } from '../constants/emotion';
 import {
   SOBAGI_DEFAULT_URI,
   SOBAGI_IMAGE_URIS,
-  ROOM_BACKGROUND_URIS,
+  ROOM_TIME_BACKGROUND_URIS,
   UTILITY_ICON_URIS,
 } from '../constants/assets';
+import { getTimeOfDayBackgroundKey } from '../services/atmosphereService';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getLevel, getRoomStage } from '../store/userStore';
 import { useEmotionStore } from '../store/emotionStore';
@@ -57,7 +58,11 @@ function prefetchHotAssets(): void {
   safePrefetch(SOBAGI_DEFAULT_URI);
   for (const uri of Object.values(SOBAGI_IMAGE_URIS)) safePrefetch(uri);
   for (const uri of Object.values(UTILITY_ICON_URIS)) safePrefetch(uri);
-  for (const uri of Object.values(ROOM_BACKGROUND_URIS)) safePrefetch(uri);
+  // Prefetch only the background that will actually render now (the current
+  // time-of-day bucket), mirroring the prior single-room-background cost rather
+  // than fetching all four. Crossing a bucket boundary mid-session cold-loads
+  // once via the lazy fallback.
+  safePrefetch(ROOM_TIME_BACKGROUND_URIS[getTimeOfDayBackgroundKey(new Date().getHours())]);
 }
 
 export function getPrevVisitDate(): string | null {

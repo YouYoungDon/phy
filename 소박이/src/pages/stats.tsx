@@ -6,13 +6,17 @@ import { useUserStore } from '../store/userStore';
 import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
+import { parseAmountInput, formatAmountInput } from '../utils/amount';
+import { amountValidForKind } from '../utils/recordValidation';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
-import { MonthPresenceRow } from '../components/stats/MonthPresenceRow';
+import { MonthAmountChart } from '../components/stats/MonthAmountChart';
+import { selectCalendarCellContent, formatCompactAmount, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -21,6 +25,12 @@ export const Route = createRoute('/stats', {
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const WEEKDAY_LABELS = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+
+const CALENDAR_VIEW_MODES: { mode: CalendarViewMode; label: string }[] = [
+  { mode: 'spending', label: '쓴 기록' },
+  { mode: 'income', label: '들어온 기록' },
+  { mode: 'both', label: '함께 보기' },
+];
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -58,7 +68,45 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
   );
 }
 
+// Renders the calendar cell's amount/marker slot from a CellDisplay descriptor.
+// Module-level (uses module `styles`); kept here so the grid map stays readable.
+function DayAmountSlot({ cell, isSelected }: { cell: CellDisplay; isSelected: boolean }) {
+  const textStyle = [styles.dayAmount, isSelected && styles.dayAmountSelected];
+  switch (cell.kind) {
+    case 'blank':
+      return <View style={styles.dayAmountPlaceholder} />;
+    case 'leaf':
+      return <Text style={textStyle} numberOfLines={1}>🌿</Text>;
+    case 'incomeMarker':
+      return <Text style={textStyle} numberOfLines={1}>🍃</Text>;
+    case 'amount':
+      return (
+        <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
+          {cell.compact ? formatCompactAmount(cell.amount) : cell.amount.toLocaleString('ko-KR')}
+        </Text>
+      );
+    case 'amountWithIncome':
+      return (
+        <View style={styles.dayAmountRow}>
+          <Text style={[...textStyle, styles.dayAmountFlex]} numberOfLines={1} ellipsizeMode="tail">
+            {cell.amount.toLocaleString('ko-KR')}
+          </Text>
+          <Text style={[styles.dayAmountLeaf, isSelected && styles.dayAmountSelected]}>·🍃</Text>
+        </View>
+      );
+  }
+}
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
+
+// Quiet lines for a no-spend-only photocard — no amount, no finance framing.
+// A no-spend day is a calm record of a day that passed gently, not a savings
+// result. Picked deterministically by date so a given day's card is stable.
+const NO_SPEND_PHOTOCARD_QUOTES = [
+  '오늘은 조용히 지나간 하루 🌿',
+  '쓰지 않은 기록도 하나의 생활이에요',
+  '가볍게 지나간 날을 남겨두었어요',
+];
 
 function StatsScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
@@ -71,6 +119,7 @@ function StatsScreen() {
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState<string>(todayStr);
   const [showDayPhotocard, setShowDayPhotocard] = useState(false);
+  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>('spending');
 
   // Month picker — separate "pickerYear" state so the user can browse years
   // inside the modal without committing until they tap a month. Reset to
@@ -86,17 +135,19 @@ function StatsScreen() {
     categories: ExpenseCategory[];
     hasRecord: boolean;
     hasOnlyNoSpend: boolean;
+    incomeTotal: number;
   };
 
   const expensesByDate = useMemo(() => {
     const map: Record<string, DayAccum> = {};
     for (const e of expenses) {
       const d = expenseLocalDate(e);
-      if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true };
+      if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true, incomeTotal: 0 };
       map[d].hasRecord = true;
       if (e.category !== 'no_spend') map[d].hasOnlyNoSpend = false;
-      // income counts as presence (hasRecord above) but not toward day total
-      if (e.kind === 'income') continue;
+      // income counts as presence (hasRecord above) + feeds the income view's
+      // per-day total, but never the spending `total`.
+      if (e.kind === 'income') { map[d].incomeTotal += e.amount; continue; }
       map[d].total += e.amount;
       map[d].count += 1;
       map[d].categories.push(e.category);
@@ -120,6 +171,14 @@ function StatsScreen() {
 
   const selectedIncomeExpenses = useMemo(
     () => selectedExpenses.filter((e) => e.kind === 'income'),
+    [selectedExpenses],
+  );
+
+  // No-spend marks (amount 0, category 'no_spend'). Surfaced in the day card so
+  // a misfired 무지출 has a delete entry point — otherwise the only trace is the
+  // calendar 🌿 with no way to remove it.
+  const selectedNoSpendExpenses = useMemo(
+    () => selectedExpenses.filter((e) => e.category === 'no_spend'),
     [selectedExpenses],
   );
 
@@ -229,6 +288,22 @@ function StatsScreen() {
     return days.size;
   }, [expenses, viewYear, viewMonth]);
 
+  // Two independent monthly totals for the settlement line: spending and
+  // income. Deliberately NO net/balance/차액 — this is the one scoped
+  // exception to the no-income-totals rule (see the monthly-settlement spec).
+  // no_spend carries amount 0, so it's harmless in the spending sum.
+  const monthSettlement = useMemo(() => {
+    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    let spending = 0;
+    let income = 0;
+    for (const e of expenses) {
+      if (!expenseLocalDate(e).startsWith(prefix)) continue;
+      if (e.kind === 'income') income += e.amount;
+      else spending += e.amount;
+    }
+    return { spending, income };
+  }, [expenses, viewYear, viewMonth]);
+
   const cadenceLines: string[] = useMemo(() => {
     if (monthVisitDays === 0) {
       return ['이번 달은 아직 비어있어요 🌿'];
@@ -259,12 +334,13 @@ function StatsScreen() {
 
   // Photocard records include both spending and income (sub-spec B), so
   // PhotocardView's groupByKind can render the 들어온 기록 section on mixed
-  // days. No_spend is excluded — it's a calendar marker, not a memory line.
-  // The entry-point gate (selectedSpendingExpenses.length > 0 below) still
-  // hides the photocard button for income-only days, so an income-only day
-  // never reaches PhotocardView in the first place.
-  const photocardRecords: PhotocardRecord[] = useMemo(
-    () => selectedExpenses
+  // days. The entry-point gate (canOpenDayPhotocard below) hides the button
+  // for income-only days, so an income-only day never reaches PhotocardView.
+  // A no-spend-only day surfaces a single quiet 🌿 무지출 line (its amount is
+  // hidden by PhotocardView's showsAmount — no ₩0) so the card isn't
+  // record-less; the line is dropped the moment any spending/income exists.
+  const photocardRecords: PhotocardRecord[] = useMemo(() => {
+    const spendingIncome = selectedExpenses
       .filter((e) => e.category !== 'no_spend')
       .map((e) => ({
         id: e.id,
@@ -273,9 +349,20 @@ function StatsScreen() {
         amount: e.amount,
         memo: e.memo,
         kind: e.kind,
-      })),
-    [selectedExpenses],
-  );
+      }));
+    if (spendingIncome.length > 0) return spendingIncome;
+    const noSpend = selectedExpenses.find((e) => e.category === 'no_spend');
+    if (noSpend) {
+      return [{
+        id: noSpend.id,
+        category: 'no_spend',
+        categoryLabel: formatCategoryLabel('no_spend'),
+        amount: 0,
+        kind: noSpend.kind,
+      }];
+    }
+    return [];
+  }, [selectedExpenses]);
 
   const photocardDateStr = useMemo(() => {
     const d = new Date(selectedDay + 'T00:00:00');
@@ -289,6 +376,20 @@ function StatsScreen() {
     const d = new Date(selectedDay + 'T00:00:00');
     return WEEKDAY_LABELS[d.getDay()];
   }, [selectedDay]);
+
+  // No-spend-only days have no spending feeling, so the photocard can still open
+  // (sub-spec: 무지출도 하나의 기록) using a quiet line + calm emotion + a single
+  // 🌿 무지출 record row (built in photocardRecords above).
+  const isNoSpendOnlyDay =
+    selectedSpendingExpenses.length === 0 &&
+    selectedIncomeExpenses.length === 0 &&
+    selectedNoSpendExpenses.length > 0;
+  const canOpenDayPhotocard = selectedSpendingExpenses.length > 0 || isNoSpendOnlyDay;
+  const photocardQuote = dayFeeling
+    ? dayFeeling.mainLine
+    : (NO_SPEND_PHOTOCARD_QUOTES[selectedDt.getDate() % NO_SPEND_PHOTOCARD_QUOTES.length]
+        ?? '오늘은 조용히 지나간 하루 🌿');
+  const photocardEmotion = dayFeeling ? dayFeeling.sobagiEmotion : ('happy' as const);
 
   const openDayPhotocard = useCallback(() => {
     dayRevealAnim.setValue(1);
@@ -314,6 +415,11 @@ function StatsScreen() {
   const [editMemo, setEditMemo] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editSheetBottom, setEditSheetBottom] = useState(0);
+  // In-flight + failure state for edit/delete persistence. `editSaving` guards
+  // against double-taps; `editError` keeps the sheet open with a message when a
+  // write fails (and was rolled back) so the UI never shows a false success.
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState(false);
   const editSheetAnim = useRef(new Animated.Value(500)).current;
 
   const editingExpensePool = useMemo(() => {
@@ -332,10 +438,12 @@ function StatsScreen() {
 
   const openEdit = useCallback((expense: Expense) => {
     setEditingExpense(expense);
-    setEditAmount(String(expense.amount));
+    setEditAmount(formatAmountInput(String(expense.amount)));
     setEditCategory(expense.category);
     setEditMemo(expense.memo ?? '');
     setDeleteConfirm(false);
+    setEditError(false);
+    setEditSaving(false);
     Animated.spring(editSheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
   }, [editSheetAnim]);
 
@@ -345,39 +453,97 @@ function StatsScreen() {
       setEditingExpense(null);
       setDeleteConfirm(false);
       setEditSheetBottom(0);
+      setEditError(false);
+      setEditSaving(false);
     });
   }, [editSheetAnim]);
 
-  const commitEdit = useCallback(() => {
-    if (!editingExpense) return;
-    const parsed = parseInt(editAmount.replace(/[^0-9]/g, ''), 10);
-    if (isNaN(parsed)) return;
-    // Income records may legitimately carry amount=0 (matches the save flow's
-    // `금액 (선택)` affordance). Spending records still require a positive
-    // amount — they're meaningful only when there's something to record.
+  const commitEdit = useCallback(async () => {
+    if (!editingExpense || editSaving) return;
+    // Shared parse + validity rule with the create flow (record.tsx):
+    // `parseAmountInput` normalizes blanks/junk to 0; income may be 0 (amount
+    // optional), spending must be positive.
+    const parsed = parseAmountInput(editAmount);
     const nextKind = kindForCategory(editCategory);
-    if (nextKind !== 'income' && parsed <= 0) return;
-    if (parsed < 0) return;
-    persistUpdateExpense(editingExpense.id, {
+    if (!amountValidForKind(nextKind, parsed)) return;
+    setEditSaving(true);
+    setEditError(false);
+    const ok = await persistUpdateExpense(editingExpense.id, {
       amount: parsed,
       category: editCategory,
       memo: editMemo.trim() || undefined,
       kind: nextKind,
     });
+    setEditSaving(false);
+    if (!ok) {
+      // Write failed and the in-memory edit was rolled back. Keep the sheet open
+      // with an error so the user sees it didn't save and can retry.
+      setEditError(true);
+      return;
+    }
     closeEdit();
-  }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
+  }, [editingExpense, editSaving, editAmount, editCategory, editMemo, closeEdit]);
 
-  const commitDelete = useCallback(() => {
-    if (!editingExpense) return;
-    persistDeleteExpense(editingExpense.id);
+  // Mirror of commitEdit's validity gate, for the save button's enabled state
+  // and the inline hint — so a blocked spending edit shows visible feedback
+  // instead of a silent no-op.
+  const editKind = kindForCategory(editCategory);
+  const editCanSave = amountValidForKind(editKind, parseAmountInput(editAmount));
+
+  // No-spend records have nothing meaningful to edit (amount 0, fixed category).
+  // The edit sheet collapses to a quiet label + delete-only affordance for them.
+  const editingNoSpend = editingExpense?.category === 'no_spend';
+
+  const commitDelete = useCallback(async () => {
+    if (!editingExpense || editSaving) return;
+    setEditSaving(true);
+    setEditError(false);
+    const ok = await persistDeleteExpense(editingExpense.id);
+    setEditSaving(false);
+    if (!ok) {
+      // Delete didn't persist (rolled back in memory). Keep the sheet + confirm
+      // open with an error so the record visibly remains and can be retried.
+      setEditError(true);
+      return;
+    }
     closeEdit();
-  }, [editingExpense, closeEdit]);
+  }, [editingExpense, editSaving, closeEdit]);
+
+  // Android hardware back closes the topmost open stats overlay before route
+  // back: photocard modal → month picker → edit sheet.
+  const handleAndroidBack = useCallback(() => {
+    if (showDayPhotocard) { closeDayPhotocard(); return; }
+    if (showMonthPicker) { closeMonthPicker(); return; }
+    if (editingExpense !== null) { closeEdit(); return; }
+  }, [showDayPhotocard, showMonthPicker, editingExpense, closeDayPhotocard, closeMonthPicker, closeEdit]);
+  useAndroidBack(
+    showDayPhotocard || showMonthPicker || editingExpense !== null,
+    handleAndroidBack,
+  );
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>소소한 기록</Text>
-        <Text style={styles.headerSub}>이번 달을 조용히 돌아봐요</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerTitleCol}>
+            <Text style={styles.headerTitle}>소소한 기록</Text>
+            <Text style={styles.headerSub}>이번 달을 조용히 돌아봐요</Text>
+          </View>
+          <View style={styles.viewToggle}>
+            {CALENDAR_VIEW_MODES.map(({ mode, label }) => (
+              <Pressable
+                key={mode}
+                style={[styles.viewPill, calendarViewMode === mode && styles.viewPillActive]}
+                onPress={() => setCalendarViewMode(mode)}
+                hitSlop={4}
+              >
+                <Text style={[styles.viewPillText, calendarViewMode === mode && styles.viewPillTextActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -393,6 +559,14 @@ function StatsScreen() {
             <Pressable onPress={nextMonth} style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]}>
               <Text style={[styles.navArrow, isCurrentMonth && styles.navArrowDisabled]}>›</Text>
             </Pressable>
+          </View>
+
+          <View style={styles.monthTotalRow}>
+            <Text style={styles.monthTotalLabel}>쓴 돈</Text>
+            <Text style={styles.monthTotalValue}>{monthSettlement.spending.toLocaleString()}원</Text>
+            <Text style={styles.monthTotalSep}>·</Text>
+            <Text style={styles.monthTotalLabel}>들어온 돈</Text>
+            <Text style={styles.monthTotalValue}>{monthSettlement.income.toLocaleString()}원</Text>
           </View>
 
           <View style={styles.dowRow}>
@@ -429,33 +603,14 @@ function StatsScreen() {
                       ]}>
                         {day}
                       </Text>
-                      {data ? (
-                        data.total === 0 ? (
-                          // No-spend-only day: render a quiet leaf instead of "0".
-                          // Same slot/size as the amount text, just a different glyph,
-                          // so the calendar layout stays untouched.
-                          <Text
-                            style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}
-                            numberOfLines={1}
-                          >
-                            🌿
-                          </Text>
-                        ) : (
-                          // numberOfLines={1} + ellipsis prevents very large totals
-                          // (max-allowed input is 9,999,999,999) from wrapping and
-                          // bloating the calendar cell height. ~50pt cell width can't
-                          // fit 13+ chars at fontSize 9 without truncation.
-                          <Text
-                            style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                          >
-                            {data.total.toLocaleString('ko-KR')}
-                          </Text>
-                        )
-                      ) : (
-                        <View style={styles.dayAmountPlaceholder} />
-                      )}
+                      <DayAmountSlot
+                        cell={selectCalendarCellContent(calendarViewMode, {
+                          spendingTotal: data?.total ?? 0,
+                          incomeTotal: data?.incomeTotal ?? 0,
+                          hasRecord: !!data,
+                        })}
+                        isSelected={isSelected}
+                      />
                     </Pressable>
                   );
                 })}
@@ -464,9 +619,12 @@ function StatsScreen() {
           </View>
         </View>
 
-        {/* Selected day card — renders when the day has any record (spending or income).
-            No-spend-only days still don't surface a card (they're calendar-only). */}
-        {(selectedSpendingExpenses.length > 0 || selectedIncomeExpenses.length > 0) && (
+        {/* Selected day card — renders when the day has any record: spending,
+            income, or a no-spend mark. No-spend-only days surface the card too
+            so the 무지출 record has a delete entry point. */}
+        {(selectedSpendingExpenses.length > 0 ||
+          selectedIncomeExpenses.length > 0 ||
+          selectedNoSpendExpenses.length > 0) && (
           <View style={styles.dayCard}>
             <View style={styles.dayCardHeader}>
               <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
@@ -506,11 +664,33 @@ function StatsScreen() {
                 })}
               </View>
             )}
+            {selectedNoSpendExpenses.length > 0 && (
+              <View
+                style={[
+                  styles.incomeSection,
+                  selectedSpendingExpenses.length === 0 &&
+                    selectedIncomeExpenses.length === 0 &&
+                    styles.incomeSectionStandalone,
+                ]}
+              >
+                {selectedNoSpendExpenses.map((r, idx) => (
+                  <React.Fragment key={r.id}>
+                    {idx > 0 && <View style={styles.recordDivider} />}
+                    <Pressable style={styles.incomeRow} onPress={() => openEdit(r)}>
+                      <Text style={styles.incomeIcon}>🌿</Text>
+                      <Text style={styles.incomeLabel}>무지출</Text>
+                      <Text style={styles.recordChevron}>›</Text>
+                    </Pressable>
+                  </React.Fragment>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
-        {/* Photocard entry — replaces DayFeelingCard, shown when selected day has spending */}
-        {selectedSpendingExpenses.length > 0 && (
+        {/* Photocard entry — shown for spending days and no-spend-only days.
+            Income-only days stay without a card (sub-spec B D2 unchanged). */}
+        {canOpenDayPhotocard && (
           <Pressable style={styles.photocardEntryBtn} onPress={openDayPhotocard}>
             <Text style={styles.photocardEntryText}>포토카드 생성</Text>
           </Pressable>
@@ -535,13 +715,15 @@ function StatsScreen() {
           )}
         </View>
 
-        {/* Month presence row — soft trace of this month, not a chart */}
-        <MonthPresenceRow
+        {/* Month amount chart — bar trace of spending across this month */}
+        <MonthAmountChart
           viewYear={viewYear}
           viewMonth={viewMonth}
           daysInMonth={daysInMonth}
           expensesByDate={expensesByDate}
           todayStr={todayStr}
+          selectedDay={selectedDay}
+          onSelectDay={setSelectedDay}
         />
 
       </ScrollView>
@@ -558,13 +740,19 @@ function StatsScreen() {
         style={[styles.editSheet, { transform: [{ translateY: editSheetAnim }], bottom: editSheetBottom }]}
         pointerEvents={editingExpense !== null ? 'auto' : 'none'}
       >
-        <Text style={styles.editSheetTitle}>기록을 조금 고칠게요</Text>
+        <Text style={styles.editSheetTitle}>
+          {editingNoSpend ? '무지출 기록' : '기록을 조금 고칠게요'}
+        </Text>
 
+        {editingNoSpend ? (
+          <Text style={styles.noSpendEditHint}>이 날은 무지출로 기록했어요 🌿</Text>
+        ) : (
+          <>
         <Text style={styles.editFieldLabel}>금액</Text>
         <TextInput
           style={styles.editAmountInput}
           value={editAmount}
-          onChangeText={setEditAmount}
+          onChangeText={(t) => setEditAmount(formatAmountInput(t))}
           keyboardType="number-pad"
           placeholder="0"
           placeholderTextColor={COLORS.textLight}
@@ -599,14 +787,28 @@ function StatsScreen() {
           maxLength={60}
         />
 
+        {editingExpense !== null && !editCanSave && (
+          <Text style={styles.editHint}>금액을 입력해 주세요</Text>
+        )}
+
         <View style={styles.editActionRow}>
-          <Pressable style={styles.editSaveBtn} onPress={commitEdit}>
+          <Pressable
+            style={[styles.editSaveBtn, (!editCanSave || editSaving) && styles.editSaveBtnDisabled]}
+            onPress={commitEdit}
+            disabled={!editCanSave || editSaving}
+          >
             <Text style={styles.editSaveBtnText}>고쳐두기</Text>
           </Pressable>
           <Pressable style={styles.editCancelBtn} onPress={closeEdit}>
             <Text style={styles.editCancelBtnText}>취소</Text>
           </Pressable>
         </View>
+          </>
+        )}
+
+        {editError && (
+          <Text style={styles.editErrorText}>저장하지 못했어요. 잠시 후 다시 시도해 주세요</Text>
+        )}
 
         <View style={styles.editDeleteArea}>
           {!deleteConfirm ? (
@@ -616,7 +818,7 @@ function StatsScreen() {
           ) : (
             <View style={styles.editDeleteConfirmRow}>
               <Text style={styles.editDeleteConfirmLabel}>이 기록을 지울까요?</Text>
-              <Pressable onPress={commitDelete}>
+              <Pressable onPress={commitDelete} disabled={editSaving}>
                 <Text style={styles.editDeleteYesText}>지우기</Text>
               </Pressable>
               <Pressable onPress={() => setDeleteConfirm(false)}>
@@ -627,24 +829,25 @@ function StatsScreen() {
         </View>
       </Animated.View>
 
-      {/* Photocard modal — full-screen dark overlay */}
-      {showDayPhotocard && dayFeeling && (
+      {/* Photocard modal — full-screen dark overlay. Backdrop and card are
+          separated: only the backdrop closes; the card absorbs its own presses
+          (stopPropagation) so tapping the card never closes it. */}
+      {showDayPhotocard && canOpenDayPhotocard && (
         <Pressable style={styles.photocardModal} onPress={closeDayPhotocard}>
-          <View style={styles.cardArea}>
+          <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
             <PhotocardView
-              quote={dayFeeling.mainLine}
+              quote={photocardQuote}
               dateStr={photocardDateStr}
               weekdayLabel={photocardWeekday}
-              amount={selectedData?.total ?? 0}
               records={photocardRecords}
-              currentEmotion={dayFeeling.sobagiEmotion}
+              currentEmotion={photocardEmotion}
               quoteAnimated
             />
             <Animated.View
               style={[styles.revealOverlay, { opacity: dayRevealAnim }]}
               pointerEvents="none"
             />
-          </View>
+          </Pressable>
           <View style={styles.closeHint} pointerEvents="none">
             <Text style={styles.closeHintText}>✕</Text>
           </View>
@@ -733,6 +936,37 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
   headerSub: { fontSize: 13, color: COLORS.textMuted },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerTitleCol: {
+    flex: 1,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  viewPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  viewPillActive: {
+    backgroundColor: COLORS.surface,
+  },
+  viewPillText: {
+    fontSize: 11,
+    color: COLORS.textLight,
+  },
+  viewPillTextActive: {
+    color: COLORS.oliveDark,
+    fontWeight: '600',
+  },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 32, gap: 16, paddingTop: 8 },
 
@@ -752,6 +986,31 @@ const styles = StyleSheet.create({
   navArrowDisabled: { color: COLORS.textLight },
   monthLabelBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
   monthLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+
+  // Monthly settlement — one quiet line under the month label. Two separate
+  // totals (쓴 돈 / 들어온 돈), no net/balance. Body color, no green emphasis,
+  // no card/border around it.
+  monthTotalRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 12,
+  },
+  monthTotalLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  monthTotalValue: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  monthTotalSep: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
 
   // Month picker overlay — soft Sobagi modal, not a system picker.
   // 88% width with maxWidth 360 keeps the card comfortable on small phones
@@ -837,6 +1096,21 @@ const styles = StyleSheet.create({
   dayAmount: { fontSize: 9, color: COLORS.textMuted, marginTop: 1, height: 12, lineHeight: 12 },
   dayAmountSelected: { color: 'rgba(255,255,255,0.85)' },
   dayAmountPlaceholder: { height: 12 },
+  dayAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 12,
+    maxWidth: '100%',
+  },
+  dayAmountFlex: {
+    flexShrink: 1,
+  },
+  dayAmountLeaf: {
+    fontSize: 9,
+    marginLeft: 1,
+    color: COLORS.textMuted,
+  },
 
   // Day card
   dayCard: {
@@ -1120,10 +1394,29 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: 'center',
   },
+  editSaveBtnDisabled: {
+    opacity: 0.4,
+  },
   editSaveBtnText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  editHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 12,
+  },
+  noSpendEditHint: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  editErrorText: {
+    fontSize: 12,
+    color: '#B5705A',
+    marginTop: 10,
   },
   editCancelBtn: {
     paddingVertical: 13,

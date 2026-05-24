@@ -53,3 +53,14 @@ export function groupByKind(records: readonly PhotocardRecord[]): PhotocardGroup
   }
   return { spending, income, noSpend };
 }
+
+/**
+ * Pure. Whether a record's amount column should render on the photocard.
+ *   - no_spend: never — it's a presence marker, not a money line (no ₩0).
+ *   - income with amount 0: hidden (sub-spec A per-record amount-hide rule).
+ *   - everything else: shown.
+ */
+export function showsAmount(r: PhotocardRecord): boolean {
+  if (r.category === 'no_spend') return false;
+  return r.kind !== 'income' || r.amount > 0;
+}

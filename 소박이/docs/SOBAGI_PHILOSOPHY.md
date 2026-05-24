@@ -75,6 +75,45 @@ Changes should feel discovered, not announced.
 
 ---
 
+## Emotional Escalation Belongs to Today
+
+Emotional escalation is a property of the present moment, not of a date field.
+The reaction screen, the photocard, the first-record "처음 들렀네요" welcome, and
+the streak-driven excited emotion all follow the **saved record's own date**, not
+the current date.
+
+- **Today (real-time) saves** keep full escalation — first-visit welcome, current
+  streak, the live hour.
+- **Back-dated catch-up saves are quiet.** They never fire the welcome and never
+  borrow today's streak. A record logged for last Tuesday is a calm note about
+  that day, not today's celebration. It reflects only the record itself (a large
+  amount can still read soft, an ordinary one reads happy).
+- The photocard a save opens shows **that record's day**, labelled with that date,
+  not today's records under today's date.
+
+**Test:** If logging something for a past day makes Sobagi react as if it just
+happened now, the context is leaking. Anchor it to the record's date.
+
+---
+
+## Recording Intent Over Friction
+
+Income amount is **optional** — a quiet "something came in" log needs no number
+(presence over accounting). But a save must carry *some* trace that the user meant
+to leave a mark, so an accidental tap can't create an empty ghost record.
+
+- Accepted intent signals (any one): an amount, a memo, a chosen emotion, or a
+  category moved off the default. One is enough.
+- This is **gentle ghost-record prevention, not strict validation.** We never
+  demand a "valid" amount or reject formats — we only ask "did you mean to leave
+  this?" Spending keeps its own rule (a positive amount, since a spend is only
+  meaningful with something spent).
+
+**Test:** Could a single stray tap, with zero input, create a record? If yes, add
+the lightest possible intent gate — never a validation wall.
+
+---
+
 ## The Anti-Pattern List
 
 Check every new feature and copy line against this.
@@ -95,6 +134,8 @@ Check every new feature and copy line against this.
 | Every corner filled | Room stops breathing; negative space is load-bearing |
 | Badge counts on navigation tabs | Standard app anxiety pattern |
 | Empty states framed as failure | "Nothing recorded" should never feel like failing |
+| Today-context leaking into past saves | A back-dated record reacting like a live "today" moment (welcome, streak excitement, today's photocard) turns catch-up into false celebration |
+| Validation walls on a quiet log | Strict "valid amount required" pressure on income contradicts presence-over-accounting; use the lightest intent gate, not a form validator |
 
 ---
 

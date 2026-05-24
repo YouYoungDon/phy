@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { SobagiReaction } from '../components/sobagi/SobagiReaction';
@@ -12,6 +12,8 @@ import { useUserStore } from '../store/userStore';
 import { getDialogueTier } from '../services/dialogueService';
 import { formatCategoryLabel } from '../constants/categories';
 import { RecordKind } from '../types';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
@@ -47,7 +49,11 @@ function getReactionTitle(emotion: SobagiEmotion, tier: 1 | 2 | 3, kind: RecordK
   }
   if (tier === 1) {
     switch (emotion) {
-      case 'surprised': return '처음 들렀네요 ✨';
+      // Title intentionally avoids the bubble's "처음 들렀네요 ✨" wording
+      // (REACTION_POOLS[1].surprised) so the first-record moment doesn't echo
+      // itself with a double ✨. Quieter leaf, marks the day's first step,
+      // preserves the "first visit matters" warmth without the celebratory peak.
+      case 'surprised': return '오늘 첫 걸음이네요 🌿';
       case 'excited':   return '조용히 이어지고 있네요 🌿';
       case 'sleepy':    return '이 시간까지 기록했네요 🌙';
       case 'soft-sad':  return '오늘은 좀 특별한 날이었네요';
@@ -100,8 +106,9 @@ function SobagiReactionScreen() {
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const currentMessage = useEmotionStore((s) => s.currentMessage);
   const lastKind = useEmotionStore((s) => s.lastKind);
+  const lastRecordDate = useEmotionStore((s) => s.lastRecordDate);
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
-  const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
+  const expenses = useExpenseStore((s) => s.expenses);
   const tier = getDialogueTier(recordedDaysCount);
 
   const [photocardBtnVisible, setPhotocardBtnVisible] = useState(false);
@@ -113,30 +120,37 @@ function SobagiReactionScreen() {
 
   const hintOpacity = photocardBtnAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
-  // Computed once at mount — expenses are already loaded when reaction screen renders.
-  const todayExpenses = getTodayExpenses();
+  // The reaction reflects the record that triggered it — which may be a
+  // back-dated save — not "today". `lastRecordDate` is the saved record's local
+  // date (set in record.tsx); fall back to today for any non-save entry.
+  const contextDate = lastRecordDate || getLocalDateString(new Date());
+  const contextExpenses = useMemo(
+    () => expenses.filter((e) => expenseLocalDate(e) === contextDate),
+    [expenses, contextDate],
+  );
   // Latest save's kind — drives the title's kind-aware branch. Read from the
   // emotion store (set alongside emotion/message at save time) rather than
-  // derived from todayExpenses, so a midnight rollover between save and reaction
-  // render can't drop the record from "today" and mis-resolve the title.
+  // derived from expenses, so a midnight rollover between save and reaction
+  // render can't drop the record and mis-resolve the title.
   const latestKind: RecordKind = lastKind;
-  // Photocard entry is gated on the day having at least one *spending* record
-  // (sub-spec B §5.2). Income-only and no-spend-only saves never expose the
-  // photocard handoff. Auto-dismiss still runs; just no button.
-  const todayHasSpending = todayExpenses.some(
+  // Photocard entry is gated on the context day having at least one *spending*
+  // record (sub-spec B §5.2). Income-only and no-spend-only saves never expose
+  // the photocard handoff. Auto-dismiss still runs; just no button.
+  const dateHasSpending = contextExpenses.some(
     (e) => e.kind !== 'income' && e.category !== 'no_spend',
   );
   // Source for the photocard's records block. Excludes no_spend (which is a
   // calendar marker, not a memory line). Income is INCLUDED so PhotocardView's
   // groupByKind can render the 들어온 기록 section on mixed days.
-  const photocardSourceRecords = todayExpenses.filter((e) => e.category !== 'no_spend');
-  // `todayTotal` still computed for the deprecated `amount` prop on PhotocardView
-  // (kept for backward compat; no longer drives layout).
-  const todayTotal = photocardSourceRecords.reduce((sum, e) => sum + e.amount, 0);
-  const now = new Date();
-  const dateStr = formatNumericDate(now);
-  const weekdayLabel = WEEKDAY_LABELS[now.getDay()];
-  const timeLabel = formatTimeLabel(now);
+  const photocardSourceRecords = contextExpenses.filter((e) => e.category !== 'no_spend');
+  // Photocard labels follow the record's date, not "now". The time badge only
+  // makes sense for a real-time (today) save; back-dated saves omit it (their
+  // createdAt is an anchored noon, not a real moment).
+  const isContextToday = contextDate === getLocalDateString(new Date());
+  const contextDt = new Date(contextDate + 'T00:00:00');
+  const dateStr = formatNumericDate(contextDt);
+  const weekdayLabel = WEEKDAY_LABELS[contextDt.getDay()];
+  const timeLabel = isContextToday ? formatTimeLabel(new Date()) : undefined;
   const photocardRecords: PhotocardRecord[] = photocardSourceRecords.map((e) => ({
     id: e.id,
     category: e.category,
@@ -167,6 +181,17 @@ function SobagiReactionScreen() {
     setShowPhotocardModal(false);
   }, []);
 
+  // Android hardware back: while the photocard modal is open it must close the
+  // modal first rather than popping the route. Active only while the modal is
+  // open — when it's closed the default route-back behavior is left untouched.
+  // During the reveal we swallow back (same as the disabled backdrop tap) so it
+  // neither closes the modal nor pops the route mid-develop. No-op on iOS.
+  const handleAndroidBack = useCallback(() => {
+    if (isRevealing) return;
+    closePhotocard();
+  }, [isRevealing, closePhotocard]);
+  useAndroidBack(showPhotocardModal, handleAndroidBack);
+
   useEffect(() => {
     // Auto-dismiss at 3500ms — always runs. Cancelled only when the
     // photocard button reveal supersedes it.
@@ -174,7 +199,7 @@ function SobagiReactionScreen() {
 
     // Income-only or no-spend-only saves never expose the photocard handoff.
     // The auto-dismiss above carries the user back home on its own timer.
-    if (!todayHasSpending) {
+    if (!dateHasSpending) {
       return () => {
         if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
       };
@@ -198,33 +223,46 @@ function SobagiReactionScreen() {
       if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
       clearTimeout(btnTimer);
     };
-  }, [handleClose, todayHasSpending]);
+  }, [handleClose, dateHasSpending]);
 
   return (
-    <Pressable style={styles.container} onPress={handleClose}>
-      <Text style={styles.title}>{getReactionTitle(currentEmotion, tier, latestKind)}</Text>
+    <View style={styles.container}>
+      {/* Backdrop — only the empty background returns home. The content card and
+          controls sit above it and absorb their own taps, so the reaction
+          visual itself never dismisses by accident (manual check #2). */}
+      <Pressable style={styles.backdrop} onPress={handleClose} />
 
-      <View style={styles.heartsRow}>
-        <FloatingHeart emoji="❤️" delay={0} offset={0} />
-        <FloatingHeart emoji="🧡" delay={220} offset={0} />
-        <FloatingHeart emoji="💛" delay={440} offset={0} />
-      </View>
+      {/* Centered reaction card — absorbs its own presses, so tapping the title,
+          hearts, or Sobagi does NOT close; only the surrounding background
+          (the backdrop behind it) does. */}
+      <Pressable style={styles.card} onPress={() => {}}>
+        <Text style={styles.title}>{getReactionTitle(currentEmotion, tier, latestKind)}</Text>
 
-      <SobagiReaction
-        emotion={currentEmotion}
-        message={currentMessage}
-        imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
-      />
+        <View style={styles.heartsRow}>
+          <FloatingHeart emoji="❤️" delay={0} offset={0} />
+          <FloatingHeart emoji="🧡" delay={220} offset={0} />
+          <FloatingHeart emoji="💛" delay={440} offset={0} />
+        </View>
 
-      {/* Hint — fades out as photocard button fades in */}
+        <SobagiReaction
+          emotion={currentEmotion}
+          message={currentMessage}
+          imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI}
+        />
+      </Pressable>
+
+      {/* Hint — pointer-transparent; taps fall through to the backdrop. */}
       <Animated.View style={[styles.hintWrapper, { opacity: hintOpacity }]} pointerEvents="none">
         <Text style={styles.hint}>화면을 탭하면 홈으로</Text>
       </Animated.View>
 
-      {/* Photocard button section — fades in after 1000ms */}
+      {/* Photocard button section — sibling of the backdrop, fades in after
+          1000ms. `box-none` lets taps in the surrounding gaps fall through to
+          the backdrop (still closes), while the buttons capture their own
+          presses and never bubble to handleClose. */}
       <Animated.View
         style={[styles.photocardSection, { opacity: photocardBtnAnim }]}
-        pointerEvents={photocardBtnVisible ? 'auto' : 'none'}
+        pointerEvents={photocardBtnVisible ? 'box-none' : 'none'}
       >
         <Pressable style={styles.photocardBtn} onPress={openPhotocard}>
           <Text style={styles.photocardBtnText}>포토카드 생성</Text>
@@ -234,16 +272,17 @@ function SobagiReactionScreen() {
         </Pressable>
       </Animated.View>
 
-      {/* Photocard modal — full-screen dark overlay */}
+      {/* Photocard modal — full-screen dark overlay. Backdrop and card are
+          separated: only the backdrop Pressable closes; the card absorbs its
+          own presses (stopPropagation) so tapping the card never closes. */}
       {showPhotocardModal && (
         <Pressable style={styles.photocardModal} onPress={isRevealing ? undefined : closePhotocard}>
-          <View style={styles.cardArea}>
+          <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
             <PhotocardView
               quote={currentMessage}
               dateStr={dateStr}
               weekdayLabel={weekdayLabel}
               timeLabel={timeLabel}
-              amount={todayTotal}
               records={photocardRecords}
               currentEmotion={currentEmotion}
               quoteAnimated
@@ -253,15 +292,16 @@ function SobagiReactionScreen() {
               style={[StyleSheet.absoluteFillObject, styles.revealOverlay, { opacity: revealAnim }]}
               pointerEvents="none"
             />
-          </View>
+          </Pressable>
 
-          {/* Visual close affordance — tapping anywhere on modal also closes */}
+          {/* Visual close affordance — pointer-transparent, so taps fall through
+              to the backdrop Pressable and close. */}
           <View style={styles.closeHint} pointerEvents="none">
             <Text style={styles.closeHintText}>✕</Text>
           </View>
         </Pressable>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -272,6 +312,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  card: {
+    alignItems: 'center',
   },
   title: {
     fontSize: 22,

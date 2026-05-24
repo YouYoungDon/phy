@@ -6,12 +6,16 @@ export type TimeOfDayTint = {
   opacity: number;
 };
 
-export function getTimeOfDayTint(hour: number): TimeOfDayTint | null {
-  if (hour >= 5 && hour < 7)   return { color: '#C8D4E8', opacity: 0.07 };
-  if (hour >= 7 && hour < 12)  return null;
-  if (hour >= 12 && hour < 17) return { color: '#F5E8C0', opacity: 0.08 };
-  if (hour >= 17 && hour < 21) return { color: '#E8C070', opacity: 0.09 };
-  return { color: '#2A3048', opacity: 0.10 };
+export type TimeOfDayBackgroundKey = 'morning' | 'afternoon' | 'evening' | 'latenight';
+
+// Pure. Maps a local hour (0-23) to the time-of-day background bucket. Total over
+// all hours: latenight is the else branch, so any value yields a defined key.
+// Buckets: morning 5-12, afternoon 12-17, evening 17-21, latenight 21-5.
+export function getTimeOfDayBackgroundKey(hour: number): TimeOfDayBackgroundKey {
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'latenight';
 }
 
 export function getWarmthOpacity(recordedDaysCount: number): number {

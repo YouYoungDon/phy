@@ -263,6 +263,8 @@ Header (`소소한 기록` / `이번 달을 조용히 돌아봐요`) — unchang
 
 ## Anti-patterns (out of scope)
 
+> **2026-05-24 amendment:** The "no Y-axis / no tappable presence row / bar trend graph gone" constraints were intentionally reversed for the Stats bottom graph by the 2026-05-24 Stats Amount Chart spec. The presence-dot row (`MonthPresenceRow`) was replaced with a readable spending bar chart (x=day, y=amount) with tap-to-select (`MonthAmountChart`). This amendment applies ONLY to the bottom graph; the rest of the stats-evolution direction (no 결산 totals block, single observation line, spending-only) still stands.
+
 This pass must NOT introduce:
 
 - A new monetary metric of any kind (average daily spend, week-over-week delta, year-over-year, projected spend)

@@ -5,9 +5,13 @@ import { COLORS } from '../../constants/colors';
 interface DailySummaryProps {
   totalAmount: number;
   recordCount: number;
+  // Count of spending records only (excludes income + no-spend). When 0, the
+  // amount row is hidden so income-only / no-spend-only days read as a quiet
+  // "left a record" note rather than a ₩0 spending summary.
+  spendingCount: number;
 }
 
-export function DailySummary({ totalAmount, recordCount }: DailySummaryProps) {
+export function DailySummary({ totalAmount, recordCount, spendingCount }: DailySummaryProps) {
   if (recordCount === 0) {
     return (
       <View style={styles.container}>
@@ -22,11 +26,15 @@ export function DailySummary({ totalAmount, recordCount }: DailySummaryProps) {
         <Text style={styles.label}>소소한 기록</Text>
         <Text style={styles.value}>{recordCount}건</Text>
       </View>
-      <View style={styles.divider} />
-      <View style={styles.row}>
-        <Text style={styles.label}>오늘 쓴 기록</Text>
-        <Text style={styles.valueAmount}>{totalAmount.toLocaleString()}원</Text>
-      </View>
+      {spendingCount > 0 && (
+        <>
+          <View style={styles.divider} />
+          <View style={styles.row}>
+            <Text style={styles.label}>오늘 쓴 기록</Text>
+            <Text style={styles.valueAmount}>{totalAmount.toLocaleString()}원</Text>
+          </View>
+        </>
+      )}
     </View>
   );
 }
