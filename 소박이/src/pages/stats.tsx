@@ -80,13 +80,22 @@ function StatsScreen() {
 
   const dayRevealAnim = useRef(new Animated.Value(1)).current;
 
+  type DayAccum = {
+    total: number;
+    count: number;
+    categories: ExpenseCategory[];
+    hasRecord: boolean;
+    hasOnlyNoSpend: boolean;
+  };
+
   const expensesByDate = useMemo(() => {
-    const map: Record<string, { total: number; count: number; categories: ExpenseCategory[]; hasRecord: boolean; hasOnlyNoSpend: boolean }> = {};
+    const map: Record<string, DayAccum> = {};
     for (const e of expenses) {
       const d = getLocalDateString(new Date(e.createdAt));
       if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true };
       map[d].hasRecord = true;
       if (e.category !== 'no_spend') map[d].hasOnlyNoSpend = false;
+      // income counts as presence (hasRecord above) but not toward day total
       if (e.kind === 'income') continue;
       map[d].total += e.amount;
       map[d].count += 1;
