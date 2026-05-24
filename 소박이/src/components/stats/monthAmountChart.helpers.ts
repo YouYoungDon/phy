@@ -1,18 +1,6 @@
 // Pure helpers for MonthAmountChart. No React Native imports — keep unit-testable.
 
 /**
- * Compact amount label for the y-axis (only ever formats maxTotal, midTotal, 0).
- *   0            → "0"
- *   >= 10000     → 만 units, one decimal, trailing .0 dropped (40000 → "4만", 72000 → "7.2만")
- *   0 < n <10000 → nearest 천 (8000 → "8천", 5400 → "5천")
- */
-export function fmtAmt(n: number): string {
-  if (n <= 0) return '0';
-  if (n >= 10000) return `${Math.round(n / 1000) / 10}만`;
-  return `${Math.round(n / 1000)}천`;
-}
-
-/**
  * Pixel height of a day's spending bar.
  *   total <= 0       → 0 (baseline, the component renders a faint empty tick instead)
  *   maxTotal <= 0    → 0 (divide-by-zero guard)

@@ -1,29 +1,4 @@
-import { fmtAmt, barHeightFor, selectMaxTotal } from '../src/components/stats/monthAmountChart.helpers';
-
-describe('fmtAmt', () => {
-  it('formats zero as "0"', () => {
-    expect(fmtAmt(0)).toBe('0');
-  });
-
-  it('formats negative/invalid as "0"', () => {
-    expect(fmtAmt(-100)).toBe('0');
-  });
-
-  it('formats >= 10000 in 만 units, dropping trailing .0', () => {
-    expect(fmtAmt(10000)).toBe('1만');
-    expect(fmtAmt(40000)).toBe('4만');
-  });
-
-  it('formats >= 10000 with one decimal when not whole 만', () => {
-    expect(fmtAmt(72000)).toBe('7.2만');
-    expect(fmtAmt(125000)).toBe('12.5만');
-  });
-
-  it('formats < 10000 in 천 units (nearest 천)', () => {
-    expect(fmtAmt(8000)).toBe('8천');
-    expect(fmtAmt(5400)).toBe('5천');
-  });
-});
+import { barHeightFor, selectMaxTotal } from '../src/components/stats/monthAmountChart.helpers';
 
 describe('barHeightFor', () => {
   const BAR_MAX = 72;

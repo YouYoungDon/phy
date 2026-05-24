@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { COLORS } from '../../constants/colors';
-import { fmtAmt, barHeightFor, selectMaxTotal } from './monthAmountChart.helpers';
+import { barHeightFor, selectMaxTotal } from './monthAmountChart.helpers';
 
 const BAR_MAX = 72;
 const MIN_BAR = 8;
-const Y_AXIS_W = 52;
+const Y_AXIS_W = 60;
 // Weekly date labels — readable for a month without crowding.
 const LABEL_DAYS = new Set([1, 8, 15, 22, 29]);
 
@@ -55,9 +55,9 @@ export function MonthAmountChart({
       <Text style={styles.title}>이달의 흐름</Text>
       <View style={styles.wrapper}>
         <View style={styles.yAxis}>
-          <Text style={styles.yLabel}>{hasAnySpending ? fmtAmt(maxTotal) : ''}</Text>
-          <Text style={styles.yLabel}>{hasAnySpending ? fmtAmt(midTotal) : ''}</Text>
-          <Text style={styles.yLabel}>0</Text>
+          <Text style={styles.yLabel} numberOfLines={1}>{hasAnySpending ? maxTotal.toLocaleString() : ''}</Text>
+          <Text style={styles.yLabel} numberOfLines={1}>{hasAnySpending ? midTotal.toLocaleString() : ''}</Text>
+          <Text style={styles.yLabel} numberOfLines={1}>0</Text>
         </View>
 
         <View style={{ flex: 1 }}>
