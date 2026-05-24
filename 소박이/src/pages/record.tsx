@@ -224,7 +224,7 @@ function RecordScreen() {
       reactionMessage = selectReactionMessage(sobagiEmotion, tier, derivedKind);
     }
 
-    setEmotion(sobagiEmotion, reactionMessage);
+    setEmotion(sobagiEmotion, reactionMessage, derivedKind);
     await saveExpense(expense);
     navigation.navigate('/reaction');
   };

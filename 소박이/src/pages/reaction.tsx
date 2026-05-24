@@ -99,6 +99,7 @@ function SobagiReactionScreen() {
   const navigation = useNavigation();
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const currentMessage = useEmotionStore((s) => s.currentMessage);
+  const lastKind = useEmotionStore((s) => s.lastKind);
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
   const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
   const tier = getDialogueTier(recordedDaysCount);
@@ -114,11 +115,11 @@ function SobagiReactionScreen() {
 
   // Computed once at mount — expenses are already loaded when reaction screen renders.
   const todayExpenses = getTodayExpenses();
-  // Latest save's kind — drives the title's kind-aware branch. `getTodayExpenses`
-  // preserves append order (see expenseStore), so the last item is the record
-  // that just triggered this reaction screen. Default 'spending' if today is
-  // empty (defensive — this screen normally renders after a save).
-  const latestKind: RecordKind = todayExpenses[todayExpenses.length - 1]?.kind ?? 'spending';
+  // Latest save's kind — drives the title's kind-aware branch. Read from the
+  // emotion store (set alongside emotion/message at save time) rather than
+  // derived from todayExpenses, so a midnight rollover between save and reaction
+  // render can't drop the record from "today" and mis-resolve the title.
+  const latestKind: RecordKind = lastKind;
   // Photocard entry is gated on the day having at least one *spending* record
   // (sub-spec B §5.2). Income-only and no-spend-only saves never expose the
   // photocard handoff. Auto-dismiss still runs; just no button.
