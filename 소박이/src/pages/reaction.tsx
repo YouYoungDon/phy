@@ -47,7 +47,11 @@ function getReactionTitle(emotion: SobagiEmotion, tier: 1 | 2 | 3, kind: RecordK
   }
   if (tier === 1) {
     switch (emotion) {
-      case 'surprised': return '처음 들렀네요 ✨';
+      // Title intentionally avoids the bubble's "처음 들렀네요 ✨" wording
+      // (REACTION_POOLS[1].surprised) so the first-record moment doesn't echo
+      // itself with a double ✨. Quieter leaf, marks the day's first step,
+      // preserves the "first visit matters" warmth without the celebratory peak.
+      case 'surprised': return '오늘 첫 걸음이네요 🌿';
       case 'excited':   return '조용히 이어지고 있네요 🌿';
       case 'sleepy':    return '이 시간까지 기록했네요 🌙';
       case 'soft-sad':  return '오늘은 좀 특별한 날이었네요';
