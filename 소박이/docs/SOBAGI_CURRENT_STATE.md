@@ -62,49 +62,55 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-24
-**Group:** Photocard 3-way layout (sub-spec B of "Income records" decomposition)
+**Group:** Income system integration (sub-spec C — closes the "Income records" decomposition A→B→C)
 
 ### What changed
-- **Helper extraction:** `PhotocardRecord` type and a new pure `groupByKind` function moved into `src/components/photocard/photocardGrouping.ts` (no React/RN imports, unit-testable in isolation). `PhotocardView.tsx` re-exports the type for backward-compat with existing callers
-- **PhotocardView refactor:** `totalBlock` (`총 금액 ₩ X` at 18pt bold) removed entirely. Records render in up to 3 grouped sub-sections (쓴 기록 / 들어온 기록 / 무지출) via `groupByKind`. Each group gated on `.length > 0` — empty groups never render a header. Group labels are 9pt muted (`TEXT_MUTED`, letterSpacing 0.3), styled as quiet separators, not section titles
-- **Slicing rule:** `VISIBLE_RECORDS = 3` cap applied across groups in order (spending → income → noSpend). `+ N개 더` overflow accounts for records hidden from any group
-- **`amount` prop deprecated:** kept on `PhotocardViewProps` for backward compat, no longer destructured inside the component, no longer drives layout
-- **reaction.tsx gate:** new `todayHasSpending = todayExpenses.some(e.kind !== 'income' && e.category !== 'no_spend')`. The button-reveal `useEffect` early-returns when `todayHasSpending === false`, so income-only and no-spend-only saves never expose the photocard handoff. Auto-dismiss timer (3500ms) still runs on the no-button path. Variable rename: `todaySpendingExpenses` → `photocardSourceRecords` (name now accurately reflects its filter behavior)
-- **stats.tsx records source:** `photocardRecords` memo now derives from `selectedExpenses.filter((e) => e.category !== 'no_spend')` instead of `selectedSpendingExpenses`. The entry-point gate `selectedSpendingExpenses.length > 0` (around the `포토카드 생성` button) is unchanged — income-only days still hide the button
-- **Tests:** new `__tests__/photocardGrouping.test.ts` covers 7 cases (empty, all-income, all-no_spend, defensive no_spend override when kind is mistakenly income, legacy-no-kind fallback, intra-group order preservation, fully mixed day)
+- **Emotion engine** (`src/services/emotionEngine.ts`): new private `evaluateIncome` subroutine. 2-rule chain: `currentHour >= 22` → `'sleepy'`, else → `'happy'`. `evaluate()` routes `kind === 'income'` through it as the first branch. Spending chain (5 rules) unchanged.
+- **Caller migration** (`src/pages/record.tsx`): removed the `derivedKind === 'income' ? 'happy' : evaluate(...)` ternary. `evaluate(...)` is now called unconditionally with `kind: derivedKind` in the synthetic expense argument. The engine is the single source of truth for emotion resolution.
+- **Dialogue** (`src/constants/dialogue.ts`, `src/services/dialogueService.ts`): new `INCOME_REACTION_POOLS` indexed by tier only (3 tiers × 3 lines). `selectReactionMessage(emotion, tier, kind = 'spending')` — third param defaulted to `'spending'` for backward compat. Income calls return from the income pool; emotion is ignored on income (kind-gated, not emotion-gated). `REACTION_POOLS` and `OBSERVATION_POOLS` untouched. Vocabulary guard test sweeps all 14 spec-banned terms × 9 income lines.
+- **Caller migration** (`src/pages/record.tsx`): `selectReactionMessage(sobagiEmotion, tier, derivedKind)` now passes the third arg explicitly.
+- **MonthPresenceRow** (`src/components/stats/MonthPresenceRow.tsx`, `src/pages/stats.tsx`): `DayCellData` extended with `hasRecord: boolean` and `hasOnlyNoSpend: boolean`. `glyphFor` checks `hasOnlyNoSpend` first (→ `🌿`), then `hasRecord` (→ `●`). Income-only days now render `●`. `stats.tsx` accumulator (`expensesByDate`) populates both new fields BEFORE the `kind === 'income' continue`, so income counts as presence but not toward day total. Per-day reducer type extracted to named `DayAccum`.
+- **Night pattern detector** (`src/services/roomPresenceService.ts`): `hasNightPattern` now filters `kind !== 'income'` at the function entry so income timestamps (e.g., late-night salary deposit notifications) don't impersonate user late-night presence. Parameter name preserved; only internal reference renamed.
+- **Stats observation** (`src/services/statsObservationService.ts`): new helper `computeIncomeDayCount` (counts distinct income days in trailing 30, using a `Set<string>`). New branch in `selectStatsObservation` at position 4 (after calm-day, before streak ≥ 7): when `>= 2` income days in last 30 → returns `'들어온 일이 종종 있었어요 🍃'`. Lifestyle texture (cafe / night / calm) still wins. Multiple income records on the same day count as 1.
+- **Tests**: +23 across `__tests__/emotionEngine.test.ts` (8), `__tests__/dialogueService.test.ts` (7), `src/services/__tests__/roomPresenceService.test.ts` (2), `__tests__/statsObservationService.test.ts` (6). Includes explicit negative tests proving income emotion ignores `isFirstRecordToday`, `amount`, `currentStreak`, and that `'surprised'` is never returned for income across any context combination. Final count: 16 suites / 273 tests, all green.
+- **Memory**: `feedback_sobagi_allowance_giving_scene.md` narrowed (controller task). The 2026-05-19 blanket ban on "income tracking" was clarified to target *gameified* tracking only (totals, balance, savings, comparison framing) — sub-specs A/B/C added income as a quiet observational shape, which is permitted.
 
 ### What's now working
-- Spending-only photocard reads quieter: no aggregate `총 금액` block. The Sobagi quote at the bottom of the right panel is the loudest emotional element
-- Mixed-day photocard (spending + income) shows `쓴 기록` group followed by `들어온 기록` group, with the sub-spec A amount-hide rule preserved (income `amount===0` rows skip the amount column)
-- Income-only save on reaction screen: no photocard button reveals; auto-dismiss returns to home at 3500ms
-- Income-only day in stats: no `포토카드 생성` button (unchanged from sub-spec A)
-- No-spend-only day in stats: no `포토카드 생성` button (unchanged)
+- Income save at any hour resolves through `evaluateIncome` with warmth tone, never event/celebration tone.
+- Dialogue for income is kind-gated and tonally coherent across all tier × emotion combinations.
+- Stats screen surfaces income as quiet recurrence (`들어온 일이 종종 있었어요 🍃`), never as number or comparison.
+- MonthPresenceRow reads income-only days as presence (`●`) without categorizing them as a financial event.
+- Night pattern stays anchored to user behavior, not system-generated income timestamps.
 
 ### Preserved (regression-confirmed)
-- Left panel mood asset, time badge, reveal animation, modal overlay — all untouched
-- `PhotocardMoodAsset` / `getPhotocardMoodAsset` / weather / spendingLevel paths unchanged
-- Sub-spec A's per-record amount-hide rule (`r.kind !== 'income' || r.amount > 0`) preserved
-- `selectedSpendingExpenses`, `expensesByDate.total` (income-excluded), `topCategoryThisMonth` — unchanged
-- No storage keys added/removed; no migration
-- `emotionEngine`, dialogue pools, pebble services, found-item, room-presence — all untouched
+- `SobagiEmotion` union — unchanged 5 tokens (`'happy' | 'excited' | 'surprised' | 'sleepy' | 'soft-sad'`).
+- `EMOTION_MESSAGES`, `VALID_EMOTIONS`, mood asset resolver — untouched.
+- `expenseService.recordNoSpend` — still emits `'happy'`.
+- `restService` / pebble jar / rest letters — untouched. No new code path writes pebble state.
+- `foundItemService` T1/T2/T3/T4 — kind-agnostic presence-shape triggers preserved (T1/T2/T3 count income as presence; T4 is category-gated).
+- `hasCategoryPattern` (cafe), `computeCalmDayCount` (atmosphere) — kept spending-keyed.
+- Photocard components — sub-spec B baseline untouched.
+- Storage keys, schema, hydration shape — no additions, no migrations.
 
-### Fragile or surprising
-- The 무지출 group in `PhotocardView` is currently unreachable in practice (no-spend records can't coexist with spending records by the record-screen gate). The conditional path exists for forward compatibility and is covered by `groupByKind` tests
-- `amount` prop on `PhotocardViewProps` is deprecated but accepted; callers still pass it. A follow-up commit can drop it once all caller sites are clean — not blocking
-- `todayTotal` in `reaction.tsx` is still computed (feeds the deprecated `amount` prop). Removable in the same follow-up
+### Surfaced for product review (not landed)
+- **Tier 2/3 income dialogue copy differentiation**: code-quality review of Task 3 noted that tier 2's first line ("들어온 날이 있네요") reads flat, and tier 3 recycles "든든" framing from tier 1, weakening the tier progression. Copy review pass recommended.
+- **Calendar (🌿) vs MonthPresenceRow (●) visual mismatch on income-only days**: spec keeps the calendar grid out of sub-spec C scope (Section 15) — calendar still uses `data.total === 0` discriminator, so an income-only day shows `🌿` on the calendar while `●` on the presence row. May be intentional (two semantic axes — spend amount vs visit shape) but worth a product call before considering it final.
 
 ### What the next agent must NOT do
-- Lift the quote to the top of the right panel — that's deferred typography work outside sub-spec B scope
-- Add per-group subtotals, income-vs-spending comparison framing, or "수입" UI text
-- Reintroduce a `총 금액` block in any form
-- Touch the left panel, mood asset resolver, or modal overlay
-- Add storage migration; `kind` continues to be hydration-normalized
+- Add a new `SobagiEmotion` token (`'calm'` / `'relief'` / `'warm'` / etc.).
+- Re-route income to `'surprised'` on first-of-day, or any context-combination-routed event tone.
+- Grant pebbles on any income code path.
+- Introduce income totals, net balance, or comparison framing anywhere.
+- Add a differentiated MonthPresenceRow glyph for income.
+- Touch `hasCategoryPattern`, `computeCalmDayCount`, or T4 to "include" income — they are spending-keyed by design.
+- Re-introduce the `derivedKind === 'income' ? 'happy' : evaluate(...)` ternary in `record.tsx`.
+- Add per-category income observations to `selectStatsObservation`.
 
 ### No new storage keys
 No storage keys were added, removed, or renamed.
 
 ### Next
-Sub-spec C is **scoped and ready for engineering.** Spec: `docs/superpowers/specs/2026-05-24-income-system-integration-design.md`. Plan: `docs/superpowers/plans/2026-05-24-income-system-integration.md`. 9 tasks across emotion engine, dialogue pool, MonthPresenceRow, night-pattern detector, stats observation, and memory hygiene. Baseline for engineering: HEAD `13b3691`, 16 suites · 250 tests green.
+The "Income records" decomposition (A → B → C) is complete. Backlog items in `SOBAGI_NEXT_PRIORITIES.md` resume normal priority order: rest-TV production ad ID swap, photocard small polish (time-of-day label / Sobagi signature / early-dismiss guard), Android keyboard verification, two product items above for review.
 
 ---
 
@@ -140,7 +146,7 @@ Sub-spec C is **scoped and ready for engineering.** Spec: `docs/superpowers/spec
 | Save-helper for 0원 amount (gentle pointer to no-spend flow) | `src/pages/record.tsx` |
 | 쉬어가기 TV — soft rewarded-ad system (5-20 pebble grant, 60-min warmth fade, rest letters at 30/100/250/500/1000 thresholds, jar with 4 fill stages, 2-per-day cap, daily reset via `effectiveRestsToday`) | `src/services/restService.ts`, `src/hooks/useRestedAd.ts`, `src/components/room/RestTV.tsx`, `src/components/room/PebbleJar.tsx`, `src/components/room/RestPrompt.tsx`, `src/constants/restLetters.ts`, `src/constants/ads.ts`, `src/pages/index.tsx` |
 | Stats screen evolution — 결산 block replaced by 3-group observation (cadence lines → top-scene chip → rotating observation); MonthTrendGraph → MonthPresenceRow; calendar amount color softened; `selectStatsObservation` 7-branch chain | `src/pages/stats.tsx`, `src/services/statsObservationService.ts`, `src/components/stats/MonthPresenceRow.tsx` |
-| Income record data model (sub-spec A) — `RecordKind` type; 5 income category tokens; `kindForCategory` / `INCOME_CATEGORIES` / `GENERAL_SPENDING_CATEGORIES` registry helpers; `normalizeExpense` hydration; record screen kind toggle; photocard `kind?` interim patch; stats income section + filter exclusions; `ExpensePatch.kind` required | `src/types/index.ts`, `src/constants/categories.ts`, `src/services/expenseService.ts`, `src/hooks/useAppInit.ts`, `src/pages/record.tsx`, `src/pages/stats.tsx`, `src/pages/reaction.tsx`, `src/components/photocard/PhotocardView.tsx`, `src/store/expenseStore.ts` |
+| Income record system (sub-specs A/B/C) — `RecordKind` type; 5 income category tokens; `kindForCategory` / `INCOME_CATEGORIES` / `GENERAL_SPENDING_CATEGORIES` helpers; `normalizeExpense` hydration; record screen kind toggle; photocard 3-way grouped layout (쓴 기록 / 들어온 기록 / 무지출, `totalBlock` removed); `todayHasSpending` gate on reaction screen; `evaluateIncome` 2-rule subroutine (hour ≥ 22 → `'sleepy'`, else → `'happy'`); `INCOME_REACTION_POOLS` kind-gated dialogue (3 tiers × 3 lines); `MonthPresenceRow` income-only days render `●`; `hasNightPattern` filters income timestamps; `selectStatsObservation` income branch (`들어온 일이 종종 있었어요 🍃` at ≥ 2 income days in 30) | `src/types/index.ts`, `src/constants/categories.ts`, `src/constants/dialogue.ts`, `src/services/expenseService.ts`, `src/services/emotionEngine.ts`, `src/services/dialogueService.ts`, `src/services/roomPresenceService.ts`, `src/services/statsObservationService.ts`, `src/hooks/useAppInit.ts`, `src/pages/record.tsx`, `src/pages/stats.tsx`, `src/pages/reaction.tsx`, `src/components/photocard/PhotocardView.tsx`, `src/components/photocard/photocardGrouping.ts`, `src/components/stats/MonthPresenceRow.tsx`, `src/store/expenseStore.ts` |
 
 ### Planned (designed, not built)
 
