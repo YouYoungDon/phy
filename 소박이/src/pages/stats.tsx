@@ -5,7 +5,7 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
 import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
@@ -91,7 +91,7 @@ function StatsScreen() {
   const expensesByDate = useMemo(() => {
     const map: Record<string, DayAccum> = {};
     for (const e of expenses) {
-      const d = getLocalDateString(new Date(e.createdAt));
+      const d = expenseLocalDate(e);
       if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true };
       map[d].hasRecord = true;
       if (e.category !== 'no_spend') map[d].hasOnlyNoSpend = false;
@@ -105,7 +105,7 @@ function StatsScreen() {
   }, [expenses]);
 
   const selectedExpenses = useMemo(
-    () => expenses.filter((e) => getLocalDateString(new Date(e.createdAt)) === selectedDay),
+    () => expenses.filter((e) => expenseLocalDate(e) === selectedDay),
     [expenses, selectedDay],
   );
 
@@ -193,7 +193,7 @@ function StatsScreen() {
     for (const e of expenses) {
       if (e.category === 'no_spend') continue;
       if (e.kind === 'income') continue;
-      if (!getLocalDateString(new Date(e.createdAt)).startsWith(prefix)) continue;
+      if (!expenseLocalDate(e).startsWith(prefix)) continue;
       counts[e.category] = (counts[e.category] ?? 0) + 1;
     }
     return (Object.entries(counts) as [ExpenseCategory, number][])
@@ -212,7 +212,7 @@ function StatsScreen() {
     const endStr = getLocalDateString(weekEnd);
     const days = new Set<string>();
     for (const e of expenses) {
-      const d = getLocalDateString(new Date(e.createdAt));
+      const d = expenseLocalDate(e);
       if (d >= startStr && d <= endStr) days.add(d);
     }
     return days.size;
@@ -223,7 +223,7 @@ function StatsScreen() {
     const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
     const days = new Set<string>();
     for (const e of expenses) {
-      const d = getLocalDateString(new Date(e.createdAt));
+      const d = expenseLocalDate(e);
       if (d.startsWith(prefix)) days.add(d);
     }
     return days.size;
@@ -351,12 +351,18 @@ function StatsScreen() {
   const commitEdit = useCallback(() => {
     if (!editingExpense) return;
     const parsed = parseInt(editAmount.replace(/[^0-9]/g, ''), 10);
-    if (isNaN(parsed) || parsed <= 0) return;
+    if (isNaN(parsed)) return;
+    // Income records may legitimately carry amount=0 (matches the save flow's
+    // `금액 (선택)` affordance). Spending records still require a positive
+    // amount — they're meaningful only when there's something to record.
+    const nextKind = kindForCategory(editCategory);
+    if (nextKind !== 'income' && parsed <= 0) return;
+    if (parsed < 0) return;
     persistUpdateExpense(editingExpense.id, {
       amount: parsed,
       category: editCategory,
       memo: editMemo.trim() || undefined,
-      kind: kindForCategory(editCategory),
+      kind: nextKind,
     });
     closeEdit();
   }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
@@ -428,11 +434,22 @@ function StatsScreen() {
                           // No-spend-only day: render a quiet leaf instead of "0".
                           // Same slot/size as the amount text, just a different glyph,
                           // so the calendar layout stays untouched.
-                          <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}>
+                          <Text
+                            style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}
+                            numberOfLines={1}
+                          >
                             🌿
                           </Text>
                         ) : (
-                          <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}>
+                          // numberOfLines={1} + ellipsis prevents very large totals
+                          // (max-allowed input is 9,999,999,999) from wrapping and
+                          // bloating the calendar cell height. ~50pt cell width can't
+                          // fit 13+ chars at fontSize 9 without truncation.
+                          <Text
+                            style={[styles.dayAmount, isSelected && styles.dayAmountSelected]}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
                             {data.total.toLocaleString('ko-KR')}
                           </Text>
                         )
@@ -468,16 +485,23 @@ function StatsScreen() {
                 ]}
               >
                 <Text style={styles.incomeSectionTitle}>들어온 기록</Text>
-                {selectedIncomeExpenses.map((r) => {
+                {selectedIncomeExpenses.map((r, idx) => {
                   const cat = CATEGORY_BY_TOKEN[r.category];
                   return (
-                    <Pressable key={r.id} style={styles.incomeRow} onPress={() => openEdit(r)}>
-                      <Text style={styles.incomeIcon}>{cat?.emoji ?? '·'}</Text>
-                      <Text style={styles.incomeLabel}>{cat?.label ?? r.category}</Text>
-                      {r.amount > 0 && (
-                        <Text style={styles.incomeAmount}>{r.amount.toLocaleString()}원</Text>
-                      )}
-                    </Pressable>
+                    <React.Fragment key={r.id}>
+                      {idx > 0 && <View style={styles.recordDivider} />}
+                      <Pressable style={styles.incomeRow} onPress={() => openEdit(r)}>
+                        <Text style={styles.incomeIcon}>{cat?.emoji ?? '·'}</Text>
+                        <Text style={styles.incomeLabel}>{cat?.label ?? r.category}</Text>
+                        {r.userEmotion ? (
+                          <Text style={styles.incomeEmotion}>{r.userEmotion}</Text>
+                        ) : null}
+                        {r.amount > 0 && (
+                          <Text style={styles.incomeAmount}>{r.amount.toLocaleString()}원</Text>
+                        )}
+                        <Text style={styles.recordChevron}>›</Text>
+                      </Pressable>
+                    </React.Fragment>
                   );
                 })}
               </View>
@@ -910,9 +934,14 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginLeft: 4,
   },
+  incomeEmotion: {
+    fontSize: 14,
+    marginRight: 6,
+  },
   incomeAmount: {
     fontSize: 12,
     color: COLORS.textMuted,
+    marginRight: 4,
   },
   incomeSectionStandalone: {
     borderTopWidth: 0,

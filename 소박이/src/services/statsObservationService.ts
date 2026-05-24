@@ -6,7 +6,7 @@ import {
   type NightPatternOpts,
 } from './roomPresenceService';
 import { computeCalmDayCount } from './atmosphereService';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 
 // ─── Stats observation — single rotating line ───────────────────────────────
 //
@@ -44,7 +44,7 @@ function computeIncomeDayCount(expenses: Expense[], today: string): number {
   const incomeDays = new Set<string>();
   for (const e of expenses) {
     if (e.kind !== 'income') continue;
-    const day = getLocalDateString(new Date(e.createdAt));
+    const day = expenseLocalDate(e);
     if (day < cutoff || day > today) continue;
     incomeDays.add(day);
   }

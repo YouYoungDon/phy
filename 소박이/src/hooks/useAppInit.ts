@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Image } from 'react-native';
+import { Image, AppState, AppStateStatus } from 'react-native';
 import * as storageService from '../services/storageService';
 import { runExpenseCategoryMigration } from '../services/expenseMigration';
 import { normalizeExpense } from '../services/expenseService';
@@ -18,7 +18,7 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getLevel, getRoomStage } from '../store/userStore';
 import { useEmotionStore } from '../store/emotionStore';
 import { Expense, UserState, SobagiEmotion } from '../types';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 
 let appInitialized = false;
 let prevVisitDate: string | null = null;
@@ -65,12 +65,43 @@ export function getPrevVisitDate(): string | null {
 }
 
 function computeRecordedDaysCount(expenses: Expense[]): number {
-  return new Set(expenses.map((e) => getLocalDateString(new Date(e.createdAt)))).size;
+  return new Set(expenses.map((e) => expenseLocalDate(e))).size;
+}
+
+// Refreshes the visit-date anchor when the app returns to the foreground.
+// The RN process can stay alive across days while backgrounded; the one-time
+// init in useAppInit won't re-run, so without this the `prevVisitDate` module
+// var and the stored LAST_VISIT_DATE would go stale and returnAfterGap would
+// mis-detect. Only updates when the local day has actually changed, so repeated
+// same-day foregrounds are no-ops. Deliberately does NOT re-run found-item /
+// placement / letter logic — those are tied to the first record of a day and
+// re-running them here risks double-triggering.
+async function refreshVisitState(): Promise<void> {
+  try {
+    const today = getLocalDateString(new Date());
+    const storedVisitDate = await storageService.load<string>(STORAGE_KEYS.LAST_VISIT_DATE);
+    if (storedVisitDate !== today) {
+      prevVisitDate = storedVisitDate;
+      void storageService.save(STORAGE_KEYS.LAST_VISIT_DATE, today);
+    }
+  } catch {
+    // Best-effort — a missed refresh just leaves the prior (still-valid) anchor.
+  }
 }
 
 export function useAppInit(): boolean {
   useEffect(() => {
-    if (appInitialized) return;
+    // Foreground listener — registered once, persists for the app lifetime
+    // (useAppInit lives on the always-mounted root). Refreshes day-sensitive
+    // visit state when the app re-activates after being backgrounded across a
+    // day boundary. Registered outside the appInitialized guard so it survives
+    // even if the heavy init already ran.
+    const handleAppStateChange = (next: AppStateStatus) => {
+      if (next === 'active') void refreshVisitState();
+    };
+    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
+
+    if (appInitialized) return () => appStateSub.remove();
     appInitialized = true;
 
     // Kick prefetches off first so they overlap with storage I/O. They're
@@ -144,6 +175,8 @@ export function useAppInit(): boolean {
     }
 
     loadStored();
+
+    return () => appStateSub.remove();
   }, []);
 
   return true;

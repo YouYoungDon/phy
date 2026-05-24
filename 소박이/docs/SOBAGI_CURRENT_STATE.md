@@ -62,6 +62,40 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-24
+**Group:** Stress-test hardening sweep (9 fixes — robustness/overflow/race audit)
+
+### What changed (stress-test sweep)
+- **Bug A — delete recompute** (`expenseService.deleteExpense`, `userStore`): deleting a record now recomputes `recordedDaysCount`, `streak`, and `totalRecordCount` from the remaining expenses + persists. Previously deletion left level/tier/streak inflated until the next app init. New `setRecordedDaysCount` / `setTotalRecordCount` store actions.
+- **Bug B — calendar amount overflow** (`stats.tsx`): `dayAmount` cell clamped to `numberOfLines={1}` + tail ellipsis so max-input totals (9,999,999,999) can't wrap and bloat the grid.
+- **Bug C — double-save race** (`record.tsx`): `isSavingRef` synchronous guard on `handleSave`/`handleNoSpend` prevents a fast double-tap from slipping a second save past the async `isSaving` state.
+- **Bug D — income row UX** (`stats.tsx`): income rows in the day card gained a divider between rows + a chevron, matching the spending list's edit affordance.
+- **Edge E — id collisions** (`utils/id.ts`): `generateExpenseId()` (timestamp + 6 random base36) replaces `Date.now().toString()` so same-ms saves can't collide.
+- **Edge F — storage durability** (`storageService`): `save` retries a transient write failure once and returns a success boolean; `saveExpense` awaits the EXPENSES/USER writes instead of fire-and-forget. Serialization failures aren't retried.
+- **Edge G — foreground refresh** (`useAppInit`): an `AppState` 'active' listener refreshes the visit-date anchor when the app returns from background across a day boundary (the one-time init won't re-run). Does not re-trigger found-item/placement/letter logic.
+- **Edge H — timezone stability** (`Expense.localDate` + `expenseLocalDate` helper): records capture their local calendar date at creation; all 27 day-grouping read sites route through the helper (prefers `localDate`, falls back to `createdAt`-derived for legacy). Behavior-preserving for non-travelers; stabilizes a record's day across tz changes.
+- **Edge I — midnight race** (`emotionStore.lastKind`): the reaction title's kind is carried on the emotion store at save time rather than re-derived from `getTodayExpenses()`, so a midnight rollover between save and reaction render can't mis-resolve it.
+
+### Test count
+**17 suites · 285 tests · all green.** (+5 expenseLocalDate, +3 storageService over the post-QA sweep's 277.)
+
+---
+
+### Earlier handoff (sub-spec C post-QA polish sweep — 5 fixes)
+
+### What changed (post-C sweep)
+- **Bug fix — calm-day income contamination** (`src/services/atmosphereService.ts`): `computeCalmDayCount` now filters `kind === 'income'` before computing daily totals. Previously, a large salary deposit could push a low-spending day above the 10,000 KRW calm threshold, and an income-only day with no spending could falsely count as calm. Affected two surfaces: `getCalmAtmosphereOpacity` (HomeScreen brightening) and `selectStatsObservation`'s calm branch. +4 regression tests covering the contamination paths.
+- **Bug fix — edit sheet rejected amount=0 income** (`src/pages/stats.tsx`): `commitEdit`'s `parsed <= 0` guard silently rejected income records edited to amount 0, even though the save flow explicitly allows this (income's `금액 (선택)` affordance). Spending edits still require a positive amount.
+- **Bug fix — `isFirstRecordToday` consumed by income** (`src/pages/record.tsx`): A salary deposit logged at 10am was consuming the 'surprised' welcome slot from the user's first spending touchpoint later that day. `isFirstRecordToday` now filters `kind !== 'income'`. No-spend records still count toward the slot since they're deliberate presence check-ins.
+- **Polish — `getReactionTitle` kind-aware** (`src/pages/reaction.tsx`): Title surface above Sobagi now branches on the latest record's kind. Income titles use a separate 3-tier track (`오늘은 든든한 날이에요 🌿` / `들어온 날이네요 🍃` / `들어왔네요 🍃`) with wording distinct from `INCOME_REACTION_POOLS`, so title + bubble complement rather than duplicate. New `latestKind` derivation reads the last record from `getTodayExpenses()`.
+- **Polish — income row userEmotion display** (`src/pages/stats.tsx`): Income picker already accepted `userEmotion` but the saved value was never surfaced. Income rows in the stats day card now show the emoji between label and amount, matching the spending list's emotion column. Existing income records with saved emotions start showing immediately.
+
+### Test count
+**16 suites · 277 tests · all green.** (+4 from the calm-day income regression tests.)
+
+---
+
+### Earlier handoff (sub-spec C landing)
+
 **Group:** Income system integration (sub-spec C — closes the "Income records" decomposition A→B→C)
 
 ### What changed
@@ -72,7 +106,7 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 - **MonthPresenceRow** (`src/components/stats/MonthPresenceRow.tsx`, `src/pages/stats.tsx`): `DayCellData` extended with `hasRecord: boolean` and `hasOnlyNoSpend: boolean`. `glyphFor` checks `hasOnlyNoSpend` first (→ `🌿`), then `hasRecord` (→ `●`). Income-only days now render `●`. `stats.tsx` accumulator (`expensesByDate`) populates both new fields BEFORE the `kind === 'income' continue`, so income counts as presence but not toward day total. Per-day reducer type extracted to named `DayAccum`.
 - **Night pattern detector** (`src/services/roomPresenceService.ts`): `hasNightPattern` now filters `kind !== 'income'` at the function entry so income timestamps (e.g., late-night salary deposit notifications) don't impersonate user late-night presence. Parameter name preserved; only internal reference renamed.
 - **Stats observation** (`src/services/statsObservationService.ts`): new helper `computeIncomeDayCount` (counts distinct income days in trailing 30, using a `Set<string>`). New branch in `selectStatsObservation` at position 4 (after calm-day, before streak ≥ 7): when `>= 2` income days in last 30 → returns `'들어온 일이 종종 있었어요 🍃'`. Lifestyle texture (cafe / night / calm) still wins. Multiple income records on the same day count as 1.
-- **Tests**: +23 across `__tests__/emotionEngine.test.ts` (8), `__tests__/dialogueService.test.ts` (7), `src/services/__tests__/roomPresenceService.test.ts` (2), `__tests__/statsObservationService.test.ts` (6). Includes explicit negative tests proving income emotion ignores `isFirstRecordToday`, `amount`, `currentStreak`, and that `'surprised'` is never returned for income across any context combination. Final count: 16 suites / 273 tests, all green.
+- **Tests**: +23 across `__tests__/emotionEngine.test.ts` (8), `__tests__/dialogueService.test.ts` (7), `src/services/__tests__/roomPresenceService.test.ts` (2), `__tests__/statsObservationService.test.ts` (6). Includes explicit negative tests proving income emotion ignores `isFirstRecordToday`, `amount`, `currentStreak`, and that `'surprised'` is never returned for income across any context combination. Final count: 16 suites / 273 tests, all green. (Later sweeps brought this to 17 suites / 285 — see top handoff.)
 - **Memory**: `feedback_sobagi_allowance_giving_scene.md` narrowed (controller task). The 2026-05-19 blanket ban on "income tracking" was clarified to target *gameified* tracking only (totals, balance, savings, comparison framing) — sub-specs A/B/C added income as a quiet observational shape, which is permitted.
 
 ### What's now working
@@ -197,24 +231,9 @@ sobagi-last-rest-at            → ISO string           drives 60-min rest-warmt
 
 ## Known Issues
 
-### Fix required
-- **Warmth color mismatch** — `PhotocardView.tsx` line 76: `'#C87941'` → `'#E8C070'`
-- **DayFeelingCard future dates** — renders for dates > today; guard `dateStr <= todayStr`
-- **Photocard early dismiss** — `onPress` is live from t=0; needs `isRevealing` guard for first 1.8s
-
-### Copy / tone
-- `"잘 기록해뒀어요"` (Tier 1 happy pool) — "잘" borderline against evaluation anti-pattern
-- `"오늘도 수고했어요"` (IDLE_MESSAGES) — "수고했어요" evaluates effort; replace with observational
-
-### UX gaps
-- Emotion picker missing `(선택)` label
-- Trend graph bars not tappable
-- Photocard quote `fontStyle: italic` reads as formal caption; recommend removing
-
 ### Long-term pacing
 - Floating hearts on every record — charming at #1, performative by #30
 - Dialogue tier transitions are hard thresholds — tone shifts abruptly at day 7 and day 30
-- Settlement section bold monetary totals compete with emotional identity
 
 ### Technical
 - Pre-existing TS error in `_404.tsx` — not blocking, not recently introduced

@@ -15,8 +15,9 @@ describe('storageService', () => {
 
   it('save serializes value and calls Storage.setItem', async () => {
     mockStorage.setItem.mockResolvedValue(undefined);
-    await storageService.save('test-key', { foo: 1 });
+    const ok = await storageService.save('test-key', { foo: 1 });
     expect(mockStorage.setItem).toHaveBeenCalledWith('test-key', '{"foo":1}');
+    expect(ok).toBe(true);
   });
 
   it('load deserializes and returns value', async () => {
@@ -31,9 +32,35 @@ describe('storageService', () => {
     expect(result).toBeNull();
   });
 
-  it('save does not throw when Storage.setItem fails', async () => {
+  it('save returns false (no throw) when Storage.setItem fails after retries', async () => {
     mockStorage.setItem.mockRejectedValue(new Error('Storage error'));
-    await expect(storageService.save('key', 'value')).resolves.toBeUndefined();
+    await expect(storageService.save('key', 'value')).resolves.toBe(false);
+    // Retried once: 2 attempts total.
+    expect(mockStorage.setItem).toHaveBeenCalledTimes(2);
+  });
+
+  it('save returns true on first success without retrying', async () => {
+    mockStorage.setItem.mockResolvedValue(undefined);
+    const ok = await storageService.save('key', 'value');
+    expect(ok).toBe(true);
+    expect(mockStorage.setItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('save retries once then succeeds on the second attempt', async () => {
+    mockStorage.setItem
+      .mockRejectedValueOnce(new Error('transient'))
+      .mockResolvedValueOnce(undefined);
+    const ok = await storageService.save('key', 'value');
+    expect(ok).toBe(true);
+    expect(mockStorage.setItem).toHaveBeenCalledTimes(2);
+  });
+
+  it('save returns false without retrying when value is unserializable', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const ok = await storageService.save('key', circular);
+    expect(ok).toBe(false);
+    expect(mockStorage.setItem).not.toHaveBeenCalled();
   });
 
   it('load returns null when Storage.getItem fails', async () => {

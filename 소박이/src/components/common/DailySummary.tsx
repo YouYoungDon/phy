@@ -24,7 +24,7 @@ export function DailySummary({ totalAmount, recordCount }: DailySummaryProps) {
       </View>
       <View style={styles.divider} />
       <View style={styles.row}>
-        <Text style={styles.label}>오늘 소비</Text>
+        <Text style={styles.label}>오늘 쓴 기록</Text>
         <Text style={styles.valueAmount}>{totalAmount.toLocaleString()}원</Text>
       </View>
     </View>

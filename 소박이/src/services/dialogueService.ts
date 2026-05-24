@@ -1,6 +1,6 @@
 import { SobagiEmotion, Expense, RecordKind } from '../types';
 import { DialogueTier, REACTION_POOLS, INCOME_REACTION_POOLS, OBSERVATION_POOLS } from '../constants/dialogue';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 
 export type ObservationType = 'timeOfDay' | 'categoryWarm' | 'returnAfterGap' | 'quietDays';
 
@@ -72,7 +72,7 @@ export function detectObservationType(ctx: ObservationContext): ObservationType 
   const sevenDaysAgoStr = getLocalDateString(sevenDaysAgo);
 
   const recentExpenses = ctx.expenses.filter(
-    (e) => getLocalDateString(new Date(e.createdAt)) >= sevenDaysAgoStr,
+    (e) => expenseLocalDate(e) >= sevenDaysAgoStr,
   );
 
   const currentZone = getTimeZone(ctx.currentHour);
@@ -88,7 +88,7 @@ export function detectObservationType(ctx: ObservationContext): ObservationType 
   if (warmCount >= 6) return 'categoryWarm';
 
   const recentDays = new Set(
-    recentExpenses.map((e) => getLocalDateString(new Date(e.createdAt))),
+    recentExpenses.map((e) => expenseLocalDate(e)),
   ).size;
   if (recentDays < 3) return 'quietDays';
 

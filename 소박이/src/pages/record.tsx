@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -30,7 +30,8 @@ import {
   kindForCategory,
 } from '../constants/categories';
 import { BottomTabs } from '../components/common/BottomTabs';
-import { getLocalDateString, localDateToISOString } from '../utils/date';
+import { getLocalDateString, localDateToISOString, expenseLocalDate } from '../utils/date';
+import { generateExpenseId } from '../utils/id';
 
 export const Route = createRoute('/record', {
   validateParams: (params) => params,
@@ -46,9 +47,11 @@ const USER_EMOTIONS = [
 ];
 
 const MAX_PAST_DAYS = 30;
-const DATE_OPTIONS: { dateStr: string; label: string }[] = Array.from(
-  { length: MAX_PAST_DAYS + 1 },
-  (_, i) => {
+
+// Built per render (keyed on today's local date) rather than once at module
+// load, so opening the record screen after midnight shows the correct chips.
+function buildDateOptions(): { dateStr: string; label: string }[] {
+  return Array.from({ length: MAX_PAST_DAYS + 1 }, (_, i) => {
     const daysAgo = MAX_PAST_DAYS - i;
     const d = new Date();
     d.setDate(d.getDate() - daysAgo);
@@ -58,12 +61,13 @@ const DATE_OPTIONS: { dateStr: string; label: string }[] = Array.from(
       daysAgo === 1 ? '어제' :
       `${d.getMonth() + 1}/${d.getDate()}`;
     return { dateStr, label };
-  },
-);
+  });
+}
 
 function RecordScreen() {
   const navigation = useNavigation();
   const todayStr = getLocalDateString(new Date());
+  const dateOptions = useMemo(() => buildDateOptions(), [todayStr]);
   const [recordKind, setRecordKind] = useState<RecordKind>('spending');
   const [amountText, setAmountText] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('cafe');
@@ -86,6 +90,10 @@ function RecordScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const focusedFieldRef = useRef<'amount' | 'memo' | null>(null);
   const memoSectionYRef = useRef(0);
+  // Ref-based double-tap guard. setState is async — between two fast taps,
+  // the closure-captured `canSave` can still be true, so the state-based
+  // disabled check alone isn't sufficient to prevent a double-save.
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', (e) => {
@@ -135,7 +143,7 @@ function RecordScreen() {
   // streak or triggering found-item eval, so past no-spend stays quiet.
   const isSelectedDateToday = selectedDate === todayStr;
   const hasRecordOnSelectedDate = expenses.some(
-    (e) => getLocalDateString(new Date(e.createdAt)) === selectedDate,
+    (e) => expenseLocalDate(e) === selectedDate,
   );
   const canNoSpend =
     recordKind === 'spending' &&
@@ -145,6 +153,8 @@ function RecordScreen() {
 
   const handleNoSpend = async () => {
     if (!canNoSpend) return;
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     const createdAt = isSelectedDateToday
       ? new Date().toISOString()
@@ -161,9 +171,16 @@ function RecordScreen() {
 
   const handleSave = async () => {
     if (!canSave) return;
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
+    // `isFirstRecordToday` drives the 'surprised' welcome on the spending
+    // chain. Income records are excluded so that a salary deposit logged at
+    // 10am does not consume the welcome slot from the user's first spending
+    // touchpoint later in the day. Sub-spec C post-QA fix (Bug #3).
+    const isFirstRecordToday = getTodayExpenses().filter((e) => e.kind !== 'income').length === 0;
     const ctx: EmotionContext = {
-      isFirstRecordToday: getTodayExpenses().length === 0,
+      isFirstRecordToday,
       currentStreak: streak,
       currentHour: new Date().getHours(),
     };
@@ -182,7 +199,7 @@ function RecordScreen() {
       : localDateToISOString(selectedDate);
 
     const expense = {
-      id: Date.now().toString(),
+      id: generateExpenseId(),
       kind: derivedKind,
       amount,
       category,
@@ -190,6 +207,9 @@ function RecordScreen() {
       memo: memo.trim() || undefined,
       sobagiEmotion,
       createdAt,
+      // selectedDate is already the chosen local date (YYYY-MM-DD), captured
+      // in the device tz at record time — tz-stable from here on.
+      localDate: selectedDate,
     };
 
     const tier = getDialogueTier(recordedDaysCount);
@@ -210,7 +230,7 @@ function RecordScreen() {
       reactionMessage = selectReactionMessage(sobagiEmotion, tier, derivedKind);
     }
 
-    setEmotion(sobagiEmotion, reactionMessage);
+    setEmotion(sobagiEmotion, reactionMessage, derivedKind);
     await saveExpense(expense);
     navigation.navigate('/reaction');
   };
@@ -269,7 +289,7 @@ function RecordScreen() {
           contentContainerStyle={styles.dateRow}
           onContentSizeChange={() => dateScrollRef.current?.scrollToEnd({ animated: false })}
         >
-          {DATE_OPTIONS.map((opt) => {
+          {dateOptions.map((opt) => {
             const isSelected = opt.dateStr === selectedDate;
             return (
               <Pressable

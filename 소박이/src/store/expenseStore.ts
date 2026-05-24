@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Expense, ExpenseCategory, RecordKind } from '../types';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 
 interface ExpensePatch {
   amount: number;
@@ -24,7 +24,7 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
     set((state) => ({ expenses: [...state.expenses, expense] })),
   getTodayExpenses: () => {
     const todayStr = getLocalDateString(new Date());
-    return get().expenses.filter((e) => getLocalDateString(new Date(e.createdAt)) === todayStr);
+    return get().expenses.filter((e) => expenseLocalDate(e) === todayStr);
   },
   hydrate: (expenses) => set({ expenses }),
   updateExpense: (id, patch) =>
