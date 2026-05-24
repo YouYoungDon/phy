@@ -127,3 +127,77 @@ describe('selectStatsObservation', () => {
     expect(result).toBe('요즘 카페에 자주 들렀네요 ☕');
   });
 });
+
+// Helper for income-branch tests: accepts kind, category, createdAt explicitly.
+function makeExpense(opts: {
+  kind: Expense['kind'];
+  category: Expense['category'];
+  createdAt: string;
+}): Expense {
+  return {
+    id: `${opts.createdAt}-${opts.category}`,
+    kind: opts.kind,
+    amount: 10000,
+    category: opts.category,
+    sobagiEmotion: 'happy',
+    createdAt: opts.createdAt,
+  };
+}
+
+describe('selectStatsObservation — income branch', () => {
+  const today = '2026-05-24';
+
+  it('fires when there are at least 2 income days within 30 days', () => {
+    const expenses: Expense[] = [
+      makeExpense({ kind: 'income', category: 'salary',  createdAt: '2026-05-01T09:00:00.000Z' }),
+      makeExpense({ kind: 'income', category: 'refund',  createdAt: '2026-05-15T15:30:00.000Z' }),
+    ];
+    expect(selectStatsObservation(expenses, 0, today)).toBe('들어온 일이 종종 있었어요 🍃');
+  });
+
+  it('does not fire with only 1 income day in window', () => {
+    const expenses: Expense[] = [
+      makeExpense({ kind: 'income', category: 'salary', createdAt: '2026-05-01T09:00:00.000Z' }),
+    ];
+    expect(selectStatsObservation(expenses, 0, today)).toBe('가끔씩 들러도 괜찮아요 🌿');
+  });
+
+  it('does not fire when income days are outside the 30-day window', () => {
+    const expenses: Expense[] = [
+      makeExpense({ kind: 'income', category: 'salary', createdAt: '2026-04-01T09:00:00.000Z' }),
+      makeExpense({ kind: 'income', category: 'salary', createdAt: '2026-04-15T09:00:00.000Z' }),
+    ];
+    expect(selectStatsObservation(expenses, 0, today)).toBe('가끔씩 들러도 괜찮아요 🌿');
+  });
+
+  it('lifestyle texture (cafe) still beats income branch when both qualify', () => {
+    const expenses: Expense[] = [
+      // cafe pattern: 3 cafe records across 3 days in last 14
+      makeExpense({ kind: 'spending', category: 'cafe', createdAt: '2026-05-20T09:00:00.000Z' }),
+      makeExpense({ kind: 'spending', category: 'cafe', createdAt: '2026-05-21T09:00:00.000Z' }),
+      makeExpense({ kind: 'spending', category: 'cafe', createdAt: '2026-05-22T09:00:00.000Z' }),
+      // 2 income days too
+      makeExpense({ kind: 'income', category: 'salary', createdAt: '2026-05-01T09:00:00.000Z' }),
+      makeExpense({ kind: 'income', category: 'refund', createdAt: '2026-05-15T15:30:00.000Z' }),
+    ];
+    expect(selectStatsObservation(expenses, 0, today)).toBe('요즘 카페에 자주 들렀네요 ☕');
+  });
+
+  it('income branch beats streak fallback when income threshold met', () => {
+    const expenses: Expense[] = [
+      makeExpense({ kind: 'income', category: 'salary', createdAt: '2026-05-01T09:00:00.000Z' }),
+      makeExpense({ kind: 'income', category: 'refund', createdAt: '2026-05-15T15:30:00.000Z' }),
+    ];
+    expect(selectStatsObservation(expenses, 10, today)).toBe('들어온 일이 종종 있었어요 🍃');
+  });
+
+  it('multiple income records on same day count as 1 day', () => {
+    // Both anchored to local-noon (T03:00:00Z = noon KST) so they land on the
+    // same local date across UTC+0 through UTC+9.
+    const expenses: Expense[] = [
+      makeExpense({ kind: 'income', category: 'salary', createdAt: '2026-05-15T03:00:00.000Z' }),
+      makeExpense({ kind: 'income', category: 'bonus',  createdAt: '2026-05-15T05:00:00.000Z' }),
+    ];
+    expect(selectStatsObservation(expenses, 0, today)).toBe('가끔씩 들러도 괜찮아요 🌿');
+  });
+});
