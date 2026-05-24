@@ -1,5 +1,37 @@
 import { Expense, EmotionContext, SobagiEmotion } from '../types';
 
+/**
+ * Pure. Builds the emotion context for a save, deciding whether "today's
+ * context" (first-record welcome, current streak, wall-clock hour) applies.
+ *
+ * Real-time (today-dated) saves use today's context unchanged. Past-date
+ * catch-up saves are intentionally QUIET: they must not borrow today's
+ * first-visit welcome (the 'surprised' pool) or today's streak, and they read
+ * the record's own hour (noon for back-dated records) rather than "now". A
+ * salary logged for last Tuesday should feel like a calm note about that day,
+ * not like today's first visit. See sub-spec C + the date-context QA pass.
+ */
+export function buildEmotionContext(params: {
+  isSelectedDateToday: boolean;
+  todayNonIncomeRecordCount: number;
+  streak: number;
+  nowHour: number;
+  recordHour: number;
+}): EmotionContext {
+  if (params.isSelectedDateToday) {
+    return {
+      isFirstRecordToday: params.todayNonIncomeRecordCount === 0,
+      currentStreak: params.streak,
+      currentHour: params.nowHour,
+    };
+  }
+  return {
+    isFirstRecordToday: false,
+    currentStreak: 0,
+    currentHour: params.recordHour,
+  };
+}
+
 export function evaluate(expense: Expense, ctx: EmotionContext): SobagiEmotion {
   if (expense.kind === 'income') {
     return evaluateIncome(expense, ctx);

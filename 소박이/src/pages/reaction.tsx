@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { SobagiReaction } from '../components/sobagi/SobagiReaction';
@@ -12,6 +12,7 @@ import { useUserStore } from '../store/userStore';
 import { getDialogueTier } from '../services/dialogueService';
 import { formatCategoryLabel } from '../constants/categories';
 import { RecordKind } from '../types';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
@@ -104,8 +105,9 @@ function SobagiReactionScreen() {
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const currentMessage = useEmotionStore((s) => s.currentMessage);
   const lastKind = useEmotionStore((s) => s.lastKind);
+  const lastRecordDate = useEmotionStore((s) => s.lastRecordDate);
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
-  const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
+  const expenses = useExpenseStore((s) => s.expenses);
   const tier = getDialogueTier(recordedDaysCount);
 
   const [photocardBtnVisible, setPhotocardBtnVisible] = useState(false);
@@ -117,27 +119,37 @@ function SobagiReactionScreen() {
 
   const hintOpacity = photocardBtnAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
-  // Computed once at mount — expenses are already loaded when reaction screen renders.
-  const todayExpenses = getTodayExpenses();
+  // The reaction reflects the record that triggered it — which may be a
+  // back-dated save — not "today". `lastRecordDate` is the saved record's local
+  // date (set in record.tsx); fall back to today for any non-save entry.
+  const contextDate = lastRecordDate || getLocalDateString(new Date());
+  const contextExpenses = useMemo(
+    () => expenses.filter((e) => expenseLocalDate(e) === contextDate),
+    [expenses, contextDate],
+  );
   // Latest save's kind — drives the title's kind-aware branch. Read from the
   // emotion store (set alongside emotion/message at save time) rather than
-  // derived from todayExpenses, so a midnight rollover between save and reaction
-  // render can't drop the record from "today" and mis-resolve the title.
+  // derived from expenses, so a midnight rollover between save and reaction
+  // render can't drop the record and mis-resolve the title.
   const latestKind: RecordKind = lastKind;
-  // Photocard entry is gated on the day having at least one *spending* record
-  // (sub-spec B §5.2). Income-only and no-spend-only saves never expose the
-  // photocard handoff. Auto-dismiss still runs; just no button.
-  const todayHasSpending = todayExpenses.some(
+  // Photocard entry is gated on the context day having at least one *spending*
+  // record (sub-spec B §5.2). Income-only and no-spend-only saves never expose
+  // the photocard handoff. Auto-dismiss still runs; just no button.
+  const dateHasSpending = contextExpenses.some(
     (e) => e.kind !== 'income' && e.category !== 'no_spend',
   );
   // Source for the photocard's records block. Excludes no_spend (which is a
   // calendar marker, not a memory line). Income is INCLUDED so PhotocardView's
   // groupByKind can render the 들어온 기록 section on mixed days.
-  const photocardSourceRecords = todayExpenses.filter((e) => e.category !== 'no_spend');
-  const now = new Date();
-  const dateStr = formatNumericDate(now);
-  const weekdayLabel = WEEKDAY_LABELS[now.getDay()];
-  const timeLabel = formatTimeLabel(now);
+  const photocardSourceRecords = contextExpenses.filter((e) => e.category !== 'no_spend');
+  // Photocard labels follow the record's date, not "now". The time badge only
+  // makes sense for a real-time (today) save; back-dated saves omit it (their
+  // createdAt is an anchored noon, not a real moment).
+  const isContextToday = contextDate === getLocalDateString(new Date());
+  const contextDt = new Date(contextDate + 'T00:00:00');
+  const dateStr = formatNumericDate(contextDt);
+  const weekdayLabel = WEEKDAY_LABELS[contextDt.getDay()];
+  const timeLabel = isContextToday ? formatTimeLabel(new Date()) : undefined;
   const photocardRecords: PhotocardRecord[] = photocardSourceRecords.map((e) => ({
     id: e.id,
     category: e.category,
@@ -175,7 +187,7 @@ function SobagiReactionScreen() {
 
     // Income-only or no-spend-only saves never expose the photocard handoff.
     // The auto-dismiss above carries the user back home on its own timer.
-    if (!todayHasSpending) {
+    if (!dateHasSpending) {
       return () => {
         if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
       };
@@ -199,7 +211,7 @@ function SobagiReactionScreen() {
       if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
       clearTimeout(btnTimer);
     };
-  }, [handleClose, todayHasSpending]);
+  }, [handleClose, dateHasSpending]);
 
   return (
     <Pressable style={styles.container} onPress={handleClose}>

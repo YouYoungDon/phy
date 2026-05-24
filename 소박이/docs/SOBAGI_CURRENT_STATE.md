@@ -62,6 +62,39 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-24
+**Group:** Pre-dogfooding hardening pass (record-system stabilization, 7 fixes)
+
+A Codex QA pass found real integration gaps in the record→reaction→persistence path. This was stabilization, not feature work. Seven fixes landed; the headline is that **today-context leakage is eliminated** — reaction, photocard, first-record emotion, and streak excitement now follow the saved record's date, not "today".
+
+### What changed
+- **#1 Reaction/photocard follow the record date** (`emotionStore.ts`, `reaction.tsx`, `record.tsx`): `emotionStore` gains `lastRecordDate` (set at save, same pattern as `lastKind`). The reaction screen filters expenses by it (not `getTodayExpenses()`) for both the photocard records and the "has spending → show button" gate, and labels the photocard with that date. Time badge shows only for today saves. Today saves are byte-identical to before.
+- **#2 Today-only emotional escalation** (`emotionEngine.ts`, `record.tsx`): new pure `buildEmotionContext`. Today → `{ isFirstRecordToday from today's non-income count, streak, now-hour }`. Past-date → `{ isFirstRecordToday:false, currentStreak:0, currentHour: record's hour }` — so a back-dated save can never resolve to `'surprised'` (welcome) or `'excited'` (streak). See `feedback_sobagi_temporal_escalation.md` + PHILOSOPHY "Emotional Escalation Belongs to Today".
+- **#3 Income-intent guard** (`utils/recordValidation.ts` new, `record.tsx`): income amount stays optional, but a fully-default save (salary + 0 + no memo + no emotion) is blocked. Requires one intent signal — amount / memo / emotion / category≠salary. Disabled button + gentle hint. Not strict validation; see `feedback_sobagi_income_intent_guard.md` + PHILOSOPHY "Recording Intent Over Friction".
+- **#4 Record screen reset on successful save** (`record.tsx`): `resetForm()` clears kind/amount/category/memo/date and the `isSavingRef` latch after a successful save — fixes stale-state-on-re-entry and a latent bug where a retained screen would block all future saves.
+- **#5 Save-failure durability** (`expenseService.ts`, `record.tsx`): `saveExpense`/`recordNoSpend` return `boolean`. On EXPENSES-write failure the optimistic in-memory mutation is rolled back (so a retry can't duplicate) and the caller shows a gentle error + stays put instead of navigating to a reaction for a record that won't survive restart.
+- **#6 Create/edit amount parity** (`stats.tsx`, `record.tsx`, `recordValidation.ts`): both paths share `parseAmountInput` + `amountValidForKind` (income ≥0, spending >0). Blank income edit now saves 0; blank spending edit shows a disabled button + hint instead of the old silent no-op.
+- **#7 Strict amount parser** (`utils/amount.ts`): `parseAmountInput` strips commas + trims, then accepts only `^[0-9]+$` else 0. `123abc`/`1원`/`12.5`/`-3` → 0 (was lenient prefix-parse). Also closes the negative-income edge.
+
+### Direction — two product principles
+Both are now in PHILOSOPHY + operational memory: **(1)** emotional escalation belongs to today — past-date records are quiet catch-up, never false celebration; **(2)** recording intent over friction — income amount optional, but the lightest gate prevents accidental ghost records (never a validation wall).
+
+### Preserved (regression-confirmed)
+Today-save behavior (escalation, photocard, dialogue), monthly settlement line, calendar grid + cell totals, day-card income section + per-record amount hiding, no-spend / reaction / edit flows, hydration normalize (both kind directions), types, storage.
+
+### No new storage keys
+
+### Test count
+**21 suites · 324 tests · all green.** New: `recordValidation.test.ts` (intent + amount-validity), `expenseServiceSave.test.ts` (boolean return + rollback + no-duplicate retry); extended `amount.test.ts` (strict pasted/junk cases) and `emotionEngine.test.ts` (`buildEmotionContext` today vs past-date).
+
+### Next
+Same backlog as before (Rest-TV prod ad ID, photocard polish, Android keyboard, on-device chart x-label density) plus the G1–G5 record-type product calls (decide via dogfooding, not pre-emptive patches).
+
+---
+
+### Earlier handoff (Monthly settlement + readability)
+
+**Agent:** Engineering
+**Date:** 2026-05-24
 **Group:** Monthly settlement line + Stats chart readability + income 0원 default
 
 ### What changed

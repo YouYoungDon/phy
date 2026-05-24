@@ -1,4 +1,4 @@
-import { evaluate } from '../src/services/emotionEngine';
+import { evaluate, buildEmotionContext } from '../src/services/emotionEngine';
 import { Expense, EmotionContext } from '../src/types';
 
 const baseExpense = (amount: number): Expense => ({
@@ -117,6 +117,94 @@ describe('evaluate — income subroutine', () => {
     it('spending large amount still returns soft-sad', () => {
       const spendingExpense: Expense = { ...incomeExpense(), kind: 'spending', category: 'cafe', amount: 60_000 };
       expect(evaluate(spendingExpense, incomeCtx())).toBe('soft-sad');
+    });
+  });
+});
+
+describe('buildEmotionContext — date-context (pre-dogfooding QA #1/#2)', () => {
+  describe('today (real-time) save uses today context', () => {
+    it('first non-income record today → isFirstRecordToday true', () => {
+      const ctx = buildEmotionContext({
+        isSelectedDateToday: true,
+        todayNonIncomeRecordCount: 0,
+        streak: 5,
+        nowHour: 14,
+        recordHour: 14,
+      });
+      expect(ctx).toEqual({ isFirstRecordToday: true, currentStreak: 5, currentHour: 14 });
+    });
+
+    it('later record today → isFirstRecordToday false, keeps streak + now hour', () => {
+      const ctx = buildEmotionContext({
+        isSelectedDateToday: true,
+        todayNonIncomeRecordCount: 2,
+        streak: 5,
+        nowHour: 23,
+        recordHour: 23,
+      });
+      expect(ctx).toEqual({ isFirstRecordToday: false, currentStreak: 5, currentHour: 23 });
+    });
+
+    it('today first record still drives the surprised welcome through evaluate', () => {
+      const ctx = buildEmotionContext({
+        isSelectedDateToday: true,
+        todayNonIncomeRecordCount: 0,
+        streak: 0,
+        nowHour: 10,
+        recordHour: 10,
+      });
+      const spending: Expense = { ...baseExpense(3000), kind: 'spending' };
+      expect(evaluate(spending, ctx)).toBe('surprised');
+    });
+  });
+
+  describe('past-date (back-dated) save is quiet', () => {
+    it('never first-record-today, never borrows streak, uses the record hour', () => {
+      const ctx = buildEmotionContext({
+        isSelectedDateToday: false,
+        todayNonIncomeRecordCount: 0, // today is empty, but this is a past save
+        streak: 9,
+        nowHour: 10,
+        recordHour: 12, // back-dated records anchor to noon
+      });
+      expect(ctx).toEqual({ isFirstRecordToday: false, currentStreak: 0, currentHour: 12 });
+    });
+
+    it('a past-date spending save does NOT resolve to surprised', () => {
+      const ctx = buildEmotionContext({
+        isSelectedDateToday: false,
+        todayNonIncomeRecordCount: 0,
+        streak: 0,
+        nowHour: 10,
+        recordHour: 12,
+      });
+      const spending: Expense = { ...baseExpense(3000), kind: 'spending' };
+      expect(evaluate(spending, ctx)).not.toBe('surprised');
+      expect(evaluate(spending, ctx)).toBe('happy');
+    });
+
+    it('a past-date save with a high today-streak does NOT resolve to excited', () => {
+      const ctx = buildEmotionContext({
+        isSelectedDateToday: false,
+        todayNonIncomeRecordCount: 0,
+        streak: 9,
+        nowHour: 10,
+        recordHour: 12,
+      });
+      const spending: Expense = { ...baseExpense(3000), kind: 'spending' };
+      expect(evaluate(spending, ctx)).not.toBe('excited');
+    });
+
+    it('a large past-date spending still reflects the record (soft-sad)', () => {
+      const ctx = buildEmotionContext({
+        isSelectedDateToday: false,
+        todayNonIncomeRecordCount: 0,
+        streak: 0,
+        nowHour: 10,
+        recordHour: 12,
+      });
+      const spending: Expense = { ...baseExpense(60_000), kind: 'spending' };
+      expect(evaluate(spending, ctx)).toBe('soft-sad');
     });
   });
 });

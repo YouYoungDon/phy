@@ -9,7 +9,7 @@ import { kindForCategory } from '../constants/categories';
 import { computeRecordingStreak } from './roomPresenceService';
 import { generateExpenseId } from '../utils/id';
 
-export async function saveExpense(expense: Expense): Promise<void> {
+export async function saveExpense(expense: Expense): Promise<boolean> {
   const expenseStore = useExpenseStore.getState();
   const userStore = useUserStore.getState();
 
@@ -46,8 +46,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
   // Persist to storage. Stores are already updated in memory, so this is the
   // durability step. Awaited (not fire-and-forget) so the EXPENSES write —
   // the user's actual records — completes its retry cycle before we proceed
-  // to navigation. A failed write is logged inside storageService; the
-  // next-init recompute is the backstop.
+  // to navigation.
   const updatedExpenses = useExpenseStore.getState().expenses;
   const s = useUserStore.getState();
   const updatedUser: UserState = {
@@ -62,7 +61,19 @@ export async function saveExpense(expense: Expense): Promise<void> {
     lastRestAt: s.lastRestAt,
   };
 
-  await storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
+  const expensesSaved = await storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
+  if (!expensesSaved) {
+    // Durability failed for the user's actual record. Roll the optimistic
+    // in-memory mutation back so storage and memory agree and a retry can't
+    // create a duplicate. `deleteExpense` re-derives recordedDays/streak/total
+    // from the remaining records — exactly the pre-save state — and persists
+    // (best-effort; harmless if storage is still down). The caller is expected
+    // to surface a gentle error and NOT navigate to the reaction screen.
+    deleteExpense(expense.id);
+    return false;
+  }
+  // USER write is non-fatal: derived state is recomputed from EXPENSES at the
+  // next init, so a dropped USER write self-heals.
   await storageService.save(STORAGE_KEYS.USER, updatedUser);
 
   // Found-item eval: only fires on the first real-time record of the day.
@@ -72,6 +83,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
   if (isFirstRecordToday) {
     await checkForFoundItem(updatedExpenses, s.recordedDaysCount);
   }
+  return true;
 }
 
 // No-spend record: a quiet daily mark with amount 0 and category 'no_spend'.
@@ -79,7 +91,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
 // (today) and retroactive (past-date) no-spend marks. saveExpense's existing
 // `isRealTimeRecord` check keeps past-date marks from advancing streak or
 // triggering found-item eval — past no-spend stays quiet by construction.
-export async function recordNoSpend(createdAt: string): Promise<void> {
+export async function recordNoSpend(createdAt: string): Promise<boolean> {
   const expense: Expense = {
     id: generateExpenseId(),
     kind: 'spending',
@@ -91,7 +103,7 @@ export async function recordNoSpend(createdAt: string): Promise<void> {
     // construction, but stored so the day stays stable across tz changes.
     localDate: getLocalDateString(new Date(createdAt)),
   };
-  await saveExpense(expense);
+  return saveExpense(expense);
 }
 
 export function updateExpense(

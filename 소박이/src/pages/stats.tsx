@@ -6,6 +6,8 @@ import { useUserStore } from '../store/userStore';
 import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
+import { parseAmountInput } from '../utils/amount';
+import { amountValidForKind } from '../utils/recordValidation';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
@@ -366,14 +368,13 @@ function StatsScreen() {
 
   const commitEdit = useCallback(() => {
     if (!editingExpense) return;
-    const parsed = parseInt(editAmount.replace(/[^0-9]/g, ''), 10);
-    if (isNaN(parsed)) return;
-    // Income records may legitimately carry amount=0 (matches the save flow's
-    // `금액 (선택)` affordance). Spending records still require a positive
-    // amount — they're meaningful only when there's something to record.
+    // Shared parse + validity rule with the create flow (record.tsx):
+    // `parseAmountInput` normalizes blanks/junk to 0; income may be 0 (amount
+    // optional), spending must be positive. This removes the old divergence
+    // where a blank create saved 0 but a blank edit silently no-op'd.
+    const parsed = parseAmountInput(editAmount);
     const nextKind = kindForCategory(editCategory);
-    if (nextKind !== 'income' && parsed <= 0) return;
-    if (parsed < 0) return;
+    if (!amountValidForKind(nextKind, parsed)) return;
     persistUpdateExpense(editingExpense.id, {
       amount: parsed,
       category: editCategory,
@@ -382,6 +383,12 @@ function StatsScreen() {
     });
     closeEdit();
   }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
+
+  // Mirror of commitEdit's validity gate, for the save button's enabled state
+  // and the inline hint — so a blocked spending edit shows visible feedback
+  // instead of a silent no-op.
+  const editKind = kindForCategory(editCategory);
+  const editCanSave = amountValidForKind(editKind, parseAmountInput(editAmount));
 
   const commitDelete = useCallback(() => {
     if (!editingExpense) return;
@@ -625,8 +632,16 @@ function StatsScreen() {
           maxLength={60}
         />
 
+        {editingExpense !== null && !editCanSave && (
+          <Text style={styles.editHint}>금액을 입력해 주세요</Text>
+        )}
+
         <View style={styles.editActionRow}>
-          <Pressable style={styles.editSaveBtn} onPress={commitEdit}>
+          <Pressable
+            style={[styles.editSaveBtn, !editCanSave && styles.editSaveBtnDisabled]}
+            onPress={commitEdit}
+            disabled={!editCanSave}
+          >
             <Text style={styles.editSaveBtnText}>고쳐두기</Text>
           </Pressable>
           <Pressable style={styles.editCancelBtn} onPress={closeEdit}>
@@ -1170,10 +1185,18 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: 'center',
   },
+  editSaveBtnDisabled: {
+    opacity: 0.4,
+  },
   editSaveBtnText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  editHint: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 12,
   },
   editCancelBtn: {
     paddingVertical: 13,

@@ -14,7 +14,7 @@ import { createRoute, useNavigation } from '@granite-js/react-native';
 import { CategorySelector } from '../components/expense/CategorySelector';
 import { MemoSuggestions } from '../components/expense/MemoSuggestions';
 import { saveExpense, recordNoSpend } from '../services/expenseService';
-import { evaluate } from '../services/emotionEngine';
+import { evaluate, buildEmotionContext } from '../services/emotionEngine';
 import { getDialogueTier, selectReactionMessage, detectObservationType, selectObservationMessage } from '../services/dialogueService';
 import * as storageService from '../services/storageService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
@@ -33,6 +33,11 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { getLocalDateString, localDateToISOString, expenseLocalDate } from '../utils/date';
 import { generateExpenseId } from '../utils/id';
 import { parseAmountInput } from '../utils/amount';
+import {
+  incomeRecordHasIntent,
+  amountValidForKind,
+  INCOME_DEFAULT_CATEGORY,
+} from '../utils/recordValidation';
 
 export const Route = createRoute('/record', {
   validateParams: (params) => params,
@@ -75,6 +80,7 @@ function RecordScreen() {
   const [userEmotion, setUserEmotion] = useState<string | undefined>(undefined);
   const [memo, setMemo] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -82,9 +88,26 @@ function RecordScreen() {
     if (nextKind === recordKind) return;
     setRecordKind(nextKind);
     setAmountText('');
-    setCategory(nextKind === 'income' ? 'salary' : 'cafe');
+    setCategory(nextKind === 'income' ? INCOME_DEFAULT_CATEGORY : 'cafe');
     setUserEmotion(undefined);
     setMemo('');
+    setSaveError(false);
+  };
+
+  // Returns the record screen to a predictable fresh state. Called after a
+  // successful save (the screen may stay mounted between visits depending on
+  // the navigator), which also clears the `isSavingRef` latch — otherwise a
+  // retained screen would block every subsequent save.
+  const resetForm = () => {
+    setRecordKind('spending');
+    setAmountText('');
+    setCategory('cafe');
+    setUserEmotion(undefined);
+    setMemo('');
+    setSelectedDate(todayStr);
+    setSaveError(false);
+    setIsSaving(false);
+    isSavingRef.current = false;
   };
   const amountInputRef = useRef<TextInput>(null);
   const dateScrollRef = useRef<ScrollView>(null);
@@ -133,9 +156,13 @@ function RecordScreen() {
   }, []);
 
   const amount = parseAmountInput(amountText);
-  const canSave = recordKind === 'income'
-    ? !isSaving
-    : amount > 0 && !isSaving;
+  // Income amount is optional, but a completely default income record (salary +
+  // 0 + no memo/emotion) is almost always an accidental tap — require one
+  // signal of intent. Spending still requires a positive amount.
+  const incomeHasIntent = incomeRecordHasIntent({ amount, memo, userEmotion, category });
+  const canSave = !isSaving && (recordKind === 'income'
+    ? incomeHasIntent
+    : amountValidForKind('spending', amount));
 
   // No-spend marks a calendar day as quietly passed. Available for today and
   // any past date the user is reviewing, as long as that day has no record
@@ -157,16 +184,28 @@ function RecordScreen() {
     if (isSavingRef.current) return;
     isSavingRef.current = true;
     setIsSaving(true);
+    setSaveError(false);
     const createdAt = isSelectedDateToday
       ? new Date().toISOString()
       : localDateToISOString(selectedDate);
-    await recordNoSpend(createdAt);
+    const ok = await recordNoSpend(createdAt);
+    if (!ok) {
+      // Persistence failed and was rolled back — don't proceed to the reaction
+      // as if it saved. Let the user retry.
+      setSaveError(true);
+      setIsSaving(false);
+      isSavingRef.current = false;
+      return;
+    }
     setEmotion(
       'happy',
       isSelectedDateToday
         ? '오늘은 조용히 머물렀네요 🌿'
         : '조용히 지나간 하루였네요 🌙',
+      'spending',
+      selectedDate,
     );
+    resetForm();
     navigation.navigate('/reaction');
   };
 
@@ -175,16 +214,24 @@ function RecordScreen() {
     if (isSavingRef.current) return;
     isSavingRef.current = true;
     setIsSaving(true);
-    // `isFirstRecordToday` drives the 'surprised' welcome on the spending
-    // chain. Income records are excluded so that a salary deposit logged at
-    // 10am does not consume the welcome slot from the user's first spending
-    // touchpoint later in the day. Sub-spec C post-QA fix (Bug #3).
-    const isFirstRecordToday = getTodayExpenses().filter((e) => e.kind !== 'income').length === 0;
-    const ctx: EmotionContext = {
-      isFirstRecordToday,
-      currentStreak: streak,
-      currentHour: new Date().getHours(),
-    };
+    setSaveError(false);
+
+    const createdAt = isSelectedDateToday
+      ? new Date().toISOString()
+      : localDateToISOString(selectedDate);
+
+    // Emotion context is anchored to the record's date, not "now". A real-time
+    // (today) save uses today's context — first-record welcome, current streak,
+    // wall-clock hour. A back-dated save is quiet: it must not borrow today's
+    // 'surprised' welcome or streak (it isn't today's first visit). See
+    // buildEmotionContext + the date-context QA pass.
+    const ctx: EmotionContext = buildEmotionContext({
+      isSelectedDateToday,
+      todayNonIncomeRecordCount: getTodayExpenses().filter((e) => e.kind !== 'income').length,
+      streak,
+      nowHour: new Date().getHours(),
+      recordHour: new Date(createdAt).getHours(),
+    });
 
     // Source of truth: category determines kind, not the UI toggle state.
     // Guards against the toggle and category being momentarily out of sync.
@@ -194,10 +241,6 @@ function RecordScreen() {
       { id: '', kind: derivedKind, amount, category, sobagiEmotion: 'happy', createdAt: '' },
       ctx,
     );
-
-    const createdAt = selectedDate === todayStr
-      ? new Date().toISOString()
-      : localDateToISOString(selectedDate);
 
     const expense = {
       id: generateExpenseId(),
@@ -223,16 +266,27 @@ function RecordScreen() {
       currentHour: new Date().getHours(),
     });
 
-    let reactionMessage: string;
-    if (observationType !== null) {
-      reactionMessage = selectObservationMessage(observationType);
-      void storageService.save(STORAGE_KEYS.OBSERVATION_SAVE_COUNT, totalRecordCount + 1);
-    } else {
-      reactionMessage = selectReactionMessage(sobagiEmotion, tier, derivedKind);
+    const reactionMessage = observationType !== null
+      ? selectObservationMessage(observationType)
+      : selectReactionMessage(sobagiEmotion, tier, derivedKind);
+
+    // Persist first. Only commit the emotion/observation side effects and
+    // navigate if the durability step succeeded — a failed write is rolled
+    // back inside saveExpense, so proceeding would show a reaction for a record
+    // that won't survive a restart.
+    const ok = await saveExpense(expense);
+    if (!ok) {
+      setSaveError(true);
+      setIsSaving(false);
+      isSavingRef.current = false;
+      return;
     }
 
-    setEmotion(sobagiEmotion, reactionMessage, derivedKind);
-    await saveExpense(expense);
+    if (observationType !== null) {
+      void storageService.save(STORAGE_KEYS.OBSERVATION_SAVE_COUNT, totalRecordCount + 1);
+    }
+    setEmotion(sobagiEmotion, reactionMessage, derivedKind, selectedDate);
+    resetForm();
     navigation.navigate('/reaction');
   };
 
@@ -402,6 +456,16 @@ function RecordScreen() {
           {recordKind === 'spending' && amount === 0 && canNoSpend && (
             <Text style={styles.saveHelper}>
               지출이 없는 날은 무지출 기록을 사용할 수 있어요 🌿
+            </Text>
+          )}
+          {recordKind === 'income' && !incomeHasIntent && (
+            <Text style={styles.saveHelper}>
+              금액, 메모, 기분 중 하나만 남겨도 충분해요 🌿
+            </Text>
+          )}
+          {saveError && (
+            <Text style={styles.saveError}>
+              저장이 잘 안 됐어요. 잠시 후 다시 시도해 주세요 🌿
             </Text>
           )}
         </ScrollView>
@@ -627,5 +691,12 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 10,
+  },
+  saveError: {
+    fontSize: 13,
+    color: '#C96A45',
+    textAlign: 'center',
+    marginTop: 10,
+    fontWeight: '500',
   },
 });
