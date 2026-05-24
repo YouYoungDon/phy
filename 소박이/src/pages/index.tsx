@@ -9,7 +9,6 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getNextThreshold } from '../store/userStore';
-import { useAppInit } from '../hooks/useAppInit';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { COLORS } from '../constants/colors';
 import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS } from '../constants/assets';
@@ -84,8 +83,6 @@ const TV_POSITION = {
 const JAR_POSITION = { x: 0.18, y: 0.66 } as const;
 
 function HomeScreen() {
-  useAppInit();
-
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const roomStage = useUserStore((s) => s.roomStage);
   const level = useUserStore((s) => s.level);
@@ -108,11 +105,12 @@ function HomeScreen() {
     return expenses.filter((e) => expenseLocalDate(e) === todayStr);
   }, [expenses]);
 
-  // Spending only — income records and no-spend markers don't count toward
-  // the day's spending total, so a salary-only day reads ₩0, not the salary.
-  const todayTotal = todayExpenses
-    .filter((e) => e.kind !== 'income' && e.category !== 'no_spend')
-    .reduce((sum, e) => sum + e.amount, 0);
+  // Spending only — income records and no-spend markers aren't spending, so
+  // they don't count toward the day's total and don't surface an amount row.
+  const todaySpendingRecords = todayExpenses.filter(
+    (e) => e.kind !== 'income' && e.category !== 'no_spend',
+  );
+  const todayTotal = todaySpendingRecords.reduce((sum, e) => sum + e.amount, 0);
 
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleMessage, setBubbleMessage] = useState('');
@@ -377,7 +375,11 @@ function HomeScreen() {
           </RoomBackground>
 
       <View style={styles.summaryCard}>
-        <DailySummary totalAmount={todayTotal} recordCount={todayExpenses.length} />
+        <DailySummary
+          totalAmount={todayTotal}
+          recordCount={todayExpenses.length}
+          spendingCount={todaySpendingRecords.length}
+        />
       </View>
 
       <BottomTabs activeRoute="/" />

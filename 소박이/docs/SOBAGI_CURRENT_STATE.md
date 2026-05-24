@@ -236,7 +236,6 @@ sobagi-last-rest-at            → ISO string           drives 60-min rest-warmt
 - Dialogue tier transitions are hard thresholds — tone shifts abruptly at day 7 and day 30
 
 ### Technical
-- Pre-existing TS error in `_404.tsx` — not blocking, not recently introduced
 - Android keyboard behavior in record.tsx unverified
 
 ---
