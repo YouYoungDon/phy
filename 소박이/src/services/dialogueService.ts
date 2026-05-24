@@ -1,5 +1,5 @@
-import { SobagiEmotion, Expense } from '../types';
-import { DialogueTier, REACTION_POOLS, OBSERVATION_POOLS } from '../constants/dialogue';
+import { SobagiEmotion, Expense, RecordKind } from '../types';
+import { DialogueTier, REACTION_POOLS, INCOME_REACTION_POOLS, OBSERVATION_POOLS } from '../constants/dialogue';
 import { getLocalDateString } from '../utils/date';
 
 export type ObservationType = 'timeOfDay' | 'categoryWarm' | 'returnAfterGap' | 'quietDays';
@@ -12,7 +12,15 @@ export function getDialogueTier(recordedDaysCount: number): DialogueTier {
   return 1;
 }
 
-export function selectReactionMessage(emotion: SobagiEmotion, tier: DialogueTier): string {
+export function selectReactionMessage(
+  emotion: SobagiEmotion,
+  tier: DialogueTier,
+  kind: RecordKind = 'spending',
+): string {
+  if (kind === 'income') {
+    const pool = INCOME_REACTION_POOLS[tier];
+    return pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
+  }
   const pool = REACTION_POOLS[tier][emotion];
   return pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
 }

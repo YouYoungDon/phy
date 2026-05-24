@@ -22,8 +22,13 @@ import { STORAGE_KEYS } from '../constants/storage';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
-import { ExpenseCategory, EmotionContext } from '../types';
+import { ExpenseCategory, EmotionContext, RecordKind } from '../types';
 import { COLORS } from '../constants/colors';
+import {
+  GENERAL_SPENDING_CATEGORIES,
+  INCOME_CATEGORIES,
+  kindForCategory,
+} from '../constants/categories';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { getLocalDateString, localDateToISOString } from '../utils/date';
 
@@ -59,6 +64,7 @@ const DATE_OPTIONS: { dateStr: string; label: string }[] = Array.from(
 function RecordScreen() {
   const navigation = useNavigation();
   const todayStr = getLocalDateString(new Date());
+  const [recordKind, setRecordKind] = useState<RecordKind>('spending');
   const [amountText, setAmountText] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('cafe');
   const [userEmotion, setUserEmotion] = useState<string | undefined>(undefined);
@@ -66,6 +72,15 @@ function RecordScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const handleToggleKind = (nextKind: RecordKind) => {
+    if (nextKind === recordKind) return;
+    setRecordKind(nextKind);
+    setAmountText('');
+    setCategory(nextKind === 'income' ? 'salary' : 'cafe');
+    setUserEmotion(undefined);
+    setMemo('');
+  };
   const amountInputRef = useRef<TextInput>(null);
   const dateScrollRef = useRef<ScrollView>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -109,7 +124,9 @@ function RecordScreen() {
   }, []);
 
   const amount = parseInt(amountText.replace(/,/g, ''), 10) || 0;
-  const canSave = amount > 0 && !isSaving;
+  const canSave = recordKind === 'income'
+    ? !isSaving
+    : amount > 0 && !isSaving;
 
   // No-spend marks a calendar day as quietly passed. Available for today and
   // any past date the user is reviewing, as long as that day has no record
@@ -121,7 +138,10 @@ function RecordScreen() {
     (e) => getLocalDateString(new Date(e.createdAt)) === selectedDate,
   );
   const canNoSpend =
-    !hasRecordOnSelectedDate && !isSaving && selectedDate <= todayStr;
+    recordKind === 'spending' &&
+    !hasRecordOnSelectedDate &&
+    !isSaving &&
+    selectedDate <= todayStr;
 
   const handleNoSpend = async () => {
     if (!canNoSpend) return;
@@ -148,8 +168,12 @@ function RecordScreen() {
       currentHour: new Date().getHours(),
     };
 
+    // Source of truth: category determines kind, not the UI toggle state.
+    // Guards against the toggle and category being momentarily out of sync.
+    const derivedKind = kindForCategory(category);
+
     const sobagiEmotion = evaluate(
-      { id: '', amount, category, sobagiEmotion: 'happy', createdAt: '' },
+      { id: '', kind: derivedKind, amount, category, sobagiEmotion: 'happy', createdAt: '' },
       ctx,
     );
 
@@ -159,6 +183,7 @@ function RecordScreen() {
 
     const expense = {
       id: Date.now().toString(),
+      kind: derivedKind,
       amount,
       category,
       userEmotion,
@@ -182,7 +207,7 @@ function RecordScreen() {
       reactionMessage = selectObservationMessage(observationType);
       void storageService.save(STORAGE_KEYS.OBSERVATION_SAVE_COUNT, totalRecordCount + 1);
     } else {
-      reactionMessage = selectReactionMessage(sobagiEmotion, tier);
+      reactionMessage = selectReactionMessage(sobagiEmotion, tier, derivedKind);
     }
 
     setEmotion(sobagiEmotion, reactionMessage);
@@ -214,6 +239,26 @@ function RecordScreen() {
           showsVerticalScrollIndicator={false}
         >
         <Text style={styles.pageSubtitle}>오늘을 기록해요 ✏️</Text>
+
+        {/* Kind toggle — segmented; resets category/amount on switch */}
+        <View style={styles.kindToggleRow}>
+          <Pressable
+            style={[styles.kindToggleChip, recordKind === 'spending' && styles.kindToggleChipSelected]}
+            onPress={() => handleToggleKind('spending')}
+          >
+            <Text style={[styles.kindToggleLabel, recordKind === 'spending' && styles.kindToggleLabelSelected]}>
+              쓴 기록
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.kindToggleChip, recordKind === 'income' && styles.kindToggleChipSelected]}
+            onPress={() => handleToggleKind('income')}
+          >
+            <Text style={[styles.kindToggleLabel, recordKind === 'income' && styles.kindToggleLabelSelected]}>
+              들어온 기록
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Date selector — horizontally scrollable, max 30 days back, auto-scrolled to today */}
         <ScrollView
@@ -259,14 +304,16 @@ function RecordScreen() {
         {/* Amount hero */}
         <Pressable style={styles.amountCard} onPress={() => amountInputRef.current?.focus()}>
           <Text style={styles.amountDisplay}>
-            {amount > 0 ? `${amount.toLocaleString()}원` : '0원'}
+            {amount > 0
+              ? `${amount.toLocaleString()}원`
+              : recordKind === 'income' ? '' : '0원'}
           </Text>
           <TextInput
             ref={amountInputRef}
             style={styles.amountInput}
             value={amountText}
             onChangeText={setAmountText}
-            placeholder="금액을 입력해요"
+            placeholder={recordKind === 'income' ? '금액 (선택)' : '금액을 입력해요'}
             placeholderTextColor={COLORS.textLight}
             keyboardType="numeric"
             maxLength={10}
@@ -276,7 +323,11 @@ function RecordScreen() {
 
         {/* Category */}
         <View style={styles.section}>
-          <CategorySelector selected={category} onSelect={setCategory} />
+          <CategorySelector
+            selected={category}
+            onSelect={setCategory}
+            categories={recordKind === 'income' ? INCOME_CATEGORIES : GENERAL_SPENDING_CATEGORIES}
+          />
           <MemoSuggestions
             category={category}
             memo={memo}
@@ -286,7 +337,7 @@ function RecordScreen() {
 
         {/* User emotion */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>기분은 어때요?</Text>
+          <Text style={styles.sectionLabel}>기분은 어때요? (선택)</Text>
           <View style={styles.emotionRow}>
             {USER_EMOTIONS.map((e) => (
               <Pressable
@@ -329,7 +380,7 @@ function RecordScreen() {
           >
             <Text style={styles.saveButtonLabel}>저장하기</Text>
           </Pressable>
-          {amount === 0 && canNoSpend && (
+          {recordKind === 'spending' && amount === 0 && canNoSpend && (
             <Text style={styles.saveHelper}>
               지출이 없는 날은 무지출 기록을 사용할 수 있어요 🌿
             </Text>
@@ -414,6 +465,30 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   dateChipLabelSelected: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  kindToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  kindToggleChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+  },
+  kindToggleChipSelected: {
+    backgroundColor: COLORS.oliveGreen,
+  },
+  kindToggleLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+  },
+  kindToggleLabelSelected: {
     color: '#fff',
     fontWeight: '600',
   },

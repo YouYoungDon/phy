@@ -1,18 +1,23 @@
 import React from 'react';
 import { Text, Pressable, View, StyleSheet } from 'react-native';
 import { ExpenseCategory } from '../../types';
-import { PICKER_CATEGORIES } from '../../constants/categories';
+import { ExpenseCategoryMeta, GENERAL_SPENDING_CATEGORIES } from '../../constants/categories';
 import { COLORS } from '../../constants/colors';
 
 interface CategorySelectorProps {
   selected: ExpenseCategory;
   onSelect: (category: ExpenseCategory) => void;
+  categories?: readonly ExpenseCategoryMeta[];
 }
 
-export function CategorySelector({ selected, onSelect }: CategorySelectorProps) {
+export function CategorySelector({
+  selected,
+  onSelect,
+  categories = GENERAL_SPENDING_CATEGORIES,
+}: CategorySelectorProps) {
   return (
     <View style={styles.row}>
-      {PICKER_CATEGORIES.map((c) => (
+      {categories.map((c) => (
         <Pressable
           key={c.key}
           style={[styles.chip, selected === c.key && styles.chipSelected]}

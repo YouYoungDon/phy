@@ -103,23 +103,31 @@ function SobagiReactionScreen() {
   const hintOpacity = photocardBtnAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
   // Computed once at mount — expenses are already loaded when reaction screen renders.
-  // No-spend records carry amount 0 and exist only to mark the day; they must
-  // not surface in the photocard's total/records blocks. Filtering them here
-  // means a no-spend-only day passes amount=0 and records=[] into PhotocardView,
-  // which then collapses both blocks via their existing conditions.
   const todayExpenses = getTodayExpenses();
-  const todaySpendingExpenses = todayExpenses.filter((e) => e.category !== 'no_spend');
-  const todayTotal = todaySpendingExpenses.reduce((sum, e) => sum + e.amount, 0);
+  // Photocard entry is gated on the day having at least one *spending* record
+  // (sub-spec B §5.2). Income-only and no-spend-only saves never expose the
+  // photocard handoff. Auto-dismiss still runs; just no button.
+  const todayHasSpending = todayExpenses.some(
+    (e) => e.kind !== 'income' && e.category !== 'no_spend',
+  );
+  // Source for the photocard's records block. Excludes no_spend (which is a
+  // calendar marker, not a memory line). Income is INCLUDED so PhotocardView's
+  // groupByKind can render the 들어온 기록 section on mixed days.
+  const photocardSourceRecords = todayExpenses.filter((e) => e.category !== 'no_spend');
+  // `todayTotal` still computed for the deprecated `amount` prop on PhotocardView
+  // (kept for backward compat; no longer drives layout).
+  const todayTotal = photocardSourceRecords.reduce((sum, e) => sum + e.amount, 0);
   const now = new Date();
   const dateStr = formatNumericDate(now);
   const weekdayLabel = WEEKDAY_LABELS[now.getDay()];
   const timeLabel = formatTimeLabel(now);
-  const photocardRecords: PhotocardRecord[] = todaySpendingExpenses.map((e) => ({
+  const photocardRecords: PhotocardRecord[] = photocardSourceRecords.map((e) => ({
     id: e.id,
     category: e.category,
     categoryLabel: formatCategoryLabel(e.category),
     amount: e.amount,
     memo: e.memo,
+    kind: e.kind,
   }));
 
   const handleClose = useCallback(() => {
@@ -144,8 +152,17 @@ function SobagiReactionScreen() {
   }, []);
 
   useEffect(() => {
-    // Auto-dismiss at 3500ms — cancelled when photocard button appears
+    // Auto-dismiss at 3500ms — always runs. Cancelled only when the
+    // photocard button reveal supersedes it.
     autoTimerRef.current = setTimeout(handleClose, 3500);
+
+    // Income-only or no-spend-only saves never expose the photocard handoff.
+    // The auto-dismiss above carries the user back home on its own timer.
+    if (!todayHasSpending) {
+      return () => {
+        if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+      };
+    }
 
     // Show photocard button at 1000ms and cancel the auto-dismiss
     const btnTimer = setTimeout(() => {
@@ -165,7 +182,7 @@ function SobagiReactionScreen() {
       if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
       clearTimeout(btnTimer);
     };
-  }, [handleClose]);
+  }, [handleClose, todayHasSpending]);
 
   return (
     <Pressable style={styles.container} onPress={handleClose}>

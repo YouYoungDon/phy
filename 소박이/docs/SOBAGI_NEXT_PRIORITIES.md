@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-22 (Engineering — 쉬어가기 TV soft rewarded-ad system landed)
+**Last updated:** 2026-05-24 (Design — sub-spec C spec + plan ready for engineering)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -9,40 +9,27 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ## Currently in progress
 
-*(Nothing claimed. Next implicit trigger to consider: night activity → warm lamp.)*
+*(Nothing claimed.)*
 
 ---
 
 ## Up next (ordered by priority)
 
-- [x] **Group E — Bag new-item dot** (Engineering)
-  - `src/constants/storage.ts` — add `LAST_BAG_OPEN_DAYS: 'sobagi-last-bag-open-days'`
-  - `src/pages/index.tsx` — load `LAST_BAG_OPEN_DAYS` from storage in the existing `useEffect`; compute `hasNewBagItem = BAG_ITEMS.some(item => item.minDays > lastBagOpenDays && item.minDays <= recordedDaysCount)`
-  - On `openSheet('bag')`: save current `recordedDaysCount` to `LAST_BAG_OPEN_DAYS` and set `hasNewBagItem = false`
-  - Replace `{pendingNewItemId !== null && <View style={styles.bagDot} />}` with `{(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.bagDot} />}`
-
-- [x] **Group F — Photocard** (Engineering — large)
-  - Production baseline: Tier 2. `src/components/photocard/PhotocardView.tsx` created. Modal overlay in `src/pages/reaction.tsx`. 1.8s white-reveal animation + quote fade-in. Auto-dismiss cancelled at 1000ms. No capture/save/share. Empty quote fallback: `"오늘의 기록이 조용히 남았어요."`. (2026-05-17)
+- [x] ~~**Photocard 3-way redesign (sub-spec B)**~~ — landed 2026-05-24. Spec at `docs/superpowers/specs/2026-05-23-photocard-3-way-design.md`, plan at `docs/superpowers/plans/2026-05-23-photocard-3-way.md`. See `SOBAGI_CURRENT_STATE.md` for handoff and `Recently completed` below for commit list.
+- [x] ~~**Income record system integration (sub-spec C)**~~ — landed 2026-05-24. See `SOBAGI_CURRENT_STATE.md` for handoff and `Recently completed` below for commit list.
 
 ---
 
 ## Backlog (ordered by impact)
 
+- [ ] **Tier 2/3 income dialogue copy review** — code-quality review of sub-spec C Task 3 flagged tier progression weakness: tier 2 line 1 reads flat, tier 3 recycles "든든" from tier 1. Three lines per tier are tonally too close; needs product copy pass. Affected: `src/constants/dialogue.ts:INCOME_REACTION_POOLS`.
+- [ ] **Calendar vs MonthPresenceRow income-only glyph alignment** — sub-spec C left the main stats calendar grid out of scope per spec §15; calendar shows `🌿` for income-only days while presence row shows `●`. Same day, two glyphs. Decide: align (both `●` for income-only) or accept the two-axis distinction (calendar = spend amount; presence row = visit). Affected: `src/pages/stats.tsx` calendar grid (around line 418).
 - [ ] **Rest-TV: swap dev ad group ID for production** — `src/constants/ads.ts` exports `REST_AD_GROUP_ID = 'ait.dev.43daa14da3ae487b'` (the AppsInToss dev test ID). Before release, replace with the production rewarded ad group ID issued in the AppsInToss console. One-line change.
 - [ ] **Rest-TV: rare ambient item delivery at 500/1500/3000 pebbles** — hook exists in `restService.grantRest` as a TODO marker; item pool and delivery shape need a separate spec. Out of scope of the initial rest-TV landing.
 - [ ] **Rest-TV: on-device visual QA on small phones** — verify TV+mailbox cluster, jar fill stages, and post-watch bubble all read calmly on iPhone SE-class widths. Code-level dimensional QA passed; live-device check pending.
-- [ ] **`letterService` test failures — seasonal window drift** — `__tests__/letterService.test.ts` "does not re-deliver already-delivered letters" and "does not call save if nothing new to deliver" fail on HEAD. Tests pin `new Date('2026-05-16')` and assume only personal letters fire; a seasonal letter now overlaps that window, so `save` is called when the test expects silence. Decide: pin the test date to a non-seasonal window, or guard `checkAndDeliverLetters` to skip seasonal delivery when the personal track is already saturated. Pre-existing, unrelated to taxonomy work. Surfaced 2026-05-20 during post-QA test run, still present after rest-TV landing.
-- [ ] **Warmth color fix in PhotocardView** (one-line) — `PhotocardView.tsx` line 76: `'#C87941'` → `'#E8C070'`; card atmosphere must match HomeScreen room at same moment
-- [ ] **Copy review: `"잘 기록해뒀어요"`** (Tier 1 happy pool) — replace "잘" with "조용히"; borderline praise anti-pattern
-- [ ] **Copy review: `"오늘도 수고했어요"`** (IDLE_MESSAGES) — "수고했어요" evaluates effort; replace with observational alternative
 - [ ] **Photocard: add time-of-day label at card top** — date (top-left) + time-of-day icon (아침☀️ / 낮🌤 / 저녁🌅 / 밤🌙, top-right); derives from `currentHour` already available in `reaction.tsx`; adds "snapshot of a moment" specificity
 - [ ] **Photocard: add "Sobagi" signature** — small muted label between `quotePanel` and `contextStrip`; authorial anchor per spec
 - [ ] **Photocard: guard early dismiss during animation** — add `isRevealing` state in `reaction.tsx`; disable `photocardModal onPress` for first 1800ms so the reveal animation always plays fully
-- [ ] **Photocard: remove `fontStyle: italic` from quoteText** — italic + quotation marks reads as formal caption; Sobagi's voice should feel spoken, not typeset
-- [ ] **Guard DayFeelingCard for future dates** — render only for `dateStr <= todayStr`
-- [ ] **Softening settlement section** — large bold monetary totals compete with emotional tone; reduce weight, soften copy
-- [ ] **Trend graph bars tappable** — tap a bar to select that day in calendar
-- [ ] **`(선택)` label on emotion picker** — parity with memo field
 - [ ] **Android keyboard behavior** — investigate whether save button is accessible
 - [ ] **Floating hearts pacing** — charming on record #1, noise by record #30; reduce or remove after N records
 
@@ -85,6 +72,11 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Income system integration (sub-spec C)** — `evaluateIncome` 2-rule subroutine (hour ≥ 22 → `'sleepy'`, else → `'happy'`); explicit negative tests prove amount / streak / first-of-day / `'surprised'` are never consulted. `INCOME_REACTION_POOLS` (3 tiers × 3 lines, warmth/relief tone, kind-gated selector). `MonthPresenceRow` income-only days render `●`. `hasNightPattern` filters income out. `selectStatsObservation` gains one quiet income branch (`들어온 일이 종종 있었어요 🍃`) at ≥ 2 income days in 30. Memory file `feedback_sobagi_allowance_giving_scene.md` narrowed. No new emotion token; no storage change; no pebble interaction; no `restService` touches. +23 new tests (273 total). Commits `28edb54` → `908b9b3`. (2026-05-24)
+- [x] **Photocard 3-way layout (sub-spec B)** — `PhotocardRecord` type + pure `groupByKind` helper extracted to `photocardGrouping.ts` (no RN imports, unit-testable). `PhotocardView` right panel restructured: `totalBlock` (`총 금액 ₩ X` at 18pt bold) removed entirely; records render in up to 3 grouped sub-sections (쓴 기록 / 들어온 기록 / 무지출) with 9pt muted group labels; `VISIBLE_RECORDS = 3` cap applied across groups in order (spending → income → noSpend); `amount` prop deprecated, no longer destructured. `reaction.tsx` new `todayHasSpending` gate suppresses photocard button on income-only / no-spend-only saves (auto-dismiss still runs); `todaySpendingExpenses` renamed to `photocardSourceRecords`. `stats.tsx` photocard records source switched to `selectedExpenses.filter(no_spend)` so income flows into PhotocardView; entry-point gate `selectedSpendingExpenses.length > 0` unchanged. 7 new groupByKind tests (250 total). No storage changes; no emotion-engine / dialogue / pebble service touches. Commits `fb2d020` → `422bbb4`. (2026-05-24)
+- [x] **Income record data model (sub-spec A)** — `RecordKind` type; 5 income category tokens (`salary`, `bonus`, `refund`, `received_gift`, `received_allowance`); `kindForCategory` / `INCOME_CATEGORIES` / `GENERAL_SPENDING_CATEGORIES` helpers; `PICKER_CATEGORIES` removed; `normalizeExpense` hydration at read path; record screen kind toggle + picker swap + optional amount; photocard `kind?` interim patch; stats income section + spending/top-category filter exclusions; `ExpensePatch.kind` required. 7 new categoryRegistry + 7 expenseHydration tests (243 total). No new storage keys. (2026-05-23)
+- [x] **Stats screen evolution** — 결산 block replaced by 3-group observation surface (cadence lines → top-scene chip → single rotating observation from `selectStatsObservation`). `MonthTrendGraph` removed; `MonthPresenceRow` (single-row presence-dot trace) added. Calendar amount color softened from `oliveGreen` → `textMuted`. New service `statsObservationService.ts` (7-branch priority chain). 12 new tests. No new storage keys. All preserved: calendar grid, month nav, edit/delete sheet, photocard entry, selected-day list. (2026-05-23)
+- [x] **Small-win backlog sweep** — `(선택)` label parity on emotion picker (`record.tsx`), `letterService` seasonal-window test fix (pre-stage `seasonal-may-2026` in the dedup tests — 11/11 pass), two copy reviews: `"잘 기록해뒀어요" → "여기 남겨뒀어요"` (dialogue Tier 1 happy) and `"오늘도 수고했어요" → "오늘도 들렀네요"` (IDLE_MESSAGES). Verified stale (already addressed in earlier work): PhotocardView warmth color, photocard italic removal, DayFeelingCard future-date guard (no longer rendered). Commits `5d0bf88` / `f7aa61f` / `493c762`. (2026-05-22)
 - [x] **쉬어가기 TV — soft rewarded-ad system** — small TV sprite in the room paired with a pebble jar that fills across 4 stages. Watching a rewarded ad grants 5-20 pebbles (`computePebbleDelta`), nudges room warmth for 60 min (`getRestWarmthOpacity` linear fade), refreshes Sobagi's idle line pool, and at hidden pebble thresholds (30/100/250/500/1000) delivers a soft letter into the existing mailbox. `grantRest()` is the sole writer of pebble state — invoked exclusively from `useRestedAd.show`'s `userEarnedReward` callback; `dismissed` and `failedToShow` grant nothing. 2-per-day cap normalized via `effectiveRestsToday` (no separate daily-reset job). When `loadFullScreenAd.isSupported()` is false, the TV sprite never renders — no fallback messaging. 15 implementation tasks across 6 phases, 32 new tests (atmosphereService, restService, stores). Commits `2554b89` → `2b9321d`. (2026-05-22)
 - [x] **Retrospective no-spend records** — `recordNoSpend(createdAt)` accepts ISO timestamp from caller; `canNoSpend` relaxed to `selectedDate <= todayStr && no record on that date`. Past dates use copy `이날은 조용히 지나갔어요 🌿` (button) and `조용히 지나간 하루였네요 🌙` (reaction); today's copy unchanged. `saveExpense.isRealTimeRecord` already handles past-date semantics — streak/found-item eval skip retroactive records. (2026-05-20)
 - [x] **0원 save-helper** — when amount is 0 and `canNoSpend` is true, a quiet line below the disabled save button reads `지출이 없는 날은 무지출 기록을 사용할 수 있어요 🌿`. Save logic unchanged. (2026-05-20)

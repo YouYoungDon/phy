@@ -10,7 +10,9 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
-import { PICKER_CATEGORIES, formatCategoryWithEmoji, formatCategoryLabel } from '../constants/categories';
+import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
+import { selectStatsObservation } from '../services/statsObservationService';
+import { MonthPresenceRow } from '../components/stats/MonthPresenceRow';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -26,92 +28,6 @@ function getDaysInMonth(year: number, month: number) {
 
 function getFirstDayOfWeek(year: number, month: number) {
   return new Date(year, month, 1).getDay();
-}
-
-function fmtAmt(n: number): string {
-  return n.toLocaleString('ko-KR');
-}
-
-// ─── Trend graph ─────────────────────────────────────────────────────────────
-
-const TREND_BAR_MAX = 72;
-const Y_AXIS_W = 52;
-const TREND_LABEL_DAYS = new Set([1, 8, 15, 22, 29]);
-
-interface TrendGraphProps {
-  viewYear: number;
-  viewMonth: number;
-  daysInMonth: number;
-  expensesByDate: Record<string, { total: number }>;
-}
-
-function MonthTrendGraph({ viewYear, viewMonth, daysInMonth, expensesByDate }: TrendGraphProps) {
-  const days = useMemo(() => {
-    return Array.from({ length: daysInMonth }, (_, i) => {
-      const day = i + 1;
-      const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      return { day, dateStr, total: expensesByDate[dateStr]?.total ?? 0 };
-    });
-  }, [viewYear, viewMonth, daysInMonth, expensesByDate]);
-
-  const maxTotal = useMemo(() => {
-    let m = 0;
-    for (const d of days) if (d.total > m) m = d.total;
-    return m > 0 ? m : 1;
-  }, [days]);
-
-  const midTotal = Math.round(maxTotal / 2);
-
-  return (
-    <View style={trendStyles.card}>
-      <Text style={trendStyles.title}>이달의 흐름</Text>
-      <View style={trendStyles.wrapper}>
-        <View style={trendStyles.yAxis}>
-          <Text style={trendStyles.yLabel}>{fmtAmt(maxTotal)}</Text>
-          <Text style={trendStyles.yLabel}>{fmtAmt(midTotal)}</Text>
-          <Text style={trendStyles.yLabel}>0</Text>
-        </View>
-
-        <View style={{ flex: 1 }}>
-          <View style={trendStyles.barArea}>
-            <View style={[trendStyles.guideLine, { top: 0 }]} />
-            <View style={[trendStyles.guideLine, { top: TREND_BAR_MAX / 2 }]} />
-            <View style={[trendStyles.guideLine, { bottom: 0 }]} />
-
-            <View style={trendStyles.barsRow}>
-              {days.map(({ day, total }) => {
-                const hasData = total > 0;
-                const barHeight = hasData
-                  ? Math.max(Math.round((total / maxTotal) * TREND_BAR_MAX), 8)
-                  : 2;
-                return (
-                  <View key={day} style={trendStyles.barColumn}>
-                    <View
-                      style={[
-                        trendStyles.bar,
-                        { height: barHeight },
-                        hasData ? trendStyles.barFilled : trendStyles.barEmpty,
-                      ]}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={trendStyles.xRow}>
-            {days.map(({ day }) => (
-              <View key={day} style={trendStyles.xCell}>
-                <Text style={trendStyles.xLabel}>
-                  {TREND_LABEL_DAYS.has(day) ? String(day) : ''}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
 }
 
 // ─── Day expense list ─────────────────────────────────────────────────────────
@@ -164,11 +80,23 @@ function StatsScreen() {
 
   const dayRevealAnim = useRef(new Animated.Value(1)).current;
 
+  type DayAccum = {
+    total: number;
+    count: number;
+    categories: ExpenseCategory[];
+    hasRecord: boolean;
+    hasOnlyNoSpend: boolean;
+  };
+
   const expensesByDate = useMemo(() => {
-    const map: Record<string, { total: number; count: number; categories: ExpenseCategory[] }> = {};
+    const map: Record<string, DayAccum> = {};
     for (const e of expenses) {
       const d = getLocalDateString(new Date(e.createdAt));
-      if (!map[d]) map[d] = { total: 0, count: 0, categories: [] };
+      if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true };
+      map[d].hasRecord = true;
+      if (e.category !== 'no_spend') map[d].hasOnlyNoSpend = false;
+      // income counts as presence (hasRecord above) but not toward day total
+      if (e.kind === 'income') continue;
       map[d].total += e.amount;
       map[d].count += 1;
       map[d].categories.push(e.category);
@@ -186,7 +114,12 @@ function StatsScreen() {
   // top-category, or dayFeeling derivations. Calendar totals are unaffected
   // because no-spend amount is 0.
   const selectedSpendingExpenses = useMemo(
-    () => selectedExpenses.filter((e) => e.category !== 'no_spend'),
+    () => selectedExpenses.filter((e) => e.category !== 'no_spend' && e.kind !== 'income'),
+    [selectedExpenses],
+  );
+
+  const selectedIncomeExpenses = useMemo(
+    () => selectedExpenses.filter((e) => e.kind === 'income'),
     [selectedExpenses],
   );
 
@@ -254,41 +187,68 @@ function StatsScreen() {
   const selectedDt = new Date(selectedDay + 'T00:00:00');
   const selectedLabel = `${selectedDt.getMonth() + 1}월 ${selectedDt.getDate()}일`;
 
-  const weeklyTotal = useMemo(() => {
-    const d = new Date(today);
-    const dow = d.getDay();
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - ((dow + 6) % 7));
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    const monStr = getLocalDateString(monday);
-    const sunStr = getLocalDateString(sunday);
-    return expenses
-      .filter((e) => {
-        const ds = getLocalDateString(new Date(e.createdAt));
-        return ds >= monStr && ds <= sunStr;
-      })
-      .reduce((s, e) => s + e.amount, 0);
-  }, [expenses]);
-
-  const monthlyTotal = useMemo(() => {
-    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
-    return expenses
-      .filter((e) => getLocalDateString(new Date(e.createdAt)).startsWith(prefix))
-      .reduce((s, e) => s + e.amount, 0);
-  }, [expenses, viewYear, viewMonth]);
-
   const topCategoryThisMonth = useMemo(() => {
     const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
     const counts: Partial<Record<ExpenseCategory, number>> = {};
     for (const e of expenses) {
       if (e.category === 'no_spend') continue;
+      if (e.kind === 'income') continue;
       if (!getLocalDateString(new Date(e.createdAt)).startsWith(prefix)) continue;
       counts[e.category] = (counts[e.category] ?? 0) + 1;
     }
     return (Object.entries(counts) as [ExpenseCategory, number][])
       .sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
   }, [expenses, viewYear, viewMonth]);
+
+  // Distinct local-date days with ANY record (spending OR no-spend) in the
+  // current calendar week (Sun–Sat) anchored on `today`.
+  const weekVisitDays = useMemo(() => {
+    const t = new Date(todayStr + 'T12:00:00');
+    const weekStart = new Date(t);
+    weekStart.setDate(t.getDate() - t.getDay()); // Sunday
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6); // Saturday
+    const startStr = getLocalDateString(weekStart);
+    const endStr = getLocalDateString(weekEnd);
+    const days = new Set<string>();
+    for (const e of expenses) {
+      const d = getLocalDateString(new Date(e.createdAt));
+      if (d >= startStr && d <= endStr) days.add(d);
+    }
+    return days.size;
+  }, [expenses, todayStr]);
+
+  // Distinct local-date days with ANY record in the current view month.
+  const monthVisitDays = useMemo(() => {
+    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    const days = new Set<string>();
+    for (const e of expenses) {
+      const d = getLocalDateString(new Date(e.createdAt));
+      if (d.startsWith(prefix)) days.add(d);
+    }
+    return days.size;
+  }, [expenses, viewYear, viewMonth]);
+
+  const cadenceLines: string[] = useMemo(() => {
+    if (monthVisitDays === 0) {
+      return ['이번 달은 아직 비어있어요 🌿'];
+    }
+    if (weekVisitDays === 0) {
+      return [
+        '이번 주는 아직 비어있어요 🌿',
+        `이번 달은 ${monthVisitDays}일 다녀갔어요`,
+      ];
+    }
+    return [
+      `이번 주엔 ${weekVisitDays}번 들렀어요`,
+      `이번 달은 ${monthVisitDays}일 다녀갔어요`,
+    ];
+  }, [weekVisitDays, monthVisitDays]);
+
+  const observation = useMemo(
+    () => selectStatsObservation(expenses, streak, todayStr),
+    [expenses, streak, todayStr],
+  );
 
   // Photocard data — derived from the selected day's spending records only.
   // A no-spend-only day has no spending feeling to surface.
@@ -297,17 +257,24 @@ function StatsScreen() {
     [selectedSpendingExpenses, selectedDay],
   );
 
-  // Photocard renders only real spending records. No-spend entries exist for
-  // streak/day-count but never appear as "₩ 0 — 무지출" lines on the card.
+  // Photocard records include both spending and income (sub-spec B), so
+  // PhotocardView's groupByKind can render the 들어온 기록 section on mixed
+  // days. No_spend is excluded — it's a calendar marker, not a memory line.
+  // The entry-point gate (selectedSpendingExpenses.length > 0 below) still
+  // hides the photocard button for income-only days, so an income-only day
+  // never reaches PhotocardView in the first place.
   const photocardRecords: PhotocardRecord[] = useMemo(
-    () => selectedSpendingExpenses.map((e) => ({
-      id: e.id,
-      category: e.category,
-      categoryLabel: formatCategoryLabel(e.category),
-      amount: e.amount,
-      memo: e.memo,
-    })),
-    [selectedSpendingExpenses],
+    () => selectedExpenses
+      .filter((e) => e.category !== 'no_spend')
+      .map((e) => ({
+        id: e.id,
+        category: e.category,
+        categoryLabel: formatCategoryLabel(e.category),
+        amount: e.amount,
+        memo: e.memo,
+        kind: e.kind,
+      })),
+    [selectedExpenses],
   );
 
   const photocardDateStr = useMemo(() => {
@@ -349,6 +316,11 @@ function StatsScreen() {
   const [editSheetBottom, setEditSheetBottom] = useState(0);
   const editSheetAnim = useRef(new Animated.Value(500)).current;
 
+  const editingExpensePool = useMemo(() => {
+    if (!editingExpense) return GENERAL_SPENDING_CATEGORIES;
+    return editingExpense.kind === 'income' ? INCOME_CATEGORIES : GENERAL_SPENDING_CATEGORIES;
+  }, [editingExpense]);
+
   useEffect(() => {
     if (editingExpense === null) return;
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -384,6 +356,7 @@ function StatsScreen() {
       amount: parsed,
       category: editCategory,
       memo: editMemo.trim() || undefined,
+      kind: kindForCategory(editCategory),
     });
     closeEdit();
   }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
@@ -474,16 +447,41 @@ function StatsScreen() {
           </View>
         </View>
 
-        {/* Selected day expense list — only renders if the day had actual spending.
-            No-spend-only days exist in the underlying data and the calendar, but
-            don't surface a spending detail card. */}
-        {selectedSpendingExpenses.length > 0 && (
+        {/* Selected day card — renders when the day has any record (spending or income).
+            No-spend-only days still don't surface a card (they're calendar-only). */}
+        {(selectedSpendingExpenses.length > 0 || selectedIncomeExpenses.length > 0) && (
           <View style={styles.dayCard}>
             <View style={styles.dayCardHeader}>
               <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
-              <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
+              {selectedSpendingExpenses.length > 0 && (
+                <Text style={styles.dayCardTotal}>{selectedData?.total.toLocaleString()}원</Text>
+              )}
             </View>
-            <ExpenseList expenses={selectedSpendingExpenses} onPress={openEdit} />
+            {selectedSpendingExpenses.length > 0 && (
+              <ExpenseList expenses={selectedSpendingExpenses} onPress={openEdit} />
+            )}
+            {selectedIncomeExpenses.length > 0 && (
+              <View
+                style={[
+                  styles.incomeSection,
+                  selectedSpendingExpenses.length === 0 && styles.incomeSectionStandalone,
+                ]}
+              >
+                <Text style={styles.incomeSectionTitle}>들어온 기록</Text>
+                {selectedIncomeExpenses.map((r) => {
+                  const cat = CATEGORY_BY_TOKEN[r.category];
+                  return (
+                    <Pressable key={r.id} style={styles.incomeRow} onPress={() => openEdit(r)}>
+                      <Text style={styles.incomeIcon}>{cat?.emoji ?? '·'}</Text>
+                      <Text style={styles.incomeLabel}>{cat?.label ?? r.category}</Text>
+                      {r.amount > 0 && (
+                        <Text style={styles.incomeAmount}>{r.amount.toLocaleString()}원</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
         )}
 
@@ -494,47 +492,34 @@ function StatsScreen() {
           </Pressable>
         )}
 
-        {/* Settlement */}
+        {/* Observation block — replaces 결산. No title; three groups flow. */}
         <View style={styles.settlementSection}>
-          <Text style={styles.settlementTitle}>결산</Text>
-          <View style={styles.settlementRow}>
-            <View style={styles.settlementItem}>
-              <Text style={styles.settlementLabel}>이번 주</Text>
-              <Text style={styles.settlementValue}>{weeklyTotal.toLocaleString()}원</Text>
-            </View>
-            <View style={styles.settlementDivider} />
-            <View style={styles.settlementItem}>
-              <Text style={styles.settlementLabel}>{viewMonth + 1}월 전체</Text>
-              <Text style={styles.settlementValue}>{monthlyTotal.toLocaleString()}원</Text>
-            </View>
-          </View>
+          {cadenceLines.map((line) => (
+            <Text key={line} style={styles.cadenceLine}>{line}</Text>
+          ))}
 
-          {topCategoryThisMonth && (
+          {monthVisitDays > 0 && topCategoryThisMonth && (
             <View style={styles.settlementChip}>
               <Text style={styles.settlementChipText}>
-                이번 달은 {formatCategoryWithEmoji(topCategoryThisMonth)} · 가장 자주 기록했어요
+                {formatCategoryWithEmoji(topCategoryThisMonth)} · 가장 자주 기록한 장면
               </Text>
             </View>
           )}
 
-          <View style={styles.streakRow}>
-            <Text style={styles.streakText}>
-              {streak >= 3
-                ? '요즘 자주 들르고 있네요 🌿'
-                : streak >= 1
-                  ? '오늘도 잠깐 들렀네요 🍃'
-                  : '가끔씩 들러도 괜찮아요 🌿'}
-            </Text>
-          </View>
+          {monthVisitDays > 0 && (
+            <Text style={styles.observationLine}>{observation}</Text>
+          )}
         </View>
 
-        {/* Trend graph */}
-        <MonthTrendGraph
+        {/* Month presence row — soft trace of this month, not a chart */}
+        <MonthPresenceRow
           viewYear={viewYear}
           viewMonth={viewMonth}
           daysInMonth={daysInMonth}
           expensesByDate={expensesByDate}
+          todayStr={todayStr}
         />
+
       </ScrollView>
 
       <BottomTabs activeRoute="/stats" />
@@ -565,7 +550,7 @@ function StatsScreen() {
 
         <Text style={styles.editFieldLabel}>분류</Text>
         <View style={styles.editCategoryRow}>
-          {PICKER_CATEGORIES.map((c) => (
+          {editingExpensePool.map((c) => (
             <Pressable
               key={c.key}
               style={[styles.editCatPill, editCategory === c.key && styles.editCatPillActive]}
@@ -825,7 +810,7 @@ const styles = StyleSheet.create({
   dayNumFuture: { color: COLORS.textLight },
   daySun: { color: '#C47B7B' },
   daySat: { color: '#7B9BC4' },
-  dayAmount: { fontSize: 9, color: COLORS.oliveGreen, marginTop: 1, height: 12, lineHeight: 12 },
+  dayAmount: { fontSize: 9, color: COLORS.textMuted, marginTop: 1, height: 12, lineHeight: 12 },
   dayAmountSelected: { color: 'rgba(255,255,255,0.85)' },
   dayAmountPlaceholder: { height: 12 },
 
@@ -896,6 +881,45 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
+  // Income section
+  incomeSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  incomeSectionTitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  incomeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  incomeIcon: {
+    fontSize: 16,
+    width: 28,
+    textAlign: 'center',
+  },
+  incomeLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+    marginLeft: 4,
+  },
+  incomeAmount: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  incomeSectionStandalone: {
+    borderTopWidth: 0,
+    paddingTop: 0,
+    marginTop: 8,
+  },
+
   // Photocard entry button
   photocardEntryBtn: {
     alignSelf: 'center',
@@ -923,12 +947,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 1,
   },
-  settlementTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
-  settlementRow: { flexDirection: 'row', alignItems: 'center' },
-  settlementItem: { flex: 1, alignItems: 'center' },
-  settlementLabel: { fontSize: 12, color: COLORS.textMuted, marginBottom: 4 },
-  settlementValue: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  settlementDivider: { width: 1, height: 36, backgroundColor: COLORS.border },
   settlementChip: {
     backgroundColor: COLORS.surface,
     borderRadius: 20,
@@ -937,8 +955,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   settlementChipText: { fontSize: 12, color: COLORS.textMuted, lineHeight: 16 },
-  streakRow: { marginTop: 2 },
-  streakText: { fontSize: 13, color: COLORS.oliveGreen, lineHeight: 18 },
+  cadenceLine: {
+    fontSize: 14,
+    color: COLORS.text,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  observationLine: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 10,
+  },
 
   // Photocard modal
   photocardModal: {
@@ -1105,97 +1132,5 @@ const styles = StyleSheet.create({
   editDeleteNoText: {
     fontSize: 12,
     color: COLORS.textLight,
-  },
-});
-
-const trendStyles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.warmWhite,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 14,
-    shadowColor: COLORS.wood,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-    marginBottom: 14,
-  },
-  wrapper: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  yAxis: {
-    width: Y_AXIS_W,
-    height: TREND_BAR_MAX,
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  yLabel: {
-    fontSize: 9,
-    color: COLORS.textLight,
-    textAlign: 'right',
-  },
-  barArea: {
-    height: TREND_BAR_MAX,
-    position: 'relative',
-  },
-  guideLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: COLORS.border,
-    opacity: 0.6,
-  },
-  barsRow: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 1.5,
-  },
-  barColumn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: '100%',
-  },
-  bar: {
-    width: '100%',
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
-  },
-  barFilled: {
-    backgroundColor: COLORS.oliveGreen,
-    opacity: 0.65,
-  },
-  barEmpty: {
-    backgroundColor: COLORS.border,
-    borderRadius: 2,
-  },
-  xRow: {
-    flexDirection: 'row',
-    marginTop: 3,
-    marginLeft: 0,
-  },
-  xCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  xLabel: {
-    fontSize: 9,
-    color: COLORS.textLight,
-    textAlign: 'center',
-    height: 13,
-    lineHeight: 13,
   },
 });

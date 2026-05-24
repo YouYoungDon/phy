@@ -16,7 +16,7 @@ export const REACTION_POOLS: Record<DialogueTier, Record<SobagiEmotion, [string,
     excited:    ['따뜻한 하루 같았어요 🌿', '오늘도 이어지고 있네요 🌿', '조용히 이어지고 있어요 🍃'],
     sleepy:     ['이 시간에도 기록하다니... 소박이도 졸려요 zzz', '늦은 시간에 왔네요 🌙', '이 시간까지 기록해줬네요 🌙'],
     'soft-sad': ['오늘은 꽤 큰 날이었네요 🌿', '오늘은 좀 특별한 날이었네요', '큰 하루였네요 🌿'],
-    happy:      ['조용히 기록해뒀어요 🌿', '오늘도 다녀왔네요 🌿', '잘 기록해뒀어요 🍃'],
+    happy:      ['조용히 기록해뒀어요 🌿', '오늘도 다녀왔네요 🌿', '여기 남겨뒀어요 🍃'],
   },
   2: {
     surprised:  ['또 처음인 날이네요 ✨', '오늘 처음 들렀네요 ✨', '이 시간에 처음 들렀네요 ✨'],
@@ -32,6 +32,30 @@ export const REACTION_POOLS: Record<DialogueTier, Record<SobagiEmotion, [string,
     'soft-sad': ['그런 날도 있어요 🌿', '오늘은 좀 큰 날이었네요 🌿', '다 기억해둘게요 🌿'],
     happy:      ['또 왔네요 🍃', '이 방이 기억하고 있어요 🌿', '오랜 친구처럼 왔네요 🍃'],
   },
+};
+
+// Income-aware reaction pool. Selected when expense.kind === 'income'.
+// Indexed by tier ONLY (not by emotion) because the income emotion subroutine
+// returns at most 2 emotions (happy | sleepy) and they share the same tonal
+// register — slicing the pool further would force tonally-thin sub-pools.
+// Tone target: relief / warmth / "something warm entered the day".
+// Banned vocabulary: 수입, 수익, 보상, 축하, 벌었, 입금, 잔액, 통장. See sub-spec C §4.
+export const INCOME_REACTION_POOLS: Record<DialogueTier, [string, string, string]> = {
+  1: [
+    '조금 든든한 날이네요 🌿',
+    '따뜻한 일이 들어왔어요 🍃',
+    '오늘은 조금 안심되는 날이에요',
+  ],
+  2: [
+    '들어온 날이 있네요 🌿',
+    '오늘은 조금 든든한 하루였어요 🍃',
+    '따뜻한 소식이 들어왔어요',
+  ],
+  3: [
+    '들어온 날도 기억해둘게요 🌿',
+    '오늘은 조금 든든했을 거예요 🍃',
+    '이런 날도 있어요. 다 기억하고 있어요',
+  ],
 };
 
 // Observation messages — behavioral texture only.

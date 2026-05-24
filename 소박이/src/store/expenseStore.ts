@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import { Expense, ExpenseCategory } from '../types';
+import { Expense, ExpenseCategory, RecordKind } from '../types';
 import { getLocalDateString } from '../utils/date';
 
 interface ExpensePatch {
   amount: number;
   category: ExpenseCategory;
   memo?: string;
+  kind: RecordKind;
 }
 
 interface ExpenseStore {
@@ -29,7 +30,9 @@ export const useExpenseStore = create<ExpenseStore>((set, get) => ({
   updateExpense: (id, patch) =>
     set((state) => ({
       expenses: state.expenses.map((e) =>
-        e.id === id ? { ...e, amount: patch.amount, category: patch.category, memo: patch.memo } : e,
+        e.id === id
+          ? { ...e, amount: patch.amount, category: patch.category, memo: patch.memo, kind: patch.kind }
+          : e,
       ),
     })),
   deleteExpense: (id) =>

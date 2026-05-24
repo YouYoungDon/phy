@@ -12,20 +12,20 @@ import {
   PhotocardWeather,
 } from '../../services/photocardMoodService';
 import { CATEGORY_BY_TOKEN } from '../../constants/categories';
+import { PhotocardRecord, groupByKind } from './photocardGrouping';
 
-// Public types — exported for callers
-export type PhotocardRecord = {
-  id?: string;
-  category?: string;
-  categoryLabel?: string;
-  amount: number;
-  memo?: string;
-};
+// Re-export so existing callers continue to import from PhotocardView
+export type { PhotocardRecord } from './photocardGrouping';
 
 interface PhotocardViewProps {
   // Content
   quote: string;
   dateStr: string;
+  /**
+   * @deprecated Unused after sub-spec B. The `총 금액` block was removed;
+   * per-record amounts live inside `records[].amount`. Accepted for
+   * backward compatibility — callers can stop passing it in a follow-up.
+   */
   amount: number;
   records?: PhotocardRecord[];
   weekdayLabel?: string;
@@ -59,7 +59,8 @@ const VISIBLE_RECORDS = 3;
 export function PhotocardView({
   quote,
   dateStr,
-  amount,
+  // `amount` accepted on the props interface for backward compat; the
+  // totalBlock it used to populate was removed in sub-spec B.
   records,
   weekdayLabel,
   timeLabel,
@@ -93,10 +94,46 @@ export function PhotocardView({
     });
   const assetUri = PHOTOCARD_MOOD_URIS[resolvedAsset];
 
-  const visibleRecords = (records ?? []).slice(0, VISIBLE_RECORDS);
-  const overflowCount = Math.max(0, (records?.length ?? 0) - VISIBLE_RECORDS);
+  // Group records by kind first, then slice across groups in order
+  // (spending → income → noSpend) capped at VISIBLE_RECORDS total. Overflow
+  // counts records that didn't make the visible cut from any group.
+  const allRecords = records ?? [];
+  const allGroups = groupByKind(allRecords);
+  let remaining = VISIBLE_RECORDS;
+  const take = <T,>(arr: readonly T[]): T[] => {
+    const slice = arr.slice(0, Math.max(0, remaining));
+    remaining -= slice.length;
+    return slice;
+  };
+  const shownSpending = take(allGroups.spending);
+  const shownIncome = take(allGroups.income);
+  const shownNoSpend = take(allGroups.noSpend);
+  const shownTotal = shownSpending.length + shownIncome.length + shownNoSpend.length;
+  const overflowCount = Math.max(0, allRecords.length - shownTotal);
 
   const displayQuote = quote.trim() || '오늘의 기록이 조용히 남았어요.';
+
+  // Local render — one row per record. Caller provides idx for the
+  // intra-group divider rule (first row in a group has no preceding divider).
+  const renderRecordRow = (r: PhotocardRecord, idx: number) => {
+    const icon = r.category
+      ? CATEGORY_BY_TOKEN[r.category as ExpenseCategory]?.emoji ?? '·'
+      : '·';
+    const label = r.categoryLabel ?? r.category ?? '';
+    const lineText = r.memo ? `${label} · ${r.memo}` : label;
+    return (
+      <View key={r.id ?? idx}>
+        {idx > 0 && <View style={styles.recordDivider} />}
+        <View style={styles.recordRow}>
+          <Text style={styles.recordIcon}>{icon}</Text>
+          <Text style={styles.recordLine} numberOfLines={1}>{lineText}</Text>
+          {(r.kind !== 'income' || r.amount > 0) && (
+            <Text style={styles.recordAmount}>₩ {r.amount.toLocaleString('ko-KR')}</Text>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.card}>
@@ -123,41 +160,31 @@ export function PhotocardView({
 
           <View style={styles.divider} />
 
-          {/* Total + records blocks render only when the day had real spending.
-              A no-spend-only day (amount === 0 with no records) collapses both
-              so the photocard reads as a quiet emotional card, not a ₩0 receipt.
-              The leading divider above stays so the date header still has its
-              soft separator before the quote block below. */}
-          {amount > 0 && (
-            <>
-              <View style={styles.totalBlock}>
-                <Text style={styles.totalLabel}>총 금액</Text>
-                <Text style={styles.totalAmount}>₩ {amount.toLocaleString('ko-KR')}</Text>
-              </View>
-
-              <View style={styles.divider} />
-            </>
-          )}
-
-          {visibleRecords.length > 0 && (
+          {/* Records grouped by kind. Each group renders only when it has
+              visible rows. Group labels are 9pt muted — quiet separators,
+              not section titles. No per-group subtotals; no aggregate total
+              block (removed in sub-spec B; the Sobagi quote at the bottom
+              carries the emotional weight instead). */}
+          {shownTotal > 0 && (
             <View style={styles.recordsBlock}>
-              {visibleRecords.map((r, idx) => {
-                const icon = r.category
-                  ? CATEGORY_BY_TOKEN[r.category as ExpenseCategory]?.emoji ?? '·'
-                  : '·';
-                const label = r.categoryLabel ?? r.category ?? '';
-                const lineText = r.memo ? `${label} · ${r.memo}` : label;
-                return (
-                  <View key={r.id ?? idx}>
-                    {idx > 0 && <View style={styles.recordDivider} />}
-                    <View style={styles.recordRow}>
-                      <Text style={styles.recordIcon}>{icon}</Text>
-                      <Text style={styles.recordLine} numberOfLines={1}>{lineText}</Text>
-                      <Text style={styles.recordAmount}>₩ {r.amount.toLocaleString('ko-KR')}</Text>
-                    </View>
-                  </View>
-                );
-              })}
+              {shownSpending.length > 0 && (
+                <View style={styles.groupSection}>
+                  <Text style={styles.groupLabel}>쓴 기록</Text>
+                  {shownSpending.map(renderRecordRow)}
+                </View>
+              )}
+              {shownIncome.length > 0 && (
+                <View style={styles.groupSection}>
+                  <Text style={styles.groupLabel}>들어온 기록</Text>
+                  {shownIncome.map(renderRecordRow)}
+                </View>
+              )}
+              {shownNoSpend.length > 0 && (
+                <View style={styles.groupSection}>
+                  <Text style={styles.groupLabel}>무지출</Text>
+                  {shownNoSpend.map(renderRecordRow)}
+                </View>
+              )}
               {overflowCount > 0 && (
                 <Text style={styles.overflowText}>+ {overflowCount}개 더</Text>
               )}
@@ -250,22 +277,18 @@ const styles = StyleSheet.create({
     backgroundColor: DIVIDER,
     marginVertical: 6,
   },
-  totalBlock: {
-    gap: 2,
+  recordsBlock: {
+    gap: 0,
   },
-  totalLabel: {
+  groupSection: {
+    marginTop: 6,
+  },
+  groupLabel: {
     fontSize: 9,
     color: TEXT_MUTED,
     letterSpacing: 0.3,
-  },
-  totalAmount: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: TEXT_DARK,
-    letterSpacing: 0.5,
-  },
-  recordsBlock: {
-    gap: 0,
+    marginBottom: 4,
+    fontWeight: '500',
   },
   recordDivider: {
     height: 1,
