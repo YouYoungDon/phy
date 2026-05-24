@@ -164,6 +164,14 @@ function StatsScreen() {
     [selectedExpenses],
   );
 
+  // No-spend marks (amount 0, category 'no_spend'). Surfaced in the day card so
+  // a misfired 무지출 has a delete entry point — otherwise the only trace is the
+  // calendar 🌿 with no way to remove it.
+  const selectedNoSpendExpenses = useMemo(
+    () => selectedExpenses.filter((e) => e.category === 'no_spend'),
+    [selectedExpenses],
+  );
+
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
   const firstDow = getFirstDayOfWeek(viewYear, viewMonth);
 
@@ -429,6 +437,10 @@ function StatsScreen() {
   const editKind = kindForCategory(editCategory);
   const editCanSave = amountValidForKind(editKind, parseAmountInput(editAmount));
 
+  // No-spend records have nothing meaningful to edit (amount 0, fixed category).
+  // The edit sheet collapses to a quiet label + delete-only affordance for them.
+  const editingNoSpend = editingExpense?.category === 'no_spend';
+
   const commitDelete = useCallback(() => {
     if (!editingExpense) return;
     persistDeleteExpense(editingExpense.id);
@@ -533,9 +545,12 @@ function StatsScreen() {
           </View>
         </View>
 
-        {/* Selected day card — renders when the day has any record (spending or income).
-            No-spend-only days still don't surface a card (they're calendar-only). */}
-        {(selectedSpendingExpenses.length > 0 || selectedIncomeExpenses.length > 0) && (
+        {/* Selected day card — renders when the day has any record: spending,
+            income, or a no-spend mark. No-spend-only days surface the card too
+            so the 무지출 record has a delete entry point. */}
+        {(selectedSpendingExpenses.length > 0 ||
+          selectedIncomeExpenses.length > 0 ||
+          selectedNoSpendExpenses.length > 0) && (
           <View style={styles.dayCard}>
             <View style={styles.dayCardHeader}>
               <Text style={styles.dayCardTitle}>{selectedLabel}</Text>
@@ -573,6 +588,27 @@ function StatsScreen() {
                     </React.Fragment>
                   );
                 })}
+              </View>
+            )}
+            {selectedNoSpendExpenses.length > 0 && (
+              <View
+                style={[
+                  styles.incomeSection,
+                  selectedSpendingExpenses.length === 0 &&
+                    selectedIncomeExpenses.length === 0 &&
+                    styles.incomeSectionStandalone,
+                ]}
+              >
+                {selectedNoSpendExpenses.map((r, idx) => (
+                  <React.Fragment key={r.id}>
+                    {idx > 0 && <View style={styles.recordDivider} />}
+                    <Pressable style={styles.incomeRow} onPress={() => openEdit(r)}>
+                      <Text style={styles.incomeIcon}>🌿</Text>
+                      <Text style={styles.incomeLabel}>무지출</Text>
+                      <Text style={styles.recordChevron}>›</Text>
+                    </Pressable>
+                  </React.Fragment>
+                ))}
               </View>
             )}
           </View>
@@ -629,8 +665,14 @@ function StatsScreen() {
         style={[styles.editSheet, { transform: [{ translateY: editSheetAnim }], bottom: editSheetBottom }]}
         pointerEvents={editingExpense !== null ? 'auto' : 'none'}
       >
-        <Text style={styles.editSheetTitle}>기록을 조금 고칠게요</Text>
+        <Text style={styles.editSheetTitle}>
+          {editingNoSpend ? '무지출 기록' : '기록을 조금 고칠게요'}
+        </Text>
 
+        {editingNoSpend ? (
+          <Text style={styles.noSpendEditHint}>이 날은 무지출로 기록했어요 🌿</Text>
+        ) : (
+          <>
         <Text style={styles.editFieldLabel}>금액</Text>
         <TextInput
           style={styles.editAmountInput}
@@ -686,6 +728,8 @@ function StatsScreen() {
             <Text style={styles.editCancelBtnText}>취소</Text>
           </Pressable>
         </View>
+          </>
+        )}
 
         <View style={styles.editDeleteArea}>
           {!deleteConfirm ? (
@@ -1281,6 +1325,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textMuted,
     marginTop: 12,
+  },
+  noSpendEditHint: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    marginTop: 8,
+    marginBottom: 4,
   },
   editCancelBtn: {
     paddingVertical: 13,
