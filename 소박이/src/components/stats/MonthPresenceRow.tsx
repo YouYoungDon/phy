@@ -4,6 +4,8 @@ import { COLORS } from '../../constants/colors';
 
 interface DayCellData {
   total: number;
+  hasRecord: boolean;
+  hasOnlyNoSpend: boolean;
 }
 
 interface MonthPresenceRowProps {
@@ -18,20 +20,20 @@ interface MonthPresenceRowProps {
 // Sparse on purpose — the row reads as a soft trace, not a precise chart.
 const LABEL_DAYS = [1, 10, 20, 30];
 
-// Glyph table:
-//   no record           → · (low-opacity middle dot)
-//   no-spend only       → 🌿 (matches calendar leaf semantic)
-//   any spending        → ●
-//   today, no record    → ○ (only on current-month view)
-//   mixed (spend + no-spend) → ● (spending dominates because total > 0)
+// Glyph table (presence is presence — income-only days render ● like spending days):
+//   no record            → · (or ○ if today)
+//   no-spend only        → 🌿
+//   any other record     → ● (spending, income, or mixed)
+// hasOnlyNoSpend is checked first to protect 🌿 from being crowded out by income.
 function glyphFor(
   data: DayCellData | undefined,
   isToday: boolean,
   isFuture: boolean,
 ): { char: string; muted: boolean } {
   if (data) {
-    if (data.total > 0) return { char: '●', muted: false };
-    return { char: '🌿', muted: false };
+    if (data.hasOnlyNoSpend) return { char: '🌿', muted: false };
+    if (data.hasRecord) return { char: '●', muted: false };
+    return { char: '·', muted: isFuture };
   }
   if (isToday) return { char: '○', muted: false };
   return { char: '·', muted: isFuture };

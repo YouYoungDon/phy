@@ -81,11 +81,13 @@ function StatsScreen() {
   const dayRevealAnim = useRef(new Animated.Value(1)).current;
 
   const expensesByDate = useMemo(() => {
-    const map: Record<string, { total: number; count: number; categories: ExpenseCategory[] }> = {};
+    const map: Record<string, { total: number; count: number; categories: ExpenseCategory[]; hasRecord: boolean; hasOnlyNoSpend: boolean }> = {};
     for (const e of expenses) {
-      if (e.kind === 'income') continue;
       const d = getLocalDateString(new Date(e.createdAt));
-      if (!map[d]) map[d] = { total: 0, count: 0, categories: [] };
+      if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true };
+      map[d].hasRecord = true;
+      if (e.category !== 'no_spend') map[d].hasOnlyNoSpend = false;
+      if (e.kind === 'income') continue;
       map[d].total += e.amount;
       map[d].count += 1;
       map[d].categories.push(e.category);
