@@ -10,7 +10,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
-import { createRoute, useNavigation } from '@granite-js/react-native';
+import { createRoute, useNavigation, useIsFocusedSafely } from '@granite-js/react-native';
 import { CategorySelector } from '../components/expense/CategorySelector';
 import { MemoSuggestions } from '../components/expense/MemoSuggestions';
 import { saveExpense, recordNoSpend } from '../services/expenseService';
@@ -139,6 +139,21 @@ function RecordScreen() {
       hide.remove();
     };
   }, []);
+
+  // Reset the form on in-app re-entry (blur → focus). resetForm already runs
+  // after a successful save; this covers leaving WITHOUT saving (e.g. toggled
+  // to 들어온 기록, navigated home, came back) on navigators that keep the
+  // screen mounted. Keyed on react-navigation focus only, so an app
+  // background→foreground does NOT wipe in-progress input. The ref guard means
+  // it never fires on first mount or while the user is typing.
+  const isScreenFocused = useIsFocusedSafely();
+  const wasFocusedRef = useRef(true);
+  useEffect(() => {
+    if (isScreenFocused && !wasFocusedRef.current) {
+      resetForm();
+    }
+    wasFocusedRef.current = isScreenFocused;
+  }, [isScreenFocused]);
 
   const setEmotion = useEmotionStore((s) => s.setEmotion);
   const getTodayExpenses = useExpenseStore((s) => s.getTodayExpenses);
