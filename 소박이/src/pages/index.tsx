@@ -24,6 +24,7 @@ import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
+import { PressableScale } from '../components/common/PressableScale';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -319,7 +320,7 @@ function HomeScreen() {
             </TouchableOpacity>
             <View style={styles.utilityStack}>
               <View style={styles.utilityItem}>
-                <Pressable style={styles.utilityBtn} onPress={() => openSheet('bag')}>
+                <PressableScale style={styles.utilityBtn} onPress={() => openSheet('bag')} pressedScale={0.93}>
                   {({ pressed }) => (
                     <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
                       <Image
@@ -330,11 +331,11 @@ function HomeScreen() {
                       {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
                     </View>
                   )}
-                </Pressable>
+                </PressableScale>
                 <Text style={styles.utilityLabel}>가방</Text>
               </View>
               <View style={styles.utilityItem}>
-                <Pressable style={styles.utilityBtn} onPress={() => openSheet('mailbox')}>
+                <PressableScale style={styles.utilityBtn} onPress={() => openSheet('mailbox')} pressedScale={0.93}>
                   {({ pressed }) => (
                     <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
                       <Image
@@ -345,12 +346,13 @@ function HomeScreen() {
                       {mailboxUnread && <View style={styles.utilityDot} />}
                     </View>
                   )}
-                </Pressable>
+                </PressableScale>
                 <Text style={styles.utilityLabel}>우편함</Text>
               </View>
               <View style={styles.utilityItem}>
-                <Pressable
+                <PressableScale
                   style={styles.utilityBtn}
+                  pressedScale={0.93}
                   onPress={() => {
                     if (effectiveRestsToday >= 2) {
                       setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
@@ -385,7 +387,7 @@ function HomeScreen() {
                       />
                     </View>
                   )}
-                </Pressable>
+                </PressableScale>
                 <Text style={styles.utilityLabel}>티비</Text>
               </View>
             </View>
@@ -486,15 +488,17 @@ function HomeScreen() {
             {/* Tab bar */}
             <View style={styles.bagTabBar}>
               {BAG_TABS.map((tab) => (
-                <Pressable
+                <PressableScale
                   key={tab}
                   style={[styles.bagTabBtn, bagTab === tab && styles.bagTabBtnActive]}
+                  pressedScale={0.95}
+                  haptic={bagTab === tab ? 'none' : 'selection'}
                   onPress={() => { setBagTab(tab); setSelectedBagItem(null); setSelectedFoundItem(null); }}
                 >
                   <Text style={[styles.bagTabLabel, bagTab === tab && styles.bagTabLabelActive]}>
                     {tab}
                   </Text>
-                </Pressable>
+                </PressableScale>
               ))}
             </View>
 
@@ -514,13 +518,15 @@ function HomeScreen() {
                       const item = rawItem !== null && recordedDaysCount >= rawItem.minDays ? rawItem : null;
                       const isSelected = item !== null && selectedBagItem?.id === item.id;
                       return (
-                        <Pressable
+                        <PressableScale
                           key={col}
                           style={[
                             styles.bagCell,
                             item === null && styles.bagCellVacant,
                             isSelected && styles.bagCellSelected,
                           ]}
+                          pressedScale={0.94}
+                          haptic={item === null ? 'none' : 'selection'}
                           onPress={() => {
                             if (!item) return;
                             setSelectedBagItem(isSelected ? null : item);
@@ -536,7 +542,7 @@ function HomeScreen() {
                           ) : (
                             <View style={styles.bagCellDot} />
                           )}
-                        </Pressable>
+                        </PressableScale>
                       );
                     })}
                   </View>
@@ -555,9 +561,10 @@ function HomeScreen() {
                     if (item === null) return null;
                     const isSelected = selectedFoundItem?.id === id;
                     return (
-                      <Pressable
+                      <PressableScale
                         key={id}
                         style={[styles.foundChip, isSelected && styles.foundChipSelected]}
+                        pressedScale={0.95}
                         onPress={() => {
                           setSelectedFoundItem(isSelected ? null : item);
                           setSelectedBagItem(null);
@@ -565,7 +572,7 @@ function HomeScreen() {
                       >
                         <Text style={styles.foundChipEmoji}>{item.emoji}</Text>
                         <Text style={styles.foundChipName}>{item.name}</Text>
-                      </Pressable>
+                      </PressableScale>
                     );
                   })}
                 </View>
@@ -810,6 +817,11 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     marginTop: -5,
     lineHeight: 14,
+    // Soft contrast aid so the light labels stay legible over bright morning/
+    // afternoon background paintings — calm and near-invisible, not a glow.
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   utilityBtn: {
     width: 60,
