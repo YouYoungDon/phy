@@ -246,18 +246,24 @@ function StatsScreen() {
     [selectedSpendingExpenses, selectedDay],
   );
 
-  // Photocard renders only real spending records. No-spend entries exist for
-  // streak/day-count but never appear as "₩ 0 — 무지출" lines on the card.
+  // Photocard records include both spending and income (sub-spec B), so
+  // PhotocardView's groupByKind can render the 들어온 기록 section on mixed
+  // days. No_spend is excluded — it's a calendar marker, not a memory line.
+  // The entry-point gate (selectedSpendingExpenses.length > 0 below) still
+  // hides the photocard button for income-only days, so an income-only day
+  // never reaches PhotocardView in the first place.
   const photocardRecords: PhotocardRecord[] = useMemo(
-    () => selectedSpendingExpenses.map((e) => ({
-      id: e.id,
-      category: e.category,
-      categoryLabel: formatCategoryLabel(e.category),
-      amount: e.amount,
-      memo: e.memo,
-      kind: e.kind,
-    })),
-    [selectedSpendingExpenses],
+    () => selectedExpenses
+      .filter((e) => e.category !== 'no_spend')
+      .map((e) => ({
+        id: e.id,
+        category: e.category,
+        categoryLabel: formatCategoryLabel(e.category),
+        amount: e.amount,
+        memo: e.memo,
+        kind: e.kind,
+      })),
+    [selectedExpenses],
   );
 
   const photocardDateStr = useMemo(() => {
