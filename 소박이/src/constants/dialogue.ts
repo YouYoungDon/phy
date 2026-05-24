@@ -34,6 +34,30 @@ export const REACTION_POOLS: Record<DialogueTier, Record<SobagiEmotion, [string,
   },
 };
 
+// Income-aware reaction pool. Selected when expense.kind === 'income'.
+// Indexed by tier ONLY (not by emotion) because the income emotion subroutine
+// returns at most 2 emotions (happy | sleepy) and they share the same tonal
+// register — slicing the pool further would force tonally-thin sub-pools.
+// Tone target: relief / warmth / "something warm entered the day".
+// Banned vocabulary: 수입, 수익, 보상, 축하, 벌었, 입금, 잔액, 통장. See sub-spec C §4.
+export const INCOME_REACTION_POOLS: Record<DialogueTier, [string, string, string]> = {
+  1: [
+    '조금 든든한 날이네요 🌿',
+    '따뜻한 일이 들어왔어요 🍃',
+    '오늘은 조금 안심되는 날이에요',
+  ],
+  2: [
+    '들어온 날이 있네요 🌿',
+    '오늘은 조금 든든한 하루였어요 🍃',
+    '따뜻한 소식이 들어왔어요',
+  ],
+  3: [
+    '들어온 날도 기억해둘게요 🌿',
+    '오늘은 조금 든든했을 거예요 🍃',
+    '이런 날도 있어요. 다 기억하고 있어요',
+  ],
+};
+
 // Observation messages — behavioral texture only.
 // MUST NEVER reference amounts, totals, spending frequency, or financial behavior.
 // Only: time-of-day pattern, category atmosphere, absence/return shape, quiet/busy day feel.
