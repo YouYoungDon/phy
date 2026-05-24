@@ -480,6 +480,9 @@ function StatsScreen() {
                     <Pressable key={r.id} style={styles.incomeRow} onPress={() => openEdit(r)}>
                       <Text style={styles.incomeIcon}>{cat?.emoji ?? '·'}</Text>
                       <Text style={styles.incomeLabel}>{cat?.label ?? r.category}</Text>
+                      {r.userEmotion ? (
+                        <Text style={styles.incomeEmotion}>{r.userEmotion}</Text>
+                      ) : null}
                       {r.amount > 0 && (
                         <Text style={styles.incomeAmount}>{r.amount.toLocaleString()}원</Text>
                       )}
@@ -915,6 +918,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.text,
     marginLeft: 4,
+  },
+  incomeEmotion: {
+    fontSize: 14,
+    marginRight: 6,
   },
   incomeAmount: {
     fontSize: 12,
