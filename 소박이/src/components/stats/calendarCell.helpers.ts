@@ -7,9 +7,7 @@ export type CalendarViewMode = 'spending' | 'income' | 'both';
 export type CellDisplay =
   | { kind: 'blank' }
   | { kind: 'leaf' }                              // 🌿 quiet / no-spend day
-  | { kind: 'amount'; amount: number; compact?: boolean }  // spending in 쓴 기록; income (compact 만) in 들어온 기록
-  | { kind: 'amountWithIncome'; amount: number }  // 함께: spending amount + 🍃 marker
-  | { kind: 'incomeMarker' };                     // 함께: income existed, no spending → 🍃
+  | { kind: 'amount'; amount: number; compact?: boolean };  // spending (쓴 기록), compact 만 income (들어온 기록), or combined movement (함께)
 
 export function selectCalendarCellContent(
   mode: CalendarViewMode,
@@ -21,13 +19,12 @@ export function selectCalendarCellContent(
     return d.incomeTotal > 0 ? { kind: 'amount', amount: d.incomeTotal, compact: true } : { kind: 'blank' };
   }
   if (mode === 'both') {
+    // 함께 보기 — one calm combined-movement number (spending + income, full
+    // comma). NOT net/balance: the absolute sum of "how much moved today".
+    // No-spend-only (combined 0) stays 🌿; no record stays blank.
     if (!d.hasRecord) return { kind: 'blank' };
-    if (d.spendingTotal > 0) {
-      return d.incomeTotal > 0
-        ? { kind: 'amountWithIncome', amount: d.spendingTotal }
-        : { kind: 'amount', amount: d.spendingTotal };
-    }
-    return d.incomeTotal > 0 ? { kind: 'incomeMarker' } : { kind: 'leaf' };
+    const combined = d.spendingTotal + d.incomeTotal;
+    return combined > 0 ? { kind: 'amount', amount: combined } : { kind: 'leaf' };
   }
   // 'spending' (default) — byte-identical to current behavior
   if (!d.hasRecord) return { kind: 'blank' };

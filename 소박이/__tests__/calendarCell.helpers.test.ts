@@ -45,19 +45,19 @@ describe('selectCalendarCellContent — 들어온 기록 (income)', () => {
 });
 
 describe('selectCalendarCellContent — 함께 보기 (both)', () => {
-  it('spend-only → amount(spending)', () => {
+  it('spend-only → combined amount (= spending)', () => {
     expect(selectCalendarCellContent('both', spend)).toEqual({ kind: 'amount', amount: 3200 });
   });
-  it('income-only → incomeMarker (🍃)', () => {
-    expect(selectCalendarCellContent('both', incomeOnly)).toEqual({ kind: 'incomeMarker' });
+  it('income-only → combined amount (= income, full number)', () => {
+    expect(selectCalendarCellContent('both', incomeOnly)).toEqual({ kind: 'amount', amount: 1200000 });
   });
-  it('spend+income → amountWithIncome(spending)', () => {
-    expect(selectCalendarCellContent('both', both)).toEqual({ kind: 'amountWithIncome', amount: 3200 });
+  it('spend+income → combined amount (spending + income)', () => {
+    expect(selectCalendarCellContent('both', both)).toEqual({ kind: 'amount', amount: 1203200 });
   });
-  it('income+no-spend → incomeMarker', () => {
-    expect(selectCalendarCellContent('both', incomeNoSpend)).toEqual({ kind: 'incomeMarker' });
+  it('income+no-spend → combined amount (= income)', () => {
+    expect(selectCalendarCellContent('both', incomeNoSpend)).toEqual({ kind: 'amount', amount: 1200000 });
   });
-  it('no-spend → leaf', () => {
+  it('no-spend → leaf (combined 0, unchanged)', () => {
     expect(selectCalendarCellContent('both', noSpend)).toEqual({ kind: 'leaf' });
   });
   it('no record → blank', () => {
