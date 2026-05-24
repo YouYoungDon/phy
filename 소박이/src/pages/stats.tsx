@@ -635,7 +635,6 @@ function StatsScreen() {
               quote={dayFeeling.mainLine}
               dateStr={photocardDateStr}
               weekdayLabel={photocardWeekday}
-              amount={selectedData?.total ?? 0}
               records={photocardRecords}
               currentEmotion={dayFeeling.sobagiEmotion}
               quoteAnimated

@@ -130,9 +130,6 @@ function SobagiReactionScreen() {
   // calendar marker, not a memory line). Income is INCLUDED so PhotocardView's
   // groupByKind can render the 들어온 기록 section on mixed days.
   const photocardSourceRecords = todayExpenses.filter((e) => e.category !== 'no_spend');
-  // `todayTotal` still computed for the deprecated `amount` prop on PhotocardView
-  // (kept for backward compat; no longer drives layout).
-  const todayTotal = photocardSourceRecords.reduce((sum, e) => sum + e.amount, 0);
   const now = new Date();
   const dateStr = formatNumericDate(now);
   const weekdayLabel = WEEKDAY_LABELS[now.getDay()];
@@ -243,7 +240,6 @@ function SobagiReactionScreen() {
               dateStr={dateStr}
               weekdayLabel={weekdayLabel}
               timeLabel={timeLabel}
-              amount={todayTotal}
               records={photocardRecords}
               currentEmotion={currentEmotion}
               quoteAnimated

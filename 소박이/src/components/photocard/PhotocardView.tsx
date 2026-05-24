@@ -21,12 +21,6 @@ interface PhotocardViewProps {
   // Content
   quote: string;
   dateStr: string;
-  /**
-   * @deprecated Unused after sub-spec B. The `총 금액` block was removed;
-   * per-record amounts live inside `records[].amount`. Accepted for
-   * backward compatibility — callers can stop passing it in a follow-up.
-   */
-  amount: number;
   records?: PhotocardRecord[];
   weekdayLabel?: string;
   timeLabel?: string;
@@ -59,8 +53,6 @@ const VISIBLE_RECORDS = 3;
 export function PhotocardView({
   quote,
   dateStr,
-  // `amount` accepted on the props interface for backward compat; the
-  // totalBlock it used to populate was removed in sub-spec B.
   records,
   weekdayLabel,
   timeLabel,
