@@ -10,3 +10,15 @@ export function parseAmountInput(text: string): number {
   if (!/^[0-9]+$/.test(cleaned)) return 0;
   return parseInt(cleaned, 10);
 }
+
+// Display formatter for amount inputs: keeps only digits, drops leading zeros,
+// and groups thousands with commas. The display inverse of parseAmountInput
+// (which strips commas back out before validating digits-only). Empty / no-digit
+// input → '' so the placeholder shows. Pure; shared by create + edit. Uses a
+// grouping regex (not toLocaleString) so it's deterministic under the test
+// runner regardless of ICU availability.
+export function formatAmountInput(text: string): string {
+  const digits = text.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+  if (digits === '') return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
