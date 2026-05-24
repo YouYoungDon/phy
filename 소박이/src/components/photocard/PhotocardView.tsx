@@ -12,7 +12,7 @@ import {
   PhotocardWeather,
 } from '../../services/photocardMoodService';
 import { CATEGORY_BY_TOKEN } from '../../constants/categories';
-import { PhotocardRecord, groupByKind } from './photocardGrouping';
+import { PhotocardRecord, groupByKind, showsAmount } from './photocardGrouping';
 
 // Re-export so existing callers continue to import from PhotocardView
 export type { PhotocardRecord } from './photocardGrouping';
@@ -119,7 +119,7 @@ export function PhotocardView({
         <View style={styles.recordRow}>
           <Text style={styles.recordIcon}>{icon}</Text>
           <Text style={styles.recordLine} numberOfLines={1}>{lineText}</Text>
-          {(r.kind !== 'income' || r.amount > 0) && (
+          {showsAmount(r) && (
             <Text style={styles.recordAmount}>₩ {r.amount.toLocaleString('ko-KR')}</Text>
           )}
         </View>
@@ -172,8 +172,10 @@ export function PhotocardView({
                 </View>
               )}
               {shownNoSpend.length > 0 && (
+                // No group label: the 🌿 무지출 row is self-describing, and the
+                // no_spend group never coexists with 쓴/들어온 groups (callers
+                // pass it alone), so a "무지출" header would only double the row.
                 <View style={styles.groupSection}>
-                  <Text style={styles.groupLabel}>무지출</Text>
                   {shownNoSpend.map(renderRecordRow)}
                 </View>
               )}

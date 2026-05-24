@@ -334,12 +334,13 @@ function StatsScreen() {
 
   // Photocard records include both spending and income (sub-spec B), so
   // PhotocardView's groupByKind can render the 들어온 기록 section on mixed
-  // days. No_spend is excluded — it's a calendar marker, not a memory line.
-  // The entry-point gate (selectedSpendingExpenses.length > 0 below) still
-  // hides the photocard button for income-only days, so an income-only day
-  // never reaches PhotocardView in the first place.
-  const photocardRecords: PhotocardRecord[] = useMemo(
-    () => selectedExpenses
+  // days. The entry-point gate (canOpenDayPhotocard below) hides the button
+  // for income-only days, so an income-only day never reaches PhotocardView.
+  // A no-spend-only day surfaces a single quiet 🌿 무지출 line (its amount is
+  // hidden by PhotocardView's showsAmount — no ₩0) so the card isn't
+  // record-less; the line is dropped the moment any spending/income exists.
+  const photocardRecords: PhotocardRecord[] = useMemo(() => {
+    const spendingIncome = selectedExpenses
       .filter((e) => e.category !== 'no_spend')
       .map((e) => ({
         id: e.id,
@@ -348,9 +349,20 @@ function StatsScreen() {
         amount: e.amount,
         memo: e.memo,
         kind: e.kind,
-      })),
-    [selectedExpenses],
-  );
+      }));
+    if (spendingIncome.length > 0) return spendingIncome;
+    const noSpend = selectedExpenses.find((e) => e.category === 'no_spend');
+    if (noSpend) {
+      return [{
+        id: noSpend.id,
+        category: 'no_spend',
+        categoryLabel: formatCategoryLabel('no_spend'),
+        amount: 0,
+        kind: noSpend.kind,
+      }];
+    }
+    return [];
+  }, [selectedExpenses]);
 
   const photocardDateStr = useMemo(() => {
     const d = new Date(selectedDay + 'T00:00:00');
@@ -366,8 +378,8 @@ function StatsScreen() {
   }, [selectedDay]);
 
   // No-spend-only days have no spending feeling, so the photocard can still open
-  // (sub-spec: 무지출도 하나의 기록) using a quiet line + calm emotion + zero
-  // record rows (photocardRecords already excludes no_spend, so it's []).
+  // (sub-spec: 무지출도 하나의 기록) using a quiet line + calm emotion + a single
+  // 🌿 무지출 record row (built in photocardRecords above).
   const isNoSpendOnlyDay =
     selectedSpendingExpenses.length === 0 &&
     selectedIncomeExpenses.length === 0 &&

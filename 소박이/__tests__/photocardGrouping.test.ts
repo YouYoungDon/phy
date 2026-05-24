@@ -1,4 +1,4 @@
-import { groupByKind, PhotocardRecord } from '../src/components/photocard/photocardGrouping';
+import { groupByKind, showsAmount, PhotocardRecord } from '../src/components/photocard/photocardGrouping';
 
 const r = (over: Partial<PhotocardRecord> = {}): PhotocardRecord => ({
   amount: 1000,
@@ -76,5 +76,26 @@ describe('groupByKind', () => {
     expect(out.spending).toHaveLength(1);
     expect(out.income).toHaveLength(1);
     expect(out.noSpend).toHaveLength(1);
+  });
+});
+
+describe('showsAmount', () => {
+  it('never shows an amount for a no_spend record (presence marker, no ₩0)', () => {
+    expect(showsAmount(r({ category: 'no_spend', kind: 'spending', amount: 0 }))).toBe(false);
+    // Even a non-zero/mis-kinded no_spend stays amountless — category wins.
+    expect(showsAmount(r({ category: 'no_spend', kind: 'income', amount: 9999 }))).toBe(false);
+  });
+
+  it('hides the amount for an income record of 0 (per-record amount-hide)', () => {
+    expect(showsAmount(r({ category: 'salary', kind: 'income', amount: 0 }))).toBe(false);
+  });
+
+  it('shows the amount for an income record above 0', () => {
+    expect(showsAmount(r({ category: 'salary', kind: 'income', amount: 3000000 }))).toBe(true);
+  });
+
+  it('shows the amount for spending and legacy (kind-less) records', () => {
+    expect(showsAmount(r({ category: 'cafe', kind: 'spending', amount: 5000 }))).toBe(true);
+    expect(showsAmount(r({ category: 'cafe', amount: 5000 }))).toBe(true);
   });
 });
