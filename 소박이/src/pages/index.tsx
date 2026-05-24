@@ -22,6 +22,7 @@ import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZON
 import { PebbleJar } from '../components/room/PebbleJar';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
 
 export const Route = createRoute('/', {
@@ -206,6 +207,19 @@ function HomeScreen() {
       }
     });
   }, [sheetAnim]);
+
+  // Android hardware back closes an open overlay before falling through to
+  // navigation. A selected bag/found item collapses back to the grid first;
+  // otherwise the whole sheet closes. No-op when nothing is open (and on iOS).
+  const handleAndroidBack = useCallback(() => {
+    if (selectedBagItem !== null || selectedFoundItem !== null) {
+      setSelectedBagItem(null);
+      setSelectedFoundItem(null);
+      return;
+    }
+    if (activeSheet !== null) closeSheet();
+  }, [selectedBagItem, selectedFoundItem, activeSheet, closeSheet]);
+  useAndroidBack(activeSheet !== null, handleAndroidBack);
 
   useEffect(() => {
     return () => {

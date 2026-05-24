@@ -12,6 +12,7 @@ import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
+import { useAndroidBack } from '../hooks/useAndroidBack';
 import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthAmountChart } from '../components/stats/MonthAmountChart';
@@ -495,6 +496,18 @@ function StatsScreen() {
     }
     closeEdit();
   }, [editingExpense, editSaving, closeEdit]);
+
+  // Android hardware back closes the topmost open stats overlay before route
+  // back: photocard modal → month picker → edit sheet.
+  const handleAndroidBack = useCallback(() => {
+    if (showDayPhotocard) { closeDayPhotocard(); return; }
+    if (showMonthPicker) { closeMonthPicker(); return; }
+    if (editingExpense !== null) { closeEdit(); return; }
+  }, [showDayPhotocard, showMonthPicker, editingExpense, closeDayPhotocard, closeMonthPicker, closeEdit]);
+  useAndroidBack(
+    showDayPhotocard || showMonthPicker || editingExpense !== null,
+    handleAndroidBack,
+  );
 
   return (
     <View style={styles.screen}>
