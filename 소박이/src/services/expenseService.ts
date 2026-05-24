@@ -6,6 +6,7 @@ import { useUserStore } from '../store/userStore';
 import { getLocalDateString } from '../utils/date';
 import { checkForFoundItem } from './foundItemService';
 import { kindForCategory } from '../constants/categories';
+import { computeRecordingStreak } from './roomPresenceService';
 
 export async function saveExpense(expense: Expense): Promise<void> {
   const expenseStore = useExpenseStore.getState();
@@ -94,8 +95,39 @@ export function updateExpense(
 }
 
 export function deleteExpense(id: string): void {
+  const userStore = useUserStore.getState();
   useExpenseStore.getState().deleteExpense(id);
-  void storageService.save(STORAGE_KEYS.EXPENSES, useExpenseStore.getState().expenses);
+
+  const expenses = useExpenseStore.getState().expenses;
+  const todayStr = getLocalDateString(new Date());
+
+  // Recompute derived user state from the remaining expenses. Deleting the
+  // only record on a unique day collapses recordedDaysCount (and therefore
+  // level / room stage / dialogue tier). Deleting yesterday's only record
+  // may also have broken the current streak. Both must be re-derived here
+  // — otherwise the UI shows inflated values until the next app init.
+  const newRecordedDays = new Set(
+    expenses.map((e) => getLocalDateString(new Date(e.createdAt))),
+  ).size;
+  userStore.setRecordedDaysCount(newRecordedDays);
+  userStore.setStreak(computeRecordingStreak(expenses, todayStr));
+  userStore.setTotalRecordCount(expenses.length);
+
+  // Persist both stores. Fresh UserState snapshot from the updated store.
+  const s = useUserStore.getState();
+  const updatedUser: UserState = {
+    level: s.level,
+    streak: s.streak,
+    totalRecordCount: s.totalRecordCount,
+    recordedDaysCount: s.recordedDaysCount,
+    roomStage: s.roomStage,
+    pebbleCount: s.pebbleCount,
+    restsToday: s.restsToday,
+    lastRestDate: s.lastRestDate,
+    lastRestAt: s.lastRestAt,
+  };
+  void storageService.save(STORAGE_KEYS.EXPENSES, expenses);
+  void storageService.save(STORAGE_KEYS.USER, updatedUser);
 }
 
 /**

@@ -33,6 +33,8 @@ interface UserStore extends UserState {
   incrementRecordedDays: () => void;
   incrementTotalRecordCount: () => void;
   setStreak: (streak: number) => void;
+  setRecordedDaysCount: (count: number) => void;
+  setTotalRecordCount: (count: number) => void;
   setPebbleCount: (count: number) => void;
   setRestsToday: (count: number) => void;
   setLastRestDate: (date: string | null) => void;
@@ -62,6 +64,16 @@ export const useUserStore = create<UserStore>((set) => ({
   incrementTotalRecordCount: () =>
     set((state) => ({ totalRecordCount: state.totalRecordCount + 1 })),
   setStreak: (streak) => set({ streak }),
+  // Sets `recordedDaysCount` and re-derives `level` / `roomStage` from it.
+  // Used by `expenseService.deleteExpense` to keep tier/level in sync after
+  // a record removal (which may collapse a unique recorded day).
+  setRecordedDaysCount: (newDays) =>
+    set(() => ({
+      recordedDaysCount: newDays,
+      level: getLevel(newDays),
+      roomStage: getRoomStage(newDays),
+    })),
+  setTotalRecordCount: (totalRecordCount) => set({ totalRecordCount }),
   setPebbleCount: (pebbleCount) => set({ pebbleCount }),
   setRestsToday: (restsToday) => set({ restsToday }),
   setLastRestDate: (lastRestDate) => set({ lastRestDate }),
