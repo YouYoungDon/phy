@@ -229,6 +229,22 @@ function StatsScreen() {
     return days.size;
   }, [expenses, viewYear, viewMonth]);
 
+  // Two independent monthly totals for the settlement line: spending and
+  // income. Deliberately NO net/balance/차액 — this is the one scoped
+  // exception to the no-income-totals rule (see the monthly-settlement spec).
+  // no_spend carries amount 0, so it's harmless in the spending sum.
+  const monthSettlement = useMemo(() => {
+    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    let spending = 0;
+    let income = 0;
+    for (const e of expenses) {
+      if (!expenseLocalDate(e).startsWith(prefix)) continue;
+      if (e.kind === 'income') income += e.amount;
+      else spending += e.amount;
+    }
+    return { spending, income };
+  }, [expenses, viewYear, viewMonth]);
+
   const cadenceLines: string[] = useMemo(() => {
     if (monthVisitDays === 0) {
       return ['이번 달은 아직 비어있어요 🌿'];
@@ -393,6 +409,14 @@ function StatsScreen() {
             <Pressable onPress={nextMonth} style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]}>
               <Text style={[styles.navArrow, isCurrentMonth && styles.navArrowDisabled]}>›</Text>
             </Pressable>
+          </View>
+
+          <View style={styles.monthTotalRow}>
+            <Text style={styles.monthTotalLabel}>쓴 돈</Text>
+            <Text style={styles.monthTotalValue}>{monthSettlement.spending.toLocaleString()}원</Text>
+            <Text style={styles.monthTotalSep}>·</Text>
+            <Text style={styles.monthTotalLabel}>들어온 돈</Text>
+            <Text style={styles.monthTotalValue}>{monthSettlement.income.toLocaleString()}원</Text>
           </View>
 
           <View style={styles.dowRow}>
@@ -753,6 +777,31 @@ const styles = StyleSheet.create({
   navArrowDisabled: { color: COLORS.textLight },
   monthLabelBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 },
   monthLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+
+  // Monthly settlement — one quiet line under the month label. Two separate
+  // totals (쓴 돈 / 들어온 돈), no net/balance. Body color, no green emphasis,
+  // no card/border around it.
+  monthTotalRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 12,
+  },
+  monthTotalLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  monthTotalValue: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  monthTotalSep: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
 
   // Month picker overlay — soft Sobagi modal, not a system picker.
   // 88% width with maxWidth 360 keeps the card comfortable on small phones
