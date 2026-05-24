@@ -106,7 +106,7 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 - **MonthPresenceRow** (`src/components/stats/MonthPresenceRow.tsx`, `src/pages/stats.tsx`): `DayCellData` extended with `hasRecord: boolean` and `hasOnlyNoSpend: boolean`. `glyphFor` checks `hasOnlyNoSpend` first (→ `🌿`), then `hasRecord` (→ `●`). Income-only days now render `●`. `stats.tsx` accumulator (`expensesByDate`) populates both new fields BEFORE the `kind === 'income' continue`, so income counts as presence but not toward day total. Per-day reducer type extracted to named `DayAccum`.
 - **Night pattern detector** (`src/services/roomPresenceService.ts`): `hasNightPattern` now filters `kind !== 'income'` at the function entry so income timestamps (e.g., late-night salary deposit notifications) don't impersonate user late-night presence. Parameter name preserved; only internal reference renamed.
 - **Stats observation** (`src/services/statsObservationService.ts`): new helper `computeIncomeDayCount` (counts distinct income days in trailing 30, using a `Set<string>`). New branch in `selectStatsObservation` at position 4 (after calm-day, before streak ≥ 7): when `>= 2` income days in last 30 → returns `'들어온 일이 종종 있었어요 🍃'`. Lifestyle texture (cafe / night / calm) still wins. Multiple income records on the same day count as 1.
-- **Tests**: +23 across `__tests__/emotionEngine.test.ts` (8), `__tests__/dialogueService.test.ts` (7), `src/services/__tests__/roomPresenceService.test.ts` (2), `__tests__/statsObservationService.test.ts` (6). Includes explicit negative tests proving income emotion ignores `isFirstRecordToday`, `amount`, `currentStreak`, and that `'surprised'` is never returned for income across any context combination. Final count: 16 suites / 273 tests, all green. (Post-QA sweep added 4 more — see top handoff for current 277.)
+- **Tests**: +23 across `__tests__/emotionEngine.test.ts` (8), `__tests__/dialogueService.test.ts` (7), `src/services/__tests__/roomPresenceService.test.ts` (2), `__tests__/statsObservationService.test.ts` (6). Includes explicit negative tests proving income emotion ignores `isFirstRecordToday`, `amount`, `currentStreak`, and that `'surprised'` is never returned for income across any context combination. Final count: 16 suites / 273 tests, all green. (Later sweeps brought this to 17 suites / 285 — see top handoff.)
 - **Memory**: `feedback_sobagi_allowance_giving_scene.md` narrowed (controller task). The 2026-05-19 blanket ban on "income tracking" was clarified to target *gameified* tracking only (totals, balance, savings, comparison framing) — sub-specs A/B/C added income as a quiet observational shape, which is permitted.
 
 ### What's now working
@@ -231,24 +231,9 @@ sobagi-last-rest-at            → ISO string           drives 60-min rest-warmt
 
 ## Known Issues
 
-### Fix required
-- **Warmth color mismatch** — `PhotocardView.tsx` line 76: `'#C87941'` → `'#E8C070'`
-- **DayFeelingCard future dates** — renders for dates > today; guard `dateStr <= todayStr`
-- **Photocard early dismiss** — `onPress` is live from t=0; needs `isRevealing` guard for first 1.8s
-
-### Copy / tone
-- `"잘 기록해뒀어요"` (Tier 1 happy pool) — "잘" borderline against evaluation anti-pattern
-- `"오늘도 수고했어요"` (IDLE_MESSAGES) — "수고했어요" evaluates effort; replace with observational
-
-### UX gaps
-- Emotion picker missing `(선택)` label
-- Trend graph bars not tappable
-- Photocard quote `fontStyle: italic` reads as formal caption; recommend removing
-
 ### Long-term pacing
 - Floating hearts on every record — charming at #1, performative by #30
 - Dialogue tier transitions are hard thresholds — tone shifts abruptly at day 7 and day 30
-- Settlement section bold monetary totals compete with emotional identity
 
 ### Technical
 - Pre-existing TS error in `_404.tsx` — not blocking, not recently introduced

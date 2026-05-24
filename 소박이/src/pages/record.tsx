@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -47,9 +47,11 @@ const USER_EMOTIONS = [
 ];
 
 const MAX_PAST_DAYS = 30;
-const DATE_OPTIONS: { dateStr: string; label: string }[] = Array.from(
-  { length: MAX_PAST_DAYS + 1 },
-  (_, i) => {
+
+// Built per render (keyed on today's local date) rather than once at module
+// load, so opening the record screen after midnight shows the correct chips.
+function buildDateOptions(): { dateStr: string; label: string }[] {
+  return Array.from({ length: MAX_PAST_DAYS + 1 }, (_, i) => {
     const daysAgo = MAX_PAST_DAYS - i;
     const d = new Date();
     d.setDate(d.getDate() - daysAgo);
@@ -59,12 +61,13 @@ const DATE_OPTIONS: { dateStr: string; label: string }[] = Array.from(
       daysAgo === 1 ? '어제' :
       `${d.getMonth() + 1}/${d.getDate()}`;
     return { dateStr, label };
-  },
-);
+  });
+}
 
 function RecordScreen() {
   const navigation = useNavigation();
   const todayStr = getLocalDateString(new Date());
+  const dateOptions = useMemo(() => buildDateOptions(), [todayStr]);
   const [recordKind, setRecordKind] = useState<RecordKind>('spending');
   const [amountText, setAmountText] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('cafe');
@@ -286,7 +289,7 @@ function RecordScreen() {
           contentContainerStyle={styles.dateRow}
           onContentSizeChange={() => dateScrollRef.current?.scrollToEnd({ animated: false })}
         >
-          {DATE_OPTIONS.map((opt) => {
+          {dateOptions.map((opt) => {
             const isSelected = opt.dateStr === selectedDate;
             return (
               <Pressable

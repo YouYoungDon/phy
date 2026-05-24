@@ -30,7 +30,6 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 - [ ] **Rest-TV: on-device visual QA on small phones** — verify TV+mailbox cluster, jar fill stages, and post-watch bubble all read calmly on iPhone SE-class widths. Code-level dimensional QA passed; live-device check pending.
 - [ ] **Photocard: add time-of-day label at card top** — date (top-left) + time-of-day icon (아침☀️ / 낮🌤 / 저녁🌅 / 밤🌙, top-right); derives from `currentHour` already available in `reaction.tsx`; adds "snapshot of a moment" specificity
 - [ ] **Photocard: add "Sobagi" signature** — small muted label between `quotePanel` and `contextStrip`; authorial anchor per spec
-- [ ] **Photocard: guard early dismiss during animation** — add `isRevealing` state in `reaction.tsx`; disable `photocardModal onPress` for first 1800ms so the reveal animation always plays fully
 - [ ] **Android keyboard behavior** — investigate whether save button is accessible
 - [ ] **Floating hearts pacing** — charming on record #1, noise by record #30; reduce or remove after N records
 

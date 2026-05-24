@@ -108,7 +108,11 @@ function HomeScreen() {
     return expenses.filter((e) => expenseLocalDate(e) === todayStr);
   }, [expenses]);
 
-  const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
+  // Spending only — income records and no-spend markers don't count toward
+  // the day's spending total, so a salary-only day reads ₩0, not the salary.
+  const todayTotal = todayExpenses
+    .filter((e) => e.kind !== 'income' && e.category !== 'no_spend')
+    .reduce((sum, e) => sum + e.amount, 0);
 
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleMessage, setBubbleMessage] = useState('');
