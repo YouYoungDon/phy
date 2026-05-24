@@ -62,31 +62,46 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-24
-**Group:** Stats amount chart
+**Group:** Monthly settlement line + Stats chart readability + income 0원 default
 
 ### What changed
-- **`MonthPresenceRow` → `MonthAmountChart`** (`src/components/stats/MonthAmountChart.tsx`): the bottom graph on the Stats screen is now a spending bar chart. x = day of month; y = daily spending total. y-axis compact labels (`max` / `mid` / `0`) formatted via `fmtAmt` (e.g. `12만`, `5천`) with 3 faint gridlines. Weekly date labels at days 1 / 8 / 15 / 22 / 29. Today and selected-day bars highlighted. Tap-to-select wired to `selectedDay` / `setSelectedDay` in `stats.tsx`.
-- **New helpers** (`src/components/stats/monthAmountChart.helpers.ts`): pure functions `fmtAmt`, `barHeightFor`, `selectMaxTotal` — no React, no SDK, no storage.
-- **New tests** (`__tests__/monthAmountChart.helpers.test.ts`): 15 unit tests covering `fmtAmt` (zero / sub-1000 / thousands / ten-thousands / hundred-thousands / millions / boundary), `barHeightFor` (zero-max / proportion / clamp / full-height), `selectMaxTotal` (empty / all-zero / normal / spending-only).
-- **`MonthPresenceRow.tsx` deleted**: file removed; no references remain in `src/`.
+- **Monthly settlement line** (`src/pages/stats.tsx`): a quiet line under the centered month label in the calendar card showing two separate totals — `쓴 돈 {지출 합계}원 · 들어온 돈 {수입 합계}원`. New `monthSettlement` memo sums the view month (income via `kind === 'income'`, spending otherwise; `no_spend` is amount 0 so harmless). Both totals always shown, including `0원`. No net / balance / 차액 — two independent numbers, body color, no card/border/heading.
+- **Chart y-axis full numbers** (`src/components/stats/MonthAmountChart.tsx`): y-labels now `toLocaleString()` (e.g. `72,000`) instead of `fmtAmt` 만/천 compaction. `Y_AXIS_W` 52→60 with a `numberOfLines={1}` truncation guard for extreme values. `fmtAmt` deleted from the helpers and its 5 unit tests removed.
+- **Chart x-axis all-day labels** (`src/components/stats/MonthAmountChart.tsx`): every day 1..N is labelled at fontSize 8 (was weekly 1/8/15/22/29). In-code note documents the sparse-label fallback if it reads too dense on-device.
+- **Record income 0원 default** (`src/pages/record.tsx`): the income-mode amount hero now shows `0원` when empty (was blank). Amount parse extracted to a tested helper `src/utils/amount.ts` (`parseAmountInput` — always returns a number; blank/junk → 0, so a raw string can never reach `Expense.amount`). Income stays optional / 0-saveable; no validation pressure.
 
-### Direction
-Conscious reversal of the 2026-05-22 stats-evolution "no Y-axis / no tappable presence row / bar trend graph gone" decision, scoped to the Stats bottom graph only. See amendment note in `docs/superpowers/specs/2026-05-22-stats-evolution-design.md`. The rest of the app identity (cozy companion, quiet income, no finance dashboard) is unchanged.
-
-### What's working
-- The bottom graph is a readable spending bar chart; tapping a bar selects that day (calendar highlight + day card update).
-- Income excluded from bars (spending-only `total`).
+### Direction — scoped policy exception
+The settlement line shows an **income total** for the first time. This is a deliberate, **scoped** reversal of the no-income-totals rule, limited to that one quiet line: still no balance / net / 순수익 / 차액 / comparison anywhere, and per-record display surfaces still hide `월급 0원` (stats income row + photocard). See `docs/superpowers/specs/2026-05-24-monthly-settlement-and-readability-design.md` and memory `feedback_sobagi_allowance_giving_scene.md`.
 
 ### Preserved (regression-confirmed)
-Observation block (cadence lines + top-scene chip + observation line), day card (spending list + income section), photocard entry, edit/delete sheet, calendar grid, month nav/picker.
+Observation block (cadence lines + top-scene chip + observation line), calendar grid + daily cell totals (still spending-only), month nav/picker, day-card income section + photocard per-record amount-hiding (no `월급 0원`), no-spend / reaction / edit flows, income save/edit, types, storage.
+
+### Known risk
+All-day x-labels at 8px may read dense on small phones — fallback (sparse `1 / 5 / 10 / 15 / 20 / 25 / 30` or every-other) is documented in-code for an on-device tuning pass.
 
 ### No new storage keys
 
 ### Test count
-**18 suites · 300 tests · all green.** (+1 suite, +15 tests over the stress-test sweep's 285.)
+**19 suites · 301 tests · all green.** (Net +1 over the 300 baseline: +6 new `amount` tests / +1 suite, −5 removed `fmtAmt` tests.)
 
 ### Next
-Rest-TV production ad group ID swap; photocard small polish (time-of-day label / Sobagi signature / early-dismiss guard); Android keyboard verification; two product items from the income-system handoff for review.
+Rest-TV production ad group ID swap; photocard small polish (time-of-day label / Sobagi signature / early-dismiss guard); Android keyboard verification; on-device chart x-label density check (apply sparse fallback if needed); two product items from the income-system handoff for review.
+
+---
+
+### Earlier handoff (Stats amount chart)
+
+**Agent:** Engineering
+**Date:** 2026-05-24
+**Group:** Stats amount chart
+
+### What changed (amount chart)
+- **`MonthPresenceRow` → `MonthAmountChart`** (`src/components/stats/MonthAmountChart.tsx`): the bottom graph on the Stats screen became a spending bar chart. x = day of month; y = daily spending total. (y-axis labels later switched from `fmtAmt` compaction to full comma numbers — see Latest Handoff.) Today and selected-day bars highlighted. Tap-to-select wired to `selectedDay` / `setSelectedDay` in `stats.tsx`.
+- **New helpers** (`src/components/stats/monthAmountChart.helpers.ts`): pure functions `barHeightFor`, `selectMaxTotal` (and originally `fmtAmt`, since removed) — no React, no SDK, no storage.
+- **`MonthPresenceRow.tsx` deleted**: file removed; no references remain in `src/`.
+
+### Direction (amount chart)
+Conscious reversal of the 2026-05-22 stats-evolution "no Y-axis / no tappable presence row / bar trend graph gone" decision, scoped to the Stats bottom graph only. See amendment note in `docs/superpowers/specs/2026-05-22-stats-evolution-design.md`. The rest of the app identity (cozy companion, quiet income, no finance dashboard) is unchanged.
 
 ---
 
@@ -211,7 +226,7 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 | Retrospective no-spend records (past dates, copy adapts to today vs past) | `src/pages/record.tsx`, `src/services/expenseService.ts` |
 | Save-helper for 0원 amount (gentle pointer to no-spend flow) | `src/pages/record.tsx` |
 | 쉬어가기 TV — soft rewarded-ad system (5-20 pebble grant, 60-min warmth fade, rest letters at 30/100/250/500/1000 thresholds, jar with 4 fill stages, 2-per-day cap, daily reset via `effectiveRestsToday`) | `src/services/restService.ts`, `src/hooks/useRestedAd.ts`, `src/components/room/RestTV.tsx`, `src/components/room/PebbleJar.tsx`, `src/components/room/RestPrompt.tsx`, `src/constants/restLetters.ts`, `src/constants/ads.ts`, `src/pages/index.tsx` |
-| Stats screen evolution — 결산 block replaced by 3-group observation (cadence lines → top-scene chip → rotating observation); MonthTrendGraph → MonthPresenceRow → MonthAmountChart (bar chart, x=day, y=spending, tap-to-select); calendar amount color softened; `selectStatsObservation` 7-branch chain | `src/pages/stats.tsx`, `src/services/statsObservationService.ts`, `src/components/stats/MonthAmountChart.tsx`, `src/components/stats/monthAmountChart.helpers.ts` |
+| Stats screen evolution — 결산 block replaced by 3-group observation (cadence lines → top-scene chip → rotating observation); monthly settlement line under the month label (`쓴 돈` / `들어온 돈`, two separate totals, scoped income-total exception); MonthTrendGraph → MonthPresenceRow → MonthAmountChart (bar chart, x=day all-day labels, y=spending full-comma labels, tap-to-select; `fmtAmt` removed); calendar amount color softened; `selectStatsObservation` 7-branch chain | `src/pages/stats.tsx`, `src/services/statsObservationService.ts`, `src/components/stats/MonthAmountChart.tsx`, `src/components/stats/monthAmountChart.helpers.ts` |
 | Income record system (sub-specs A/B/C) — `RecordKind` type; 5 income category tokens; `kindForCategory` / `INCOME_CATEGORIES` / `GENERAL_SPENDING_CATEGORIES` helpers; `normalizeExpense` hydration; record screen kind toggle; photocard 3-way grouped layout (쓴 기록 / 들어온 기록 / 무지출, `totalBlock` removed); `todayHasSpending` gate on reaction screen; `evaluateIncome` 2-rule subroutine (hour ≥ 22 → `'sleepy'`, else → `'happy'`); `INCOME_REACTION_POOLS` kind-gated dialogue (3 tiers × 3 lines); `MonthPresenceRow` income-only days render `●`; `hasNightPattern` filters income timestamps; `selectStatsObservation` income branch (`들어온 일이 종종 있었어요 🍃` at ≥ 2 income days in 30) | `src/types/index.ts`, `src/constants/categories.ts`, `src/constants/dialogue.ts`, `src/services/expenseService.ts`, `src/services/emotionEngine.ts`, `src/services/dialogueService.ts`, `src/services/roomPresenceService.ts`, `src/services/statsObservationService.ts`, `src/hooks/useAppInit.ts`, `src/pages/record.tsx`, `src/pages/stats.tsx`, `src/pages/reaction.tsx`, `src/components/photocard/PhotocardView.tsx`, `src/components/photocard/photocardGrouping.ts`, `src/components/stats/MonthPresenceRow.tsx`, `src/store/expenseStore.ts` |
 
 ### Planned (designed, not built)
