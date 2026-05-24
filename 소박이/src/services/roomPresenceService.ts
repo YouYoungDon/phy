@@ -1,7 +1,7 @@
 import { SobagiEmotion, Expense, ExpenseCategory } from '../types';
 import { STORAGE_KEYS } from '../constants/storage';
 import * as storageService from './storageService';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import {
   BagItem,
   RoomPlacement,
@@ -134,7 +134,7 @@ export function hasCategoryPattern(
   });
   if (matching.length < opts.minCount) return false;
   const distinctDays = new Set(
-    matching.map((e) => getLocalDateString(new Date(e.createdAt))),
+    matching.map((e) => expenseLocalDate(e)),
   );
   return distinctDays.size >= opts.minDistinctDays;
 }
@@ -213,7 +213,7 @@ export function computeRecordingStreak(expenses: Expense[], today: string): numb
   if (expenses.length === 0) return 0;
 
   const dates = new Set(
-    expenses.map((e) => getLocalDateString(new Date(e.createdAt))),
+    expenses.map((e) => expenseLocalDate(e)),
   );
 
   const previousLocalDate = (dateStr: string): string => {
@@ -323,7 +323,7 @@ export function hasNightPattern(
   });
   if (matching.length < opts.minCount) return false;
   const distinctDays = new Set(
-    matching.map((e) => getLocalDateString(new Date(e.createdAt))),
+    matching.map((e) => expenseLocalDate(e)),
   );
   return distinctDays.size >= opts.minDistinctDays;
 }

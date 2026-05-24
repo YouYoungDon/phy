@@ -1,5 +1,5 @@
 import { Expense } from '../types';
-import { getLocalDateString } from '../utils/date';
+import { expenseLocalDate } from '../utils/date';
 
 export type TimeOfDayTint = {
   color: string;
@@ -64,7 +64,7 @@ export function computeCalmDayCount(
     if (e.kind === 'income') continue;
     const ts = new Date(e.createdAt).getTime();
     if (ts < cutoffMs || ts > todayMs + 24 * 60 * 60 * 1000) continue;
-    const day = getLocalDateString(new Date(e.createdAt));
+    const day = expenseLocalDate(e);
     totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + e.amount);
   }
 

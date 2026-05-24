@@ -3,7 +3,7 @@ import * as storageService from './storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { checkForFoundItem } from './foundItemService';
 import { kindForCategory } from '../constants/categories';
 import { computeRecordingStreak } from './roomPresenceService';
@@ -14,7 +14,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
   const userStore = useUserStore.getState();
 
   const todayStr = getLocalDateString(new Date());
-  const expenseDateStr = getLocalDateString(new Date(expense.createdAt));
+  const expenseDateStr = expenseLocalDate(expense);
   const isRealTimeRecord = expenseDateStr === todayStr;
 
   // Streak: only the first real-time (today-dated) record of the day advances it.
@@ -24,7 +24,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
   if (isFirstRecordToday) {
     const yesterdayStr = getLocalDateString(new Date(Date.now() - 86400000));
     const yesterdayHadRecord = expenseStore.expenses.some(
-      (e) => getLocalDateString(new Date(e.createdAt)) === yesterdayStr,
+      (e) => expenseLocalDate(e) === yesterdayStr,
     );
     const newStreak = yesterdayHadRecord ? userStore.streak + 1 : 1;
     userStore.setStreak(newStreak);
@@ -32,7 +32,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
 
   // Check before adding: is this expense's local date a brand-new recorded day?
   const isNewDay = !expenseStore.expenses.some(
-    (e) => getLocalDateString(new Date(e.createdAt)) === expenseDateStr,
+    (e) => expenseLocalDate(e) === expenseDateStr,
   );
 
   expenseStore.addExpense(expense);
@@ -87,6 +87,9 @@ export async function recordNoSpend(createdAt: string): Promise<void> {
     category: 'no_spend',
     sobagiEmotion: 'happy',
     createdAt,
+    // Captured in the current device tz; equals the createdAt-derived date by
+    // construction, but stored so the day stays stable across tz changes.
+    localDate: getLocalDateString(new Date(createdAt)),
   };
   await saveExpense(expense);
 }
@@ -112,7 +115,7 @@ export function deleteExpense(id: string): void {
   // may also have broken the current streak. Both must be re-derived here
   // — otherwise the UI shows inflated values until the next app init.
   const newRecordedDays = new Set(
-    expenses.map((e) => getLocalDateString(new Date(e.createdAt))),
+    expenses.map((e) => expenseLocalDate(e)),
   ).size;
   userStore.setRecordedDaysCount(newRecordedDays);
   userStore.setStreak(computeRecordingStreak(expenses, todayStr));

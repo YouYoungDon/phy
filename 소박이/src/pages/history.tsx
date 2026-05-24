@@ -4,7 +4,7 @@ import { createRoute } from '@granite-js/react-native';
 import { ExpenseCard } from '../components/expense/ExpenseCard';
 import { useExpenseStore } from '../store/expenseStore';
 import { Expense } from '../types';
-import { getLocalDateString } from '../utils/date';
+import { expenseLocalDate } from '../utils/date';
 import { COLORS } from '../constants/colors';
 import { BottomTabs } from '../components/common/BottomTabs';
 
@@ -24,7 +24,7 @@ function HistoryScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
 
   const grouped = expenses.reduce<Record<string, Expense[]>>((acc, expense) => {
-    const dateStr = getLocalDateString(new Date(expense.createdAt));
+    const dateStr = expenseLocalDate(expense);
     if (!acc[dateStr]) acc[dateStr] = [];
     acc[dateStr]?.push(expense);
     return acc;

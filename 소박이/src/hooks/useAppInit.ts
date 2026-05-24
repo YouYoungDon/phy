@@ -18,7 +18,7 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getLevel, getRoomStage } from '../store/userStore';
 import { useEmotionStore } from '../store/emotionStore';
 import { Expense, UserState, SobagiEmotion } from '../types';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 
 let appInitialized = false;
 let prevVisitDate: string | null = null;
@@ -65,7 +65,7 @@ export function getPrevVisitDate(): string | null {
 }
 
 function computeRecordedDaysCount(expenses: Expense[]): number {
-  return new Set(expenses.map((e) => getLocalDateString(new Date(e.createdAt)))).size;
+  return new Set(expenses.map((e) => expenseLocalDate(e))).size;
 }
 
 // Refreshes the visit-date anchor when the app returns to the foreground.

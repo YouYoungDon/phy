@@ -10,7 +10,7 @@ import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getNextThreshold } from '../store/userStore';
 import { useAppInit } from '../hooks/useAppInit';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { COLORS } from '../constants/colors';
 import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS } from '../constants/assets';
 import * as storageService from '../services/storageService';
@@ -105,7 +105,7 @@ function HomeScreen() {
 
   const todayExpenses = useMemo(() => {
     const todayStr = getLocalDateString(new Date());
-    return expenses.filter((e) => getLocalDateString(new Date(e.createdAt)) === todayStr);
+    return expenses.filter((e) => expenseLocalDate(e) === todayStr);
   }, [expenses]);
 
   const todayTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);

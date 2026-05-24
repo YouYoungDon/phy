@@ -2,7 +2,7 @@ import { Expense } from '../types';
 import { FINDABLE_ITEMS } from '../constants/findableItems';
 import { STORAGE_KEYS } from '../constants/storage';
 import * as storageService from './storageService';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 
 const COOLDOWN_DAYS = 3;
 const GRACE_DAYS = 3;
@@ -19,10 +19,10 @@ function daysSince(dateStr: string): number {
 
 function hasTrigger(expenses: Expense[], today: string, yesterday: string): boolean {
   const todayExpenses = expenses.filter(
-    (e) => getLocalDateString(new Date(e.createdAt)) === today,
+    (e) => expenseLocalDate(e) === today,
   );
   const yesterdayExpenses = expenses.filter(
-    (e) => getLocalDateString(new Date(e.createdAt)) === yesterday,
+    (e) => expenseLocalDate(e) === yesterday,
   );
   const recentExpenses = [...todayExpenses, ...yesterdayExpenses];
 
@@ -31,11 +31,11 @@ function hasTrigger(expenses: Expense[], today: string, yesterday: string): bool
   // T1: First record after a 3+ day gap
   if (todayExpenses.length > 0) {
     const priorExpenses = expenses.filter(
-      (e) => getLocalDateString(new Date(e.createdAt)) < today,
+      (e) => expenseLocalDate(e) < today,
     );
     if (priorExpenses.length > 0) {
       const lastPriorDate = priorExpenses.reduce<string>((latest, e) => {
-        const d = getLocalDateString(new Date(e.createdAt));
+        const d = expenseLocalDate(e);
         return d > latest ? d : latest;
       }, '');
       if (calendarDaysBetween(today, lastPriorDate) >= 3) return true;
@@ -48,10 +48,10 @@ function hasTrigger(expenses: Expense[], today: string, yesterday: string): bool
     const otherDaysThisMonth = new Set(
       expenses
         .filter((e) => {
-          const d = getLocalDateString(new Date(e.createdAt));
+          const d = expenseLocalDate(e);
           return d.startsWith(monthPrefix) && d !== today;
         })
-        .map((e) => getLocalDateString(new Date(e.createdAt))),
+        .map((e) => expenseLocalDate(e)),
     );
     if (otherDaysThisMonth.size === 0) return true;
   }

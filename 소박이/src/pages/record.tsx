@@ -30,7 +30,7 @@ import {
   kindForCategory,
 } from '../constants/categories';
 import { BottomTabs } from '../components/common/BottomTabs';
-import { getLocalDateString, localDateToISOString } from '../utils/date';
+import { getLocalDateString, localDateToISOString, expenseLocalDate } from '../utils/date';
 import { generateExpenseId } from '../utils/id';
 
 export const Route = createRoute('/record', {
@@ -140,7 +140,7 @@ function RecordScreen() {
   // streak or triggering found-item eval, so past no-spend stays quiet.
   const isSelectedDateToday = selectedDate === todayStr;
   const hasRecordOnSelectedDate = expenses.some(
-    (e) => getLocalDateString(new Date(e.createdAt)) === selectedDate,
+    (e) => expenseLocalDate(e) === selectedDate,
   );
   const canNoSpend =
     recordKind === 'spending' &&
@@ -204,6 +204,9 @@ function RecordScreen() {
       memo: memo.trim() || undefined,
       sobagiEmotion,
       createdAt,
+      // selectedDate is already the chosen local date (YYYY-MM-DD), captured
+      // in the device tz at record time — tz-stable from here on.
+      localDate: selectedDate,
     };
 
     const tier = getDialogueTier(recordedDaysCount);

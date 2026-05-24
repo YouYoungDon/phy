@@ -46,6 +46,15 @@ export interface Expense {
   memo?: string;
   sobagiEmotion: SobagiEmotion;
   createdAt: string;
+  /**
+   * The local calendar date (YYYY-MM-DD) captured at record creation, in the
+   * device timezone at that moment. Day-grouping should prefer this over
+   * re-deriving from `createdAt` (which is UTC and shifts if the device tz
+   * changes between recording and viewing). Optional because legacy records
+   * pre-date it — `expenseLocalDate()` falls back to deriving from `createdAt`
+   * when absent. Read everywhere via that helper, never directly.
+   */
+  localDate?: string;
 }
 
 export interface UserState {

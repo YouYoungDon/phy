@@ -16,3 +16,14 @@ export function localDateToISOString(localDateStr: string): string {
   const d = Number(parts[2]);
   return new Date(y, m - 1, d, 12, 0, 0).toISOString();
 }
+
+// Returns a record's local calendar date (YYYY-MM-DD). Prefers the stored
+// `localDate` captured at creation; falls back to deriving from `createdAt`
+// (UTC) in the device's *current* timezone for legacy records that predate
+// the field. For non-traveling users the two are identical by construction,
+// so routing all day-grouping through this helper is behavior-preserving —
+// it only stabilizes a record's day across timezone changes for records
+// created after `localDate` was introduced.
+export function expenseLocalDate(e: { localDate?: string; createdAt: string }): string {
+  return e.localDate ?? getLocalDateString(new Date(e.createdAt));
+}

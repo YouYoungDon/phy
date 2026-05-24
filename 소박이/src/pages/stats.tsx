@@ -5,7 +5,7 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
 import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
-import { getLocalDateString } from '../utils/date';
+import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
@@ -91,7 +91,7 @@ function StatsScreen() {
   const expensesByDate = useMemo(() => {
     const map: Record<string, DayAccum> = {};
     for (const e of expenses) {
-      const d = getLocalDateString(new Date(e.createdAt));
+      const d = expenseLocalDate(e);
       if (!map[d]) map[d] = { total: 0, count: 0, categories: [], hasRecord: false, hasOnlyNoSpend: true };
       map[d].hasRecord = true;
       if (e.category !== 'no_spend') map[d].hasOnlyNoSpend = false;
@@ -105,7 +105,7 @@ function StatsScreen() {
   }, [expenses]);
 
   const selectedExpenses = useMemo(
-    () => expenses.filter((e) => getLocalDateString(new Date(e.createdAt)) === selectedDay),
+    () => expenses.filter((e) => expenseLocalDate(e) === selectedDay),
     [expenses, selectedDay],
   );
 
@@ -193,7 +193,7 @@ function StatsScreen() {
     for (const e of expenses) {
       if (e.category === 'no_spend') continue;
       if (e.kind === 'income') continue;
-      if (!getLocalDateString(new Date(e.createdAt)).startsWith(prefix)) continue;
+      if (!expenseLocalDate(e).startsWith(prefix)) continue;
       counts[e.category] = (counts[e.category] ?? 0) + 1;
     }
     return (Object.entries(counts) as [ExpenseCategory, number][])
@@ -212,7 +212,7 @@ function StatsScreen() {
     const endStr = getLocalDateString(weekEnd);
     const days = new Set<string>();
     for (const e of expenses) {
-      const d = getLocalDateString(new Date(e.createdAt));
+      const d = expenseLocalDate(e);
       if (d >= startStr && d <= endStr) days.add(d);
     }
     return days.size;
@@ -223,7 +223,7 @@ function StatsScreen() {
     const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
     const days = new Set<string>();
     for (const e of expenses) {
-      const d = getLocalDateString(new Date(e.createdAt));
+      const d = expenseLocalDate(e);
       if (d.startsWith(prefix)) days.add(d);
     }
     return days.size;
