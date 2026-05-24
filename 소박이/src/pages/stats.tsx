@@ -458,6 +458,15 @@ function StatsScreen() {
     });
   }, [editSheetAnim]);
 
+  // Single guarded dismiss for every user-initiated close path (backdrop tap,
+  // 취소 button, Android back). While a save/delete is in flight the sheet is
+  // locked, so it can't disappear mid-operation and read as success. The
+  // programmatic closeEdit used by the success paths stays unguarded.
+  const dismissEdit = useCallback(() => {
+    if (editSaving) return;
+    closeEdit();
+  }, [editSaving, closeEdit]);
+
   const commitEdit = useCallback(async () => {
     if (!editingExpense || editSaving) return;
     // Shared parse + validity rule with the create flow (record.tsx):
@@ -514,8 +523,8 @@ function StatsScreen() {
   const handleAndroidBack = useCallback(() => {
     if (showDayPhotocard) { closeDayPhotocard(); return; }
     if (showMonthPicker) { closeMonthPicker(); return; }
-    if (editingExpense !== null) { closeEdit(); return; }
-  }, [showDayPhotocard, showMonthPicker, editingExpense, closeDayPhotocard, closeMonthPicker, closeEdit]);
+    if (editingExpense !== null) { dismissEdit(); return; }
+  }, [showDayPhotocard, showMonthPicker, editingExpense, closeDayPhotocard, closeMonthPicker, dismissEdit]);
   useAndroidBack(
     showDayPhotocard || showMonthPicker || editingExpense !== null,
     handleAndroidBack,
@@ -732,7 +741,7 @@ function StatsScreen() {
 
       {/* Edit backdrop */}
       {editingExpense !== null && (
-        <Pressable style={styles.editBackdrop} onPress={closeEdit} />
+        <Pressable style={styles.editBackdrop} onPress={dismissEdit} />
       )}
 
       {/* Edit sheet */}
@@ -799,7 +808,11 @@ function StatsScreen() {
           >
             <Text style={styles.editSaveBtnText}>고쳐두기</Text>
           </Pressable>
-          <Pressable style={styles.editCancelBtn} onPress={closeEdit}>
+          <Pressable
+            style={[styles.editCancelBtn, editSaving && styles.editCancelBtnDisabled]}
+            onPress={dismissEdit}
+            disabled={editSaving}
+          >
             <Text style={styles.editCancelBtnText}>취소</Text>
           </Pressable>
         </View>
@@ -1424,6 +1437,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
+  },
+  editCancelBtnDisabled: {
+    opacity: 0.4,
   },
   editCancelBtnText: {
     fontSize: 14,
