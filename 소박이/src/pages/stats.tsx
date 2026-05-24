@@ -17,7 +17,6 @@ import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, format
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthAmountChart } from '../components/stats/MonthAmountChart';
 import { selectCalendarCellContent, formatCompactAmount, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
-import { PressableScale } from '../components/common/PressableScale';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -48,7 +47,7 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
   return (
     <View style={styles.expenseList}>
       {expenses.map((e, idx) => (
-        <PressableScale key={e.id} onPress={() => onPress?.(e)} pressedScale={0.985} haptic={onPress ? 'selection' : 'none'}>
+        <Pressable key={e.id} onPress={() => onPress?.(e)}>
           {idx > 0 && <View style={styles.recordDivider} />}
           <View style={styles.recordRow}>
             <Text style={styles.recordCategory}>{formatCategoryWithEmoji(e.category)}</Text>
@@ -63,7 +62,7 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
           {e.memo ? (
             <Text style={styles.recordMemo}>{e.memo}</Text>
           ) : null}
-        </PressableScale>
+        </Pressable>
       ))}
     </View>
   );
@@ -541,18 +540,16 @@ function StatsScreen() {
           </View>
           <View style={styles.viewToggle}>
             {CALENDAR_VIEW_MODES.map(({ mode, label }) => (
-              <PressableScale
+              <Pressable
                 key={mode}
                 style={[styles.viewPill, calendarViewMode === mode && styles.viewPillActive]}
-                pressedScale={0.96}
-                haptic={calendarViewMode === mode ? 'none' : 'selection'}
                 onPress={() => setCalendarViewMode(mode)}
                 hitSlop={4}
               >
                 <Text style={[styles.viewPillText, calendarViewMode === mode && styles.viewPillTextActive]}>
                   {label}
                 </Text>
-              </PressableScale>
+              </Pressable>
             ))}
           </View>
         </View>
@@ -562,15 +559,15 @@ function StatsScreen() {
         {/* Calendar */}
         <View style={styles.calendarCard}>
           <View style={styles.monthNav}>
-            <PressableScale onPress={prevMonth} style={styles.navBtn} pressedScale={0.9}>
+            <Pressable onPress={prevMonth} style={styles.navBtn}>
               <Text style={styles.navArrow}>‹</Text>
-            </PressableScale>
-            <PressableScale onPress={openMonthPicker} style={styles.monthLabelBtn} hitSlop={8} pressedScale={0.96}>
+            </Pressable>
+            <Pressable onPress={openMonthPicker} style={styles.monthLabelBtn} hitSlop={8}>
               <Text style={styles.monthLabel}>{monthLabel}</Text>
-            </PressableScale>
-            <PressableScale onPress={nextMonth} style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]} disabled={isCurrentMonth} pressedScale={0.9}>
+            </Pressable>
+            <Pressable onPress={nextMonth} style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]} disabled={isCurrentMonth}>
               <Text style={[styles.navArrow, isCurrentMonth && styles.navArrowDisabled]}>›</Text>
-            </PressableScale>
+            </Pressable>
           </View>
 
           <View style={styles.monthTotalRow}>
@@ -600,11 +597,9 @@ function StatsScreen() {
                   const isSelected = dateStr === selectedDay;
                   const isFuture = dateStr > todayStr;
                   return (
-                    <PressableScale
+                    <Pressable
                       key={dateStr}
                       style={[styles.cell, isSelected && styles.cellSelected, isToday && !isSelected && styles.cellToday]}
-                      pressedScale={0.94}
-                      haptic={isSelected || isFuture ? 'none' : 'selection'}
                       onPress={() => !isFuture && setSelectedDay(dateStr)}
                       disabled={isFuture}
                     >
@@ -626,7 +621,7 @@ function StatsScreen() {
                         })}
                         isSelected={isSelected}
                       />
-                    </PressableScale>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -663,7 +658,7 @@ function StatsScreen() {
                   return (
                     <React.Fragment key={r.id}>
                       {idx > 0 && <View style={styles.recordDivider} />}
-                      <PressableScale style={styles.incomeRow} onPress={() => openEdit(r)} pressedScale={0.985}>
+                      <Pressable style={styles.incomeRow} onPress={() => openEdit(r)}>
                         <Text style={styles.incomeIcon}>{cat?.emoji ?? '·'}</Text>
                         <Text style={styles.incomeLabel}>{cat?.label ?? r.category}</Text>
                         {r.userEmotion ? (
@@ -673,7 +668,7 @@ function StatsScreen() {
                           <Text style={styles.incomeAmount}>{r.amount.toLocaleString()}원</Text>
                         )}
                         <Text style={styles.recordChevron}>›</Text>
-                      </PressableScale>
+                      </Pressable>
                     </React.Fragment>
                   );
                 })}
@@ -691,11 +686,11 @@ function StatsScreen() {
                 {selectedNoSpendExpenses.map((r, idx) => (
                   <React.Fragment key={r.id}>
                     {idx > 0 && <View style={styles.recordDivider} />}
-                    <PressableScale style={styles.incomeRow} onPress={() => openEdit(r)} pressedScale={0.985}>
+                    <Pressable style={styles.incomeRow} onPress={() => openEdit(r)}>
                       <Text style={styles.incomeIcon}>🌿</Text>
                       <Text style={styles.incomeLabel}>무지출</Text>
                       <Text style={styles.recordChevron}>›</Text>
-                    </PressableScale>
+                    </Pressable>
                   </React.Fragment>
                 ))}
               </View>
@@ -706,9 +701,9 @@ function StatsScreen() {
         {/* Photocard entry — shown for spending days and no-spend-only days.
             Income-only days stay without a card (sub-spec B D2 unchanged). */}
         {canOpenDayPhotocard && (
-          <PressableScale style={styles.photocardEntryBtn} onPress={openDayPhotocard} pressedScale={0.96} haptic="light">
+          <Pressable style={styles.photocardEntryBtn} onPress={openDayPhotocard}>
             <Text style={styles.photocardEntryText}>포토카드 생성</Text>
-          </PressableScale>
+          </Pressable>
         )}
 
         {/* Observation block — replaces 결산. No title; three groups flow. */}
@@ -778,17 +773,15 @@ function StatsScreen() {
         <Text style={styles.editFieldLabel}>분류</Text>
         <View style={styles.editCategoryRow}>
           {editingExpensePool.map((c) => (
-            <PressableScale
+            <Pressable
               key={c.key}
               style={[styles.editCatPill, editCategory === c.key && styles.editCatPillActive]}
-              pressedScale={0.95}
-              haptic={editCategory === c.key ? 'none' : 'selection'}
               onPress={() => setEditCategory(c.key)}
             >
               <Text style={[styles.editCatPillText, editCategory === c.key && styles.editCatPillTextActive]}>
                 {c.label} {c.emoji}
               </Text>
-            </PressableScale>
+            </Pressable>
           ))}
         </View>
 
@@ -809,23 +802,20 @@ function StatsScreen() {
         )}
 
         <View style={styles.editActionRow}>
-          <PressableScale
+          <Pressable
             style={[styles.editSaveBtn, (!editCanSave || editSaving) && styles.editSaveBtnDisabled]}
             onPress={commitEdit}
             disabled={!editCanSave || editSaving}
-            pressedScale={0.96}
-            haptic="light"
           >
             <Text style={styles.editSaveBtnText}>고쳐두기</Text>
-          </PressableScale>
-          <PressableScale
+          </Pressable>
+          <Pressable
             style={[styles.editCancelBtn, editSaving && styles.editCancelBtnDisabled]}
             onPress={dismissEdit}
             disabled={editSaving}
-            pressedScale={0.96}
           >
             <Text style={styles.editCancelBtnText}>취소</Text>
-          </PressableScale>
+          </Pressable>
         </View>
           </>
         )}
@@ -836,18 +826,18 @@ function StatsScreen() {
 
         <View style={styles.editDeleteArea}>
           {!deleteConfirm ? (
-            <PressableScale onPress={() => setDeleteConfirm(true)} pressedScale={0.96} haptic="medium">
+            <Pressable onPress={() => setDeleteConfirm(true)}>
               <Text style={styles.editDeleteTriggerText}>삭제</Text>
-            </PressableScale>
+            </Pressable>
           ) : (
             <View style={styles.editDeleteConfirmRow}>
               <Text style={styles.editDeleteConfirmLabel}>이 기록을 지울까요?</Text>
-              <PressableScale onPress={commitDelete} disabled={editSaving} pressedScale={0.96} haptic="medium">
+              <Pressable onPress={commitDelete} disabled={editSaving}>
                 <Text style={styles.editDeleteYesText}>지우기</Text>
-              </PressableScale>
-              <PressableScale onPress={() => setDeleteConfirm(false)} pressedScale={0.96}>
+              </Pressable>
+              <Pressable onPress={() => setDeleteConfirm(false)}>
                 <Text style={styles.editDeleteNoText}>아니요</Text>
-              </PressableScale>
+              </Pressable>
             </View>
           )}
         </View>
@@ -884,18 +874,17 @@ function StatsScreen() {
         <Pressable style={styles.monthPickerOverlay} onPress={closeMonthPicker}>
           <Pressable style={styles.monthPickerCard} onPress={(e) => e.stopPropagation()}>
             <View style={styles.monthPickerYearRow}>
-              <PressableScale onPress={pickerPrevYear} style={styles.monthPickerArrowBtn} hitSlop={8} pressedScale={0.9}>
+              <Pressable onPress={pickerPrevYear} style={styles.monthPickerArrowBtn} hitSlop={8}>
                 <Text style={styles.monthPickerArrow}>‹</Text>
-              </PressableScale>
+              </Pressable>
               <Text style={styles.monthPickerYearLabel}>{pickerYear}년</Text>
-              <PressableScale
+              <Pressable
                 onPress={pickerNextYear}
                 style={[
                   styles.monthPickerArrowBtn,
                   pickerYear >= today.getFullYear() && styles.monthPickerArrowBtnDisabled,
                 ]}
                 disabled={pickerYear >= today.getFullYear()}
-                pressedScale={0.9}
                 hitSlop={8}
               >
                 <Text
@@ -906,7 +895,7 @@ function StatsScreen() {
                 >
                   ›
                 </Text>
-              </PressableScale>
+              </Pressable>
             </View>
             <View style={styles.monthGrid}>
               {[0, 1, 2].map((rowIdx) => (
@@ -918,12 +907,10 @@ function StatsScreen() {
                       (pickerYear === today.getFullYear() && m > today.getMonth());
                     const isCurrent = pickerYear === viewYear && m === viewMonth;
                     return (
-                      <PressableScale
+                      <Pressable
                         key={m}
                         onPress={() => !isFuture && selectMonth(pickerYear, m)}
                         disabled={isFuture}
-                        pressedScale={0.95}
-                        haptic={isCurrent || isFuture ? 'none' : 'selection'}
                         style={[
                           styles.monthChip,
                           isCurrent && styles.monthChipCurrent,
@@ -939,7 +926,7 @@ function StatsScreen() {
                         >
                           {m + 1}월
                         </Text>
-                      </PressableScale>
+                      </Pressable>
                     );
                   })}
                 </View>

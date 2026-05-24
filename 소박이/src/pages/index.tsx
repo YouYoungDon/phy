@@ -24,7 +24,6 @@ import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
-import { PressableScale } from '../components/common/PressableScale';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -320,7 +319,7 @@ function HomeScreen() {
             </TouchableOpacity>
             <View style={styles.utilityStack}>
               <View style={styles.utilityItem}>
-                <PressableScale style={styles.utilityBtn} onPress={() => openSheet('bag')} pressedScale={0.93}>
+                <Pressable style={styles.utilityBtn} onPress={() => openSheet('bag')}>
                   {({ pressed }) => (
                     <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
                       <Image
@@ -331,11 +330,11 @@ function HomeScreen() {
                       {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
                     </View>
                   )}
-                </PressableScale>
+                </Pressable>
                 <Text style={styles.utilityLabel}>가방</Text>
               </View>
               <View style={styles.utilityItem}>
-                <PressableScale style={styles.utilityBtn} onPress={() => openSheet('mailbox')} pressedScale={0.93}>
+                <Pressable style={styles.utilityBtn} onPress={() => openSheet('mailbox')}>
                   {({ pressed }) => (
                     <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
                       <Image
@@ -346,13 +345,12 @@ function HomeScreen() {
                       {mailboxUnread && <View style={styles.utilityDot} />}
                     </View>
                   )}
-                </PressableScale>
+                </Pressable>
                 <Text style={styles.utilityLabel}>우편함</Text>
               </View>
               <View style={styles.utilityItem}>
-                <PressableScale
+                <Pressable
                   style={styles.utilityBtn}
-                  pressedScale={0.93}
                   onPress={() => {
                     if (effectiveRestsToday >= 2) {
                       setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
@@ -387,7 +385,7 @@ function HomeScreen() {
                       />
                     </View>
                   )}
-                </PressableScale>
+                </Pressable>
                 <Text style={styles.utilityLabel}>티비</Text>
               </View>
             </View>
@@ -488,17 +486,15 @@ function HomeScreen() {
             {/* Tab bar */}
             <View style={styles.bagTabBar}>
               {BAG_TABS.map((tab) => (
-                <PressableScale
+                <Pressable
                   key={tab}
                   style={[styles.bagTabBtn, bagTab === tab && styles.bagTabBtnActive]}
-                  pressedScale={0.95}
-                  haptic={bagTab === tab ? 'none' : 'selection'}
                   onPress={() => { setBagTab(tab); setSelectedBagItem(null); setSelectedFoundItem(null); }}
                 >
                   <Text style={[styles.bagTabLabel, bagTab === tab && styles.bagTabLabelActive]}>
                     {tab}
                   </Text>
-                </PressableScale>
+                </Pressable>
               ))}
             </View>
 
@@ -518,15 +514,13 @@ function HomeScreen() {
                       const item = rawItem !== null && recordedDaysCount >= rawItem.minDays ? rawItem : null;
                       const isSelected = item !== null && selectedBagItem?.id === item.id;
                       return (
-                        <PressableScale
+                        <Pressable
                           key={col}
                           style={[
                             styles.bagCell,
                             item === null && styles.bagCellVacant,
                             isSelected && styles.bagCellSelected,
                           ]}
-                          pressedScale={0.94}
-                          haptic={item === null ? 'none' : 'selection'}
                           onPress={() => {
                             if (!item) return;
                             setSelectedBagItem(isSelected ? null : item);
@@ -542,7 +536,7 @@ function HomeScreen() {
                           ) : (
                             <View style={styles.bagCellDot} />
                           )}
-                        </PressableScale>
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -561,10 +555,9 @@ function HomeScreen() {
                     if (item === null) return null;
                     const isSelected = selectedFoundItem?.id === id;
                     return (
-                      <PressableScale
+                      <Pressable
                         key={id}
                         style={[styles.foundChip, isSelected && styles.foundChipSelected]}
-                        pressedScale={0.95}
                         onPress={() => {
                           setSelectedFoundItem(isSelected ? null : item);
                           setSelectedBagItem(null);
@@ -572,7 +565,7 @@ function HomeScreen() {
                       >
                         <Text style={styles.foundChipEmoji}>{item.emoji}</Text>
                         <Text style={styles.foundChipName}>{item.name}</Text>
-                      </PressableScale>
+                      </Pressable>
                     );
                   })}
                 </View>
