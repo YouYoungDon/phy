@@ -32,6 +32,7 @@ import {
 import { BottomTabs } from '../components/common/BottomTabs';
 import { getLocalDateString, localDateToISOString, expenseLocalDate } from '../utils/date';
 import { generateExpenseId } from '../utils/id';
+import { parseAmountInput } from '../utils/amount';
 
 export const Route = createRoute('/record', {
   validateParams: (params) => params,
@@ -131,7 +132,7 @@ function RecordScreen() {
     });
   }, []);
 
-  const amount = parseInt(amountText.replace(/,/g, ''), 10) || 0;
+  const amount = parseAmountInput(amountText);
   const canSave = recordKind === 'income'
     ? !isSaving
     : amount > 0 && !isSaving;
@@ -324,9 +325,7 @@ function RecordScreen() {
         {/* Amount hero */}
         <Pressable style={styles.amountCard} onPress={() => amountInputRef.current?.focus()}>
           <Text style={styles.amountDisplay}>
-            {amount > 0
-              ? `${amount.toLocaleString()}원`
-              : recordKind === 'income' ? '' : '0원'}
+            {amount > 0 ? `${amount.toLocaleString()}원` : '0원'}
           </Text>
           <TextInput
             ref={amountInputRef}
