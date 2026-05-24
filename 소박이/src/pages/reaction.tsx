@@ -11,6 +11,7 @@ import { SobagiEmotion } from '../types';
 import { useUserStore } from '../store/userStore';
 import { getDialogueTier } from '../services/dialogueService';
 import { formatCategoryLabel } from '../constants/categories';
+import { RecordKind } from '../types';
 
 export const Route = createRoute('/reaction', {
   validateParams: (params) => params,
@@ -34,7 +35,16 @@ function formatTimeLabel(date: Date): string {
   return `${isAm ? '오전' : '오후'} ${h12}:${m}`;
 }
 
-function getReactionTitle(emotion: SobagiEmotion, tier: 1 | 2 | 3): string {
+function getReactionTitle(emotion: SobagiEmotion, tier: 1 | 2 | 3, kind: RecordKind = 'spending'): string {
+  // Income titles run a separate tonal track. Distinct wording from
+  // INCOME_REACTION_POOLS (which feeds the bubble) so title + bubble
+  // complement rather than duplicate. Tier progression shortens as
+  // familiarity grows, mirroring the spending titles' shape.
+  if (kind === 'income') {
+    if (tier === 1) return '오늘은 든든한 날이에요 🌿';
+    if (tier === 2) return '들어온 날이네요 🍃';
+    return '들어왔네요 🍃';
+  }
   if (tier === 1) {
     switch (emotion) {
       case 'surprised': return '처음 들렀네요 ✨';
@@ -104,6 +114,11 @@ function SobagiReactionScreen() {
 
   // Computed once at mount — expenses are already loaded when reaction screen renders.
   const todayExpenses = getTodayExpenses();
+  // Latest save's kind — drives the title's kind-aware branch. `getTodayExpenses`
+  // preserves append order (see expenseStore), so the last item is the record
+  // that just triggered this reaction screen. Default 'spending' if today is
+  // empty (defensive — this screen normally renders after a save).
+  const latestKind: RecordKind = todayExpenses[todayExpenses.length - 1]?.kind ?? 'spending';
   // Photocard entry is gated on the day having at least one *spending* record
   // (sub-spec B §5.2). Income-only and no-spend-only saves never expose the
   // photocard handoff. Auto-dismiss still runs; just no button.
@@ -186,7 +201,7 @@ function SobagiReactionScreen() {
 
   return (
     <Pressable style={styles.container} onPress={handleClose}>
-      <Text style={styles.title}>{getReactionTitle(currentEmotion, tier)}</Text>
+      <Text style={styles.title}>{getReactionTitle(currentEmotion, tier, latestKind)}</Text>
 
       <View style={styles.heartsRow}>
         <FloatingHeart emoji="❤️" delay={0} offset={0} />
