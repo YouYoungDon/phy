@@ -7,6 +7,7 @@ import { getLocalDateString } from '../utils/date';
 import { checkForFoundItem } from './foundItemService';
 import { kindForCategory } from '../constants/categories';
 import { computeRecordingStreak } from './roomPresenceService';
+import { generateExpenseId } from '../utils/id';
 
 export async function saveExpense(expense: Expense): Promise<void> {
   const expenseStore = useExpenseStore.getState();
@@ -42,7 +43,11 @@ export async function saveExpense(expense: Expense): Promise<void> {
     userStore.incrementRecordedDays();
   }
 
-  // Persist to storage (fire-and-forget — stores already updated in memory)
+  // Persist to storage. Stores are already updated in memory, so this is the
+  // durability step. Awaited (not fire-and-forget) so the EXPENSES write —
+  // the user's actual records — completes its retry cycle before we proceed
+  // to navigation. A failed write is logged inside storageService; the
+  // next-init recompute is the backstop.
   const updatedExpenses = useExpenseStore.getState().expenses;
   const s = useUserStore.getState();
   const updatedUser: UserState = {
@@ -57,8 +62,8 @@ export async function saveExpense(expense: Expense): Promise<void> {
     lastRestAt: s.lastRestAt,
   };
 
-  void storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
-  void storageService.save(STORAGE_KEYS.USER, updatedUser);
+  await storageService.save(STORAGE_KEYS.EXPENSES, updatedExpenses);
+  await storageService.save(STORAGE_KEYS.USER, updatedUser);
 
   // Found-item eval: only fires on the first real-time record of the day.
   // Both regular expenses and no-spend records qualify as "first meaningful
@@ -76,7 +81,7 @@ export async function saveExpense(expense: Expense): Promise<void> {
 // triggering found-item eval — past no-spend stays quiet by construction.
 export async function recordNoSpend(createdAt: string): Promise<void> {
   const expense: Expense = {
-    id: Date.now().toString(),
+    id: generateExpenseId(),
     kind: 'spending',
     amount: 0,
     category: 'no_spend',

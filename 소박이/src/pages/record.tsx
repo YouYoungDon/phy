@@ -31,6 +31,7 @@ import {
 } from '../constants/categories';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { getLocalDateString, localDateToISOString } from '../utils/date';
+import { generateExpenseId } from '../utils/id';
 
 export const Route = createRoute('/record', {
   validateParams: (params) => params,
@@ -195,7 +196,7 @@ function RecordScreen() {
       : localDateToISOString(selectedDate);
 
     const expense = {
-      id: Date.now().toString(),
+      id: generateExpenseId(),
       kind: derivedKind,
       amount,
       category,
