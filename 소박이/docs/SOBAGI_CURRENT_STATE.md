@@ -61,37 +61,50 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 ## Latest Handoff
 
 **Agent:** Engineering
-**Date:** 2026-05-23
-**Group:** Income record data model (sub-spec A of "Income records" decomposition)
+**Date:** 2026-05-24
+**Group:** Photocard 3-way layout (sub-spec B of "Income records" decomposition)
 
 ### What changed
-- **Type:** `RecordKind` ('spending' | 'income') added to `src/types/index.ts`; `Expense.kind?: RecordKind` (optional, hydration-filled)
-- **Categories:** 5 new income tokens in `src/constants/categories.ts` — `salary` 💼, `bonus` ✨, `refund` 🧾, `received_gift` 💝, `received_allowance` 🤲; `ExpenseCategoryMeta.kind` field added to all entries
-- **Registry helpers:** `kindForCategory`, `SPENDING_CATEGORIES`, `GENERAL_SPENDING_CATEGORIES`, `INCOME_CATEGORIES` exported from `categories.ts`; `PICKER_CATEGORIES` removed
-- **Hydration:** `normalizeExpense` in `expenseService.ts` applied at `useAppInit` read path; corrects missing/mismatched kind silently, does not mutate storage
-- **Record screen:** kind toggle ("쓴 기록" / "들어온 기록"), picker swaps on toggle, amount optional for income, save path derives `kind` from category via `kindForCategory`, hardcodes `sobagiEmotion='happy'` for income records
-- **Photocard interim patch:** `PhotocardRecord.kind?` field added to `PhotocardView.tsx`; amount column hides for `kind==='income' && amount===0`; `reaction.tsx` and `stats.tsx` callers pass `kind` through
-- **Stats:** `selectedIncomeExpenses` memo; quiet read-only income section in day card; day card outer condition is `(selectedSpendingExpenses.length > 0 || selectedIncomeExpenses.length > 0)`; `selectedSpendingExpenses` and `topCategoryThisMonth` exclude income; edit sheet picker pool derives from `editingExpense.kind`; `commitEdit` re-derives kind via `kindForCategory(editCategory)`
-- **Store + service:** `ExpensePatch.kind: RecordKind` required in `expenseStore.ts`; `updateExpense` writes `kind` field
+- **Helper extraction:** `PhotocardRecord` type and a new pure `groupByKind` function moved into `src/components/photocard/photocardGrouping.ts` (no React/RN imports, unit-testable in isolation). `PhotocardView.tsx` re-exports the type for backward-compat with existing callers
+- **PhotocardView refactor:** `totalBlock` (`총 금액 ₩ X` at 18pt bold) removed entirely. Records render in up to 3 grouped sub-sections (쓴 기록 / 들어온 기록 / 무지출) via `groupByKind`. Each group gated on `.length > 0` — empty groups never render a header. Group labels are 9pt muted (`TEXT_MUTED`, letterSpacing 0.3), styled as quiet separators, not section titles
+- **Slicing rule:** `VISIBLE_RECORDS = 3` cap applied across groups in order (spending → income → noSpend). `+ N개 더` overflow accounts for records hidden from any group
+- **`amount` prop deprecated:** kept on `PhotocardViewProps` for backward compat, no longer destructured inside the component, no longer drives layout
+- **reaction.tsx gate:** new `todayHasSpending = todayExpenses.some(e.kind !== 'income' && e.category !== 'no_spend')`. The button-reveal `useEffect` early-returns when `todayHasSpending === false`, so income-only and no-spend-only saves never expose the photocard handoff. Auto-dismiss timer (3500ms) still runs on the no-button path. Variable rename: `todaySpendingExpenses` → `photocardSourceRecords` (name now accurately reflects its filter behavior)
+- **stats.tsx records source:** `photocardRecords` memo now derives from `selectedExpenses.filter((e) => e.category !== 'no_spend')` instead of `selectedSpendingExpenses`. The entry-point gate `selectedSpendingExpenses.length > 0` (around the `포토카드 생성` button) is unchanged — income-only days still hide the button
+- **Tests:** new `__tests__/photocardGrouping.test.ts` covers 7 cases (empty, all-income, all-no_spend, defensive no_spend override when kind is mistakenly income, legacy-no-kind fallback, intra-group order preservation, fully mixed day)
 
 ### What's now working
-- Income records can be created via the record screen toggle, persist across restarts (hydration sets kind)
-- Income records appear in stats day card as a quiet read-only section; tap to edit via existing sheet (kind is re-derived from edited category on commit)
-- Photocard renders income records without "₩ 0" awkwardness
-- Existing spending save/reaction/edit/no-spend flows untouched
+- Spending-only photocard reads quieter: no aggregate `총 금액` block. The Sobagi quote at the bottom of the right panel is the loudest emotional element
+- Mixed-day photocard (spending + income) shows `쓴 기록` group followed by `들어온 기록` group, with the sub-spec A amount-hide rule preserved (income `amount===0` rows skip the amount column)
+- Income-only save on reaction screen: no photocard button reveals; auto-dismiss returns to home at 3500ms
+- Income-only day in stats: no `포토카드 생성` button (unchanged from sub-spec A)
+- No-spend-only day in stats: no `포토카드 생성` button (unchanged)
 
 ### Preserved (regression-confirmed)
-- No-spend marker flow (`recordNoSpend`, `hasRecordOnSelectedDate`, `canNoSpend`)
-- Spending save → reaction → photocard
-- Calendar grid, month nav, edit sheet, photocard entry button (spending-only)
-- `selectStatsObservation`, `MonthPresenceRow`, cadence-line memos
-- `weekVisitDays` / `monthVisitDays` count income days as presence (per spec)
+- Left panel mood asset, time badge, reveal animation, modal overlay — all untouched
+- `PhotocardMoodAsset` / `getPhotocardMoodAsset` / weather / spendingLevel paths unchanged
+- Sub-spec A's per-record amount-hide rule (`r.kind !== 'income' || r.amount > 0`) preserved
+- `selectedSpendingExpenses`, `expensesByDate.total` (income-excluded), `topCategoryThisMonth` — unchanged
+- No storage keys added/removed; no migration
+- `emotionEngine`, dialogue pools, pebble services, found-item, room-presence — all untouched
+
+### Fragile or surprising
+- The 무지출 group in `PhotocardView` is currently unreachable in practice (no-spend records can't coexist with spending records by the record-screen gate). The conditional path exists for forward compatibility and is covered by `groupByKind` tests
+- `amount` prop on `PhotocardViewProps` is deprecated but accepted; callers still pass it. A follow-up commit can drop it once all caller sites are clean — not blocking
+- `todayTotal` in `reaction.tsx` is still computed (feeds the deprecated `amount` prop). Removable in the same follow-up
+
+### What the next agent must NOT do
+- Lift the quote to the top of the right panel — that's deferred typography work outside sub-spec B scope
+- Add per-group subtotals, income-vs-spending comparison framing, or "수입" UI text
+- Reintroduce a `총 금액` block in any form
+- Touch the left panel, mood asset resolver, or modal overlay
+- Add storage migration; `kind` continues to be hydration-normalized
 
 ### No new storage keys
 No storage keys were added, removed, or renamed.
 
 ### Next
-Sub-spec B (Photocard 3-way layout) → Sub-spec C (system integration: emotion engine, dialogue, pebble triggers, presence detectors, calendar/MonthPresenceRow income treatment, allowance memory note update).
+Sub-spec C — emotion engine income-aware branches (remove sub-spec A's `'happy'` hardcode), income-specific dialogue pool, pebble jar policy on income save, calendar/MonthPresenceRow income glyph, room-presence detectors income consideration, `selectStatsObservation` income awareness, `allowance` policy memo update, optional income `memoSuggestions`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-23 (Engineering — Income record data model sub-spec A landed)
+**Last updated:** 2026-05-24 (Engineering — Photocard 3-way layout sub-spec B landed)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -15,8 +15,8 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ## Up next (ordered by priority)
 
-- [ ] **Photocard 3-way redesign (sub-spec B)** — replace single spending-summary photocard with a 3-group card (쓴 / 들어온 / 무지출). Spec needed before implementation.
-- [ ] **Income record system integration (sub-spec C)** — emotion engine income-aware branch; income-specific dialogue pool; pebble jar policy on income save; calendar/MonthPresenceRow income glyph; room-presence detectors income consideration; `selectStatsObservation` income awareness; update `allowance` policy memo to reflect narrowed lock. Note: memory file `feedback_sobagi_allowance_giving_scene.md` update is pending (controller responsibility).
+- [x] ~~**Photocard 3-way redesign (sub-spec B)**~~ — landed 2026-05-24. Spec at `docs/superpowers/specs/2026-05-23-photocard-3-way-design.md`, plan at `docs/superpowers/plans/2026-05-23-photocard-3-way.md`. See `SOBAGI_CURRENT_STATE.md` for handoff and `Recently completed` below for commit list.
+- [ ] **Income record system integration (sub-spec C)** — emotion engine income-aware branch (remove sub-spec A's `'happy'` hardcode); income-specific dialogue pool; pebble jar policy on income save; calendar/MonthPresenceRow income glyph; room-presence detectors income consideration; `selectStatsObservation` income awareness; update `allowance` policy memo to reflect narrowed lock; optional income `memoSuggestions`. Note: memory file `feedback_sobagi_allowance_giving_scene.md` update is pending (controller responsibility).
 
 ---
 
@@ -70,6 +70,7 @@ After completing it, update `SOBAGI_CURRENT_STATE.md` and move this item to the 
 
 ## Recently completed
 
+- [x] **Photocard 3-way layout (sub-spec B)** — `PhotocardRecord` type + pure `groupByKind` helper extracted to `photocardGrouping.ts` (no RN imports, unit-testable). `PhotocardView` right panel restructured: `totalBlock` (`총 금액 ₩ X` at 18pt bold) removed entirely; records render in up to 3 grouped sub-sections (쓴 기록 / 들어온 기록 / 무지출) with 9pt muted group labels; `VISIBLE_RECORDS = 3` cap applied across groups in order (spending → income → noSpend); `amount` prop deprecated, no longer destructured. `reaction.tsx` new `todayHasSpending` gate suppresses photocard button on income-only / no-spend-only saves (auto-dismiss still runs); `todaySpendingExpenses` renamed to `photocardSourceRecords`. `stats.tsx` photocard records source switched to `selectedExpenses.filter(no_spend)` so income flows into PhotocardView; entry-point gate `selectedSpendingExpenses.length > 0` unchanged. 7 new groupByKind tests (250 total). No storage changes; no emotion-engine / dialogue / pebble service touches. Commits `fb2d020` → `422bbb4`. (2026-05-24)
 - [x] **Income record data model (sub-spec A)** — `RecordKind` type; 5 income category tokens (`salary`, `bonus`, `refund`, `received_gift`, `received_allowance`); `kindForCategory` / `INCOME_CATEGORIES` / `GENERAL_SPENDING_CATEGORIES` helpers; `PICKER_CATEGORIES` removed; `normalizeExpense` hydration at read path; record screen kind toggle + picker swap + optional amount; photocard `kind?` interim patch; stats income section + spending/top-category filter exclusions; `ExpensePatch.kind` required. 7 new categoryRegistry + 7 expenseHydration tests (243 total). No new storage keys. (2026-05-23)
 - [x] **Stats screen evolution** — 결산 block replaced by 3-group observation surface (cadence lines → top-scene chip → single rotating observation from `selectStatsObservation`). `MonthTrendGraph` removed; `MonthPresenceRow` (single-row presence-dot trace) added. Calendar amount color softened from `oliveGreen` → `textMuted`. New service `statsObservationService.ts` (7-branch priority chain). 12 new tests. No new storage keys. All preserved: calendar grid, month nav, edit/delete sheet, photocard entry, selected-day list. (2026-05-23)
 - [x] **Small-win backlog sweep** — `(선택)` label parity on emotion picker (`record.tsx`), `letterService` seasonal-window test fix (pre-stage `seasonal-may-2026` in the dedup tests — 11/11 pass), two copy reviews: `"잘 기록해뒀어요" → "여기 남겨뒀어요"` (dialogue Tier 1 happy) and `"오늘도 수고했어요" → "오늘도 들렀네요"` (IDLE_MESSAGES). Verified stale (already addressed in earlier work): PhotocardView warmth color, photocard italic removal, DayFeelingCard future-date guard (no longer rendered). Commits `5d0bf88` / `f7aa61f` / `493c762`. (2026-05-22)
