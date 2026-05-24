@@ -5,7 +5,7 @@ import { barHeightFor, selectMaxTotal } from './monthAmountChart.helpers';
 
 const BAR_MAX = 72;
 const MIN_BAR = 8;
-const Y_AXIS_W = 60;
+const Y_AXIS_W = 48;
 
 interface MonthAmountChartProps {
   viewYear: number;
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.warmWhite,
     borderRadius: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingTop: 18,
     paddingBottom: 14,
     marginTop: 16,
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
   wrapper: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
   },
   yAxis: {
     width: Y_AXIS_W,
