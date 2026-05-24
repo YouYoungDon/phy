@@ -62,6 +62,36 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-24
+**Group:** Time-of-day home backgrounds
+
+The static home-room background and the `getTimeOfDayTint` color wash were replaced by four time-of-day background paintings (morning / afternoon / evening / latenight), each already lit for its hour. The background now carries the time-of-day feeling the faint tint used to only hint at.
+
+### What changed
+- **Pure resolver** (`src/services/atmosphereService.ts`): new `getTimeOfDayBackgroundKey(hour)` → `morning` (5–12) / `afternoon` (12–17) / `evening` (17–21) / `latenight` (else, 21–5). `getTimeOfDayTint` and its tests removed; the `TimeOfDayTint` type is kept (still a `PhotocardView` prop, currently unused at any call site).
+- **Asset map** (`src/constants/assets.ts`): CDN pin → `d940b2c`; new `ROOM_TIME_BACKGROUND_URIS` maps the four keys to `sobaki_stage_{morning,afternoon,evening,latenight}.png`. `ROOM_BACKGROUND_URIS` (old `room_stage1.png`) kept as an export but now unused everywhere — clean-up candidate.
+- **Home wiring** (`src/pages/index.tsx`): resolves the current bucket's URI at render and passes it to `RoomBackground` for all stages; the tint-overlay `<View>` is removed. Warmth / rest-warmth / calm overlays + bottom fade unchanged.
+- **Prefetch** (`src/hooks/useAppInit.ts`): now prefetches the current time-of-day background (one image, same cost as before) instead of `room_stage1`, so the home background still loads warm. Crossing a bucket boundary mid-session cold-loads once via the lazy fallback.
+
+### Direction
+Same single centered room, lit for the hour. No new objects / labels / controls; consistent with `project_sobagi_spatial_identity` + `feedback_sobagi_restraint_over_visibility`. Background resolves at render time (no timer) — matches how warmth/calm already recompute.
+
+### Preserved (regression-confirmed)
+All warmth/calm/rest atmosphere overlays + bottom fade, room placements, every non-home surface. No storage changes.
+
+### No new storage keys
+
+### Test count
+**24 suites · 356 tests · all green.** `atmosphereService.test.ts` swaps the `getTimeOfDayTint` block for a `getTimeOfDayBackgroundKey` block (every bucket + each boundary hour).
+
+### Next
+Device-test the four backgrounds across the day. Same backlog (Rest-TV prod ad ID, photocard polish, Android keyboard, G1–G5 dogfooding calls). Optional: drop the now-unused `ROOM_BACKGROUND_URIS` export.
+
+---
+
+### Earlier handoff (Pre-dogfooding hardening pass)
+
+**Agent:** Engineering
+**Date:** 2026-05-24
 **Group:** Pre-dogfooding hardening pass (record-system stabilization, 7 fixes)
 
 A Codex QA pass found real integration gaps in the record→reaction→persistence path. This was stabilization, not feature work. Seven fixes landed; the headline is that **today-context leakage is eliminated** — reaction, photocard, first-record emotion, and streak excitement now follow the saved record's date, not "today".
@@ -234,7 +264,7 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 
 | System | Location |
 |---|---|
-| HomeScreen room + atmosphere overlays | `src/pages/index.tsx`, `src/services/atmosphereService.ts` |
+| HomeScreen room (time-of-day backgrounds) + atmosphere overlays | `src/pages/index.tsx`, `src/services/atmosphereService.ts`, `src/constants/assets.ts` |
 | Sobagi character (float + spring pop) | `src/components/SobagiCharacter.tsx` |
 | Tap-to-talk speech bubble (12 idle messages) | `src/pages/index.tsx` |
 | Level chip + progress bar | `src/pages/index.tsx` |
