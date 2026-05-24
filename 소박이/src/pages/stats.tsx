@@ -402,6 +402,11 @@ function StatsScreen() {
   const [editMemo, setEditMemo] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editSheetBottom, setEditSheetBottom] = useState(0);
+  // In-flight + failure state for edit/delete persistence. `editSaving` guards
+  // against double-taps; `editError` keeps the sheet open with a message when a
+  // write fails (and was rolled back) so the UI never shows a false success.
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState(false);
   const editSheetAnim = useRef(new Animated.Value(500)).current;
 
   const editingExpensePool = useMemo(() => {
@@ -424,6 +429,8 @@ function StatsScreen() {
     setEditCategory(expense.category);
     setEditMemo(expense.memo ?? '');
     setDeleteConfirm(false);
+    setEditError(false);
+    setEditSaving(false);
     Animated.spring(editSheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
   }, [editSheetAnim]);
 
@@ -433,26 +440,36 @@ function StatsScreen() {
       setEditingExpense(null);
       setDeleteConfirm(false);
       setEditSheetBottom(0);
+      setEditError(false);
+      setEditSaving(false);
     });
   }, [editSheetAnim]);
 
-  const commitEdit = useCallback(() => {
-    if (!editingExpense) return;
+  const commitEdit = useCallback(async () => {
+    if (!editingExpense || editSaving) return;
     // Shared parse + validity rule with the create flow (record.tsx):
     // `parseAmountInput` normalizes blanks/junk to 0; income may be 0 (amount
-    // optional), spending must be positive. This removes the old divergence
-    // where a blank create saved 0 but a blank edit silently no-op'd.
+    // optional), spending must be positive.
     const parsed = parseAmountInput(editAmount);
     const nextKind = kindForCategory(editCategory);
     if (!amountValidForKind(nextKind, parsed)) return;
-    persistUpdateExpense(editingExpense.id, {
+    setEditSaving(true);
+    setEditError(false);
+    const ok = await persistUpdateExpense(editingExpense.id, {
       amount: parsed,
       category: editCategory,
       memo: editMemo.trim() || undefined,
       kind: nextKind,
     });
+    setEditSaving(false);
+    if (!ok) {
+      // Write failed and the in-memory edit was rolled back. Keep the sheet open
+      // with an error so the user sees it didn't save and can retry.
+      setEditError(true);
+      return;
+    }
     closeEdit();
-  }, [editingExpense, editAmount, editCategory, editMemo, closeEdit]);
+  }, [editingExpense, editSaving, editAmount, editCategory, editMemo, closeEdit]);
 
   // Mirror of commitEdit's validity gate, for the save button's enabled state
   // and the inline hint — so a blocked spending edit shows visible feedback
@@ -464,11 +481,20 @@ function StatsScreen() {
   // The edit sheet collapses to a quiet label + delete-only affordance for them.
   const editingNoSpend = editingExpense?.category === 'no_spend';
 
-  const commitDelete = useCallback(() => {
-    if (!editingExpense) return;
-    persistDeleteExpense(editingExpense.id);
+  const commitDelete = useCallback(async () => {
+    if (!editingExpense || editSaving) return;
+    setEditSaving(true);
+    setEditError(false);
+    const ok = await persistDeleteExpense(editingExpense.id);
+    setEditSaving(false);
+    if (!ok) {
+      // Delete didn't persist (rolled back in memory). Keep the sheet + confirm
+      // open with an error so the record visibly remains and can be retried.
+      setEditError(true);
+      return;
+    }
     closeEdit();
-  }, [editingExpense, closeEdit]);
+  }, [editingExpense, editSaving, closeEdit]);
 
   return (
     <View style={styles.screen}>
@@ -742,9 +768,9 @@ function StatsScreen() {
 
         <View style={styles.editActionRow}>
           <Pressable
-            style={[styles.editSaveBtn, !editCanSave && styles.editSaveBtnDisabled]}
+            style={[styles.editSaveBtn, (!editCanSave || editSaving) && styles.editSaveBtnDisabled]}
             onPress={commitEdit}
-            disabled={!editCanSave}
+            disabled={!editCanSave || editSaving}
           >
             <Text style={styles.editSaveBtnText}>고쳐두기</Text>
           </Pressable>
@@ -755,6 +781,10 @@ function StatsScreen() {
           </>
         )}
 
+        {editError && (
+          <Text style={styles.editErrorText}>저장하지 못했어요. 잠시 후 다시 시도해 주세요</Text>
+        )}
+
         <View style={styles.editDeleteArea}>
           {!deleteConfirm ? (
             <Pressable onPress={() => setDeleteConfirm(true)}>
@@ -763,7 +793,7 @@ function StatsScreen() {
           ) : (
             <View style={styles.editDeleteConfirmRow}>
               <Text style={styles.editDeleteConfirmLabel}>이 기록을 지울까요?</Text>
-              <Pressable onPress={commitDelete}>
+              <Pressable onPress={commitDelete} disabled={editSaving}>
                 <Text style={styles.editDeleteYesText}>지우기</Text>
               </Pressable>
               <Pressable onPress={() => setDeleteConfirm(false)}>
@@ -1355,6 +1385,11 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 8,
     marginBottom: 4,
+  },
+  editErrorText: {
+    fontSize: 12,
+    color: '#B5705A',
+    marginTop: 10,
   },
   editCancelBtn: {
     paddingVertical: 13,
