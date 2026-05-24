@@ -1,6 +1,6 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-24 (Engineering — stress-test hardening sweep landed)
+**Last updated:** 2026-05-24 (Engineering — monthly settlement + stats readability landed; record-type integration audit logged)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
@@ -22,8 +22,19 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 
 ## Backlog (ordered by impact)
 
+### Record-type integration audit (2026-05-24)
+
+Full surface × scenario matrix run after the monthly-settlement landing (spending / income / no_spend and all combinations, across 10 surfaces). **No structural or release-blocking failures** — the visible-default, amount-hiding, two-total, edit-lock, and hydration guarantees all hold. The items below are product/philosophy decisions, not broken behavior. **Do not patch pre-emptively; decide via dogfooding observation.**
+
+- [ ] **G1 — Bottom graph no longer shows income / no_spend presence** — `MonthPresenceRow` (rendered `●` for any presence, incl. income-only days) was replaced by `MonthAmountChart` (spending-magnitude bars only), so income-only and no_spend days now render no bar. Presence still shows on the calendar (🌿). *Read: acceptable for now — keep conscious awareness during dogfooding and confirm the calendar alone carries "I came by" for non-spending days.* Affected: `src/components/stats/MonthAmountChart.tsx`, `src/pages/stats.tsx`. *(Supersedes the former "Calendar vs MonthPresenceRow glyph alignment" item — that row no longer exists.)*
+- [ ] **G2 — Income-only calendar day renders 🌿, identical to a no-spend day** — `expensesByDate.total` excludes income, so an income-only day has `total === 0` → 🌿, visually the same as a quiet/no-spend day; a salary day looks "empty." *Read: the most visible emotional ambiguity — needs real-device dogfooding before deciding. Weigh any distinct income glyph against the "presence is presence" rule (`feedback_sobagi_allowance_giving_scene.md`).* Affected: `src/pages/stats.tsx` calendar grid (~line 432).
+- [ ] **G3 — no_spend records can't be edited or deleted** — no_spend rows are never rendered in the day card, and a no_spend-only day shows no card at all, so a mis-mark is permanent via the UI. *Read: likely to become annoying in real usage — strong candidate for future polish (e.g. a soft "이 날 기록 지우기" affordance on no_spend-only days). Pre-existing, not introduced by recent work.* Affected: `src/pages/stats.tsx` day card.
+- [ ] **G4 — Income advances progression / presence systems (philosophically sensitive)** — logging income counts toward `recordedDaysCount` (→ level / room stage), `streak`, `totalRecordCount`, and the first-of-day found-item eval, exactly like spending. This is **intended** per sub-spec C ("income counts as presence"; found-item T1/T2/T3 are presence-shaped) and pebbles are **not** granted on income save. **Tension:** the line between "income is quiet presence" and "logging salary levels me up / fuels rewards" is thin. Not automatically wrong, but the **key dogfooding question is whether users start *feeling* "logging salary levels me up."** If they do, consider making income presence-neutral (e.g. count for day-presence but not streak/level, or hold it out of found-item eval). *Read: needs observation, not a pre-emptive patch.* Affected: `src/services/expenseService.ts` (`saveExpense` streak/day/found-item), `src/services/foundItemService.ts` T1–T3.
+- [ ] **G5 — DailySummary "소소한 기록 N건" counts income + no_spend** — `recordCount = todayExpenses.length` includes income and no_spend while the amount row is spending-only, so a mixed day shows e.g. "2건" alongside a single-record amount. *Read: low-risk semantic polish — decide whether "건" should mean all-records or spend-only.* Affected: `src/pages/index.tsx` (~line 389), `src/components/common/DailySummary.tsx`.
+
+---
+
 - [ ] **Tier 2/3 income dialogue copy review** — code-quality review of sub-spec C Task 3 flagged tier progression weakness: tier 2 line 1 reads flat, tier 3 recycles "든든" from tier 1. Three lines per tier are tonally too close; needs product copy pass. Affected: `src/constants/dialogue.ts:INCOME_REACTION_POOLS`.
-- [ ] **Calendar vs MonthPresenceRow income-only glyph alignment** — sub-spec C left the main stats calendar grid out of scope per spec §15; calendar shows `🌿` for income-only days while presence row shows `●`. Same day, two glyphs. Decide: align (both `●` for income-only) or accept the two-axis distinction (calendar = spend amount; presence row = visit). Affected: `src/pages/stats.tsx` calendar grid (around line 418).
 - [x] ~~**`amount` prop deprecation on `PhotocardView`**~~ — removed 2026-05-24. Prop + JSDoc dropped from `PhotocardView`; dead `todayTotal` calc removed from `reaction.tsx`; unused prop pass removed from `stats.tsx`. Typecheck clean, 285 tests pass.
 - [ ] **Rest-TV: swap dev ad group ID for production** — `src/constants/ads.ts` exports `REST_AD_GROUP_ID = 'ait.dev.43daa14da3ae487b'` (the AppsInToss dev test ID). Before release, replace with the production rewarded ad group ID issued in the AppsInToss console. One-line change.
 - [ ] **Rest-TV: rare ambient item delivery at 500/1500/3000 pebbles** — hook exists in `restService.grantRest` as a TODO marker; item pool and delivery shape need a separate spec. Out of scope of the initial rest-TV landing.
