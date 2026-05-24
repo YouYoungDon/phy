@@ -692,3 +692,29 @@ describe('selectNightCandidate', () => {
     expect(result).toBeNull();
   });
 });
+
+// ─── hasNightPattern — income filter (sub-spec C §7) ────────────────────────
+
+describe('hasNightPattern — income filter (sub-spec C §7)', () => {
+  it('does not count income records toward the night pattern', () => {
+    const today = '2026-05-24';
+    const incomeOnlyNights: Expense[] = [
+      // Three late-night income saves across three distinct nights — would trigger
+      // the pattern if income counted, but must NOT trigger after the §7 filter.
+      makeExpense({ id: 'i1', kind: 'income', category: 'salary', createdAt: '2026-05-22T22:30:00' }),
+      makeExpense({ id: 'i2', kind: 'income', category: 'salary', createdAt: '2026-05-23T23:10:00' }),
+      makeExpense({ id: 'i3', kind: 'income', category: 'salary', createdAt: '2026-05-24T22:45:00' }),
+    ];
+    expect(hasNightPattern(incomeOnlyNights, NIGHT_OPTS, today)).toBe(false);
+  });
+
+  it('still fires when spending records satisfy the pattern', () => {
+    const today = '2026-05-24';
+    const spendingNights: Expense[] = [
+      makeExpense({ id: 's1', kind: 'spending', category: 'cafe',      createdAt: '2026-05-22T22:30:00' }),
+      makeExpense({ id: 's2', kind: 'spending', category: 'home_meal', createdAt: '2026-05-23T23:10:00' }),
+      makeExpense({ id: 's3', kind: 'spending', category: 'cafe',      createdAt: '2026-05-24T22:45:00' }),
+    ];
+    expect(hasNightPattern(spendingNights, NIGHT_OPTS, today)).toBe(true);
+  });
+});

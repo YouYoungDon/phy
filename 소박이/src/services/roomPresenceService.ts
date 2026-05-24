@@ -310,9 +310,12 @@ export function hasNightPattern(
   opts: NightPatternOpts,
   today: string,
 ): boolean {
+  // Night pattern reads user-presence at night. Income records (e.g., salary deposits
+  // timestamped late) are system events, not late-night user activity. Sub-spec C §7.
+  const spendingExpenses = expenses.filter((e) => e.kind !== 'income');
   const todayMs = new Date(today + 'T12:00:00').getTime();
   const cutoffMs = todayMs - opts.windowDays * 24 * 60 * 60 * 1000;
-  const matching = expenses.filter((e) => {
+  const matching = spendingExpenses.filter((e) => {
     const d = new Date(e.createdAt);
     const ts = d.getTime();
     if (ts < cutoffMs || ts > todayMs + 24 * 60 * 60 * 1000) return false;
