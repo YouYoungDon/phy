@@ -172,16 +172,10 @@ function RecordScreen() {
     // Guards against the toggle and category being momentarily out of sync.
     const derivedKind = kindForCategory(category);
 
-    // Income records skip the spending-shaped emotion resolver (which is
-    // tuned around amount magnitude and category atmosphere). Sub-spec C
-    // will move this branching into emotionEngine and add income-aware
-    // nuance. For sub-spec A, a flat 'happy' is sufficient.
-    const sobagiEmotion = derivedKind === 'income'
-      ? 'happy'
-      : evaluate(
-          { id: '', amount, category, sobagiEmotion: 'happy', createdAt: '' },
-          ctx,
-        );
+    const sobagiEmotion = evaluate(
+      { id: '', kind: derivedKind, amount, category, sobagiEmotion: 'happy', createdAt: '' },
+      ctx,
+    );
 
     const createdAt = selectedDate === todayStr
       ? new Date().toISOString()
@@ -213,7 +207,7 @@ function RecordScreen() {
       reactionMessage = selectObservationMessage(observationType);
       void storageService.save(STORAGE_KEYS.OBSERVATION_SAVE_COUNT, totalRecordCount + 1);
     } else {
-      reactionMessage = selectReactionMessage(sobagiEmotion, tier);
+      reactionMessage = selectReactionMessage(sobagiEmotion, tier, derivedKind);
     }
 
     setEmotion(sobagiEmotion, reactionMessage);
