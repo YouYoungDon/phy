@@ -162,8 +162,13 @@ function RecordScreen() {
   const handleSave = async () => {
     if (!canSave) return;
     setIsSaving(true);
+    // `isFirstRecordToday` drives the 'surprised' welcome on the spending
+    // chain. Income records are excluded so that a salary deposit logged at
+    // 10am does not consume the welcome slot from the user's first spending
+    // touchpoint later in the day. Sub-spec C post-QA fix (Bug #3).
+    const isFirstRecordToday = getTodayExpenses().filter((e) => e.kind !== 'income').length === 0;
     const ctx: EmotionContext = {
-      isFirstRecordToday: getTodayExpenses().length === 0,
+      isFirstRecordToday,
       currentStreak: streak,
       currentHour: new Date().getHours(),
     };
