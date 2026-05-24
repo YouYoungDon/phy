@@ -829,10 +829,12 @@ function StatsScreen() {
         </View>
       </Animated.View>
 
-      {/* Photocard modal — full-screen dark overlay */}
+      {/* Photocard modal — full-screen dark overlay. Backdrop and card are
+          separated: only the backdrop closes; the card absorbs its own presses
+          (stopPropagation) so tapping the card never closes it. */}
       {showDayPhotocard && canOpenDayPhotocard && (
         <Pressable style={styles.photocardModal} onPress={closeDayPhotocard}>
-          <View style={styles.cardArea}>
+          <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
             <PhotocardView
               quote={photocardQuote}
               dateStr={photocardDateStr}
@@ -845,7 +847,7 @@ function StatsScreen() {
               style={[styles.revealOverlay, { opacity: dayRevealAnim }]}
               pointerEvents="none"
             />
-          </View>
+          </Pressable>
           <View style={styles.closeHint} pointerEvents="none">
             <Text style={styles.closeHintText}>✕</Text>
           </View>
