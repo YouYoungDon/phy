@@ -11,13 +11,13 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getNextThreshold } from '../store/userStore';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { COLORS } from '../constants/colors';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS, ROOM_FURNITURE_URIS } from '../constants/assets';
+import { ROOM_TIME_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS, ROOM_FURNITURE_URIS } from '../constants/assets';
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
-import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
+import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
 import { PebbleJar } from '../components/room/PebbleJar';
 import { RestPrompt } from '../components/room/RestPrompt';
@@ -88,7 +88,7 @@ function HomeScreen() {
   const adState = useRestedAd();
   const todayStr = getLocalDateString(new Date());
   const effectiveRestsToday = getEffectiveRestsToday(restsToday, lastRestDate, todayStr);
-  const timeOfDayTint = getTimeOfDayTint(new Date().getHours());
+  const timeBackgroundUri = ROOM_TIME_BACKGROUND_URIS[getTimeOfDayBackgroundKey(new Date().getHours())];
   const warmthOpacity = getWarmthOpacity(recordedDaysCount);
   const calmOpacity = getCalmAtmosphereOpacity(expenses, getLocalDateString(new Date()));
 
@@ -244,13 +244,7 @@ function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <RoomBackground stage={roomStage} backgroundUri={ROOM_BACKGROUND_URIS[roomStage] ?? ROOM_BACKGROUND_URIS[1]}>
-            {timeOfDayTint !== null && (
-              <View
-                style={[styles.atmosphereOverlay, { backgroundColor: timeOfDayTint.color, opacity: timeOfDayTint.opacity }]}
-                pointerEvents="none"
-              />
-            )}
+      <RoomBackground stage={roomStage} backgroundUri={timeBackgroundUri}>
             <View
               style={[styles.atmosphereOverlay, { backgroundColor: '#E8C070', opacity: warmthOpacity }]}
               pointerEvents="none"
