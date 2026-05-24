@@ -98,6 +98,15 @@ function DayAmountSlot({ cell, isSelected }: { cell: CellDisplay; isSelected: bo
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
+// Quiet lines for a no-spend-only photocard — no amount, no finance framing.
+// A no-spend day is a calm record of a day that passed gently, not a savings
+// result. Picked deterministically by date so a given day's card is stable.
+const NO_SPEND_PHOTOCARD_QUOTES = [
+  '오늘은 조용히 지나간 하루 🌿',
+  '쓰지 않은 기록도 하나의 생활이에요',
+  '가볍게 지나간 날을 남겨두었어요',
+];
+
 function StatsScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
   const streak = useUserStore((s) => s.streak);
@@ -354,6 +363,20 @@ function StatsScreen() {
     const d = new Date(selectedDay + 'T00:00:00');
     return WEEKDAY_LABELS[d.getDay()];
   }, [selectedDay]);
+
+  // No-spend-only days have no spending feeling, so the photocard can still open
+  // (sub-spec: 무지출도 하나의 기록) using a quiet line + calm emotion + zero
+  // record rows (photocardRecords already excludes no_spend, so it's []).
+  const isNoSpendOnlyDay =
+    selectedSpendingExpenses.length === 0 &&
+    selectedIncomeExpenses.length === 0 &&
+    selectedNoSpendExpenses.length > 0;
+  const canOpenDayPhotocard = selectedSpendingExpenses.length > 0 || isNoSpendOnlyDay;
+  const photocardQuote = dayFeeling
+    ? dayFeeling.mainLine
+    : (NO_SPEND_PHOTOCARD_QUOTES[selectedDt.getDate() % NO_SPEND_PHOTOCARD_QUOTES.length]
+        ?? '오늘은 조용히 지나간 하루 🌿');
+  const photocardEmotion = dayFeeling ? dayFeeling.sobagiEmotion : ('happy' as const);
 
   const openDayPhotocard = useCallback(() => {
     dayRevealAnim.setValue(1);
@@ -614,8 +637,9 @@ function StatsScreen() {
           </View>
         )}
 
-        {/* Photocard entry — replaces DayFeelingCard, shown when selected day has spending */}
-        {selectedSpendingExpenses.length > 0 && (
+        {/* Photocard entry — shown for spending days and no-spend-only days.
+            Income-only days stay without a card (sub-spec B D2 unchanged). */}
+        {canOpenDayPhotocard && (
           <Pressable style={styles.photocardEntryBtn} onPress={openDayPhotocard}>
             <Text style={styles.photocardEntryText}>포토카드 생성</Text>
           </Pressable>
@@ -751,15 +775,15 @@ function StatsScreen() {
       </Animated.View>
 
       {/* Photocard modal — full-screen dark overlay */}
-      {showDayPhotocard && dayFeeling && (
+      {showDayPhotocard && canOpenDayPhotocard && (
         <Pressable style={styles.photocardModal} onPress={closeDayPhotocard}>
           <View style={styles.cardArea}>
             <PhotocardView
-              quote={dayFeeling.mainLine}
+              quote={photocardQuote}
               dateStr={photocardDateStr}
               weekdayLabel={photocardWeekday}
               records={photocardRecords}
-              currentEmotion={dayFeeling.sobagiEmotion}
+              currentEmotion={photocardEmotion}
               quoteAnimated
             />
             <Animated.View
