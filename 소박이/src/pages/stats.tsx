@@ -77,22 +77,11 @@ function DayAmountSlot({ cell, isSelected }: { cell: CellDisplay; isSelected: bo
       return <View style={styles.dayAmountPlaceholder} />;
     case 'leaf':
       return <Text style={textStyle} numberOfLines={1}>🌿</Text>;
-    case 'incomeMarker':
-      return <Text style={textStyle} numberOfLines={1}>🍃</Text>;
     case 'amount':
       return (
         <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
           {cell.compact ? formatCompactAmount(cell.amount) : cell.amount.toLocaleString('ko-KR')}
         </Text>
-      );
-    case 'amountWithIncome':
-      return (
-        <View style={styles.dayAmountRow}>
-          <Text style={[...textStyle, styles.dayAmountFlex]} numberOfLines={1} ellipsizeMode="tail">
-            {cell.amount.toLocaleString('ko-KR')}
-          </Text>
-          <Text style={[styles.dayAmountLeaf, isSelected && styles.dayAmountSelected]}>·🍃</Text>
-        </View>
       );
   }
 }
@@ -1111,21 +1100,6 @@ const styles = StyleSheet.create({
   dayAmount: { fontSize: 9, color: COLORS.textMuted, marginTop: 1, height: 12, lineHeight: 12 },
   dayAmountSelected: { color: 'rgba(255,255,255,0.85)' },
   dayAmountPlaceholder: { height: 12 },
-  dayAmountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 12,
-    maxWidth: '100%',
-  },
-  dayAmountFlex: {
-    flexShrink: 1,
-  },
-  dayAmountLeaf: {
-    fontSize: 9,
-    marginLeft: 1,
-    color: COLORS.textMuted,
-  },
 
   // Day card
   dayCard: {
