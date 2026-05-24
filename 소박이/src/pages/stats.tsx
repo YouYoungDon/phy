@@ -12,7 +12,7 @@ import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
 import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
-import { MonthPresenceRow } from '../components/stats/MonthPresenceRow';
+import { MonthAmountChart } from '../components/stats/MonthAmountChart';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -535,13 +535,15 @@ function StatsScreen() {
           )}
         </View>
 
-        {/* Month presence row — soft trace of this month, not a chart */}
-        <MonthPresenceRow
+        {/* Month amount chart — bar trace of spending across this month */}
+        <MonthAmountChart
           viewYear={viewYear}
           viewMonth={viewMonth}
           daysInMonth={daysInMonth}
           expensesByDate={expensesByDate}
           todayStr={todayStr}
+          selectedDay={selectedDay}
+          onSelectDay={setSelectedDay}
         />
 
       </ScrollView>
