@@ -32,6 +32,7 @@ This is the ordered work queue. Keep it short. Strike through completed items. M
 - [ ] **Photocard: add "Sobagi" signature** — small muted label between `quotePanel` and `contextStrip`; authorial anchor per spec
 - [ ] **Android keyboard behavior** — investigate whether save button is accessible
 - [ ] **Floating hearts pacing** — charming on record #1, noise by record #30; reduce or remove after N records
+- [ ] **Dev-only fresh-state reset helper (dogfooding)** — no in-app storage clear exists today; resetting to zero-state requires a device/host wipe (see `docs/dogfooding-fresh-state-2026-05-24.md`). Once first-use dogfooding becomes frequent, a `__DEV__`-gated reset that clears all `STORAGE_KEYS` would help. **Must stay strictly dev-only — never a user-facing reset/settings feature.** Device-level wipe is sufficient for now; deferring keeps the production mental model clean.
 
 ---
 
