@@ -1,6 +1,6 @@
 import { SobagiEmotion } from '../types';
 
-const CDN = 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@94fdc8ea787a469d6ae86a0d7e4ce7d10a0e3e66/assets';
+const CDN = 'https://cdn.jsdelivr.net/gh/YouYoungDon/sobaki@ffd169c1e2cf370768506179f0e1be1b6386ec3a/assets';
 
 export const ROOM_BACKGROUND_URIS: Partial<Record<1 | 2 | 3 | 4 | 5, string>> = {
   1: `${CDN}/room_stage1.png`,

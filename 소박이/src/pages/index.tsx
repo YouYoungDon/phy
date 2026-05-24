@@ -11,7 +11,7 @@ import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore, getNextThreshold } from '../store/userStore';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { COLORS } from '../constants/colors';
-import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS } from '../constants/assets';
+import { ROOM_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS, ROOM_FURNITURE_URIS } from '../constants/assets';
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
@@ -19,7 +19,6 @@ import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
 import { getTimeOfDayTint, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
-import { RestTV } from '../components/room/RestTV';
 import { PebbleJar } from '../components/room/PebbleJar';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
@@ -71,15 +70,7 @@ function getIdleMessages(lastRestAtISO: string | null, now: Date): string[] {
   return [...IDLE_MESSAGES, ...REST_IDLE_MESSAGES];
 }
 
-// Normalized room coordinates. MAILBOX_POSITION represents the visual
-// location of the mailbox utility icon — the utility stack itself stays
-// pixel-positioned in its existing styles; this constant is the source of
-// truth for room-layer fixtures that anchor below it.
-const MAILBOX_POSITION = { x: 0.12, y: 0.29 } as const;
-const TV_POSITION = {
-  x: MAILBOX_POSITION.x + 0.02,
-  y: MAILBOX_POSITION.y + 0.16,
-};
+// Normalized room coordinate for the pebble jar fixture.
 const JAR_POSITION = { x: 0.18, y: 0.66 } as const;
 
 function HomeScreen() {
@@ -284,28 +275,6 @@ function HomeScreen() {
                 </View>
               );
             })}
-            <RestTV
-              position={TV_POSITION}
-              adStatus={adState.status}
-              effectiveRestsToday={effectiveRestsToday}
-              onPress={() => {
-                if (effectiveRestsToday >= 2) {
-                  setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
-                  setBubbleVisible(true);
-                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
-                  return;
-                }
-                if (adState.status === 'error') {
-                  setBubbleMessage('지금은 조용한 채널이 없어요 🌿');
-                  setBubbleVisible(true);
-                  if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-                  hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
-                  return;
-                }
-                openSheet('rest');
-              }}
-            />
             <PebbleJar
               position={JAR_POSITION}
               pebbleCount={pebbleCount}
@@ -370,6 +339,46 @@ function HomeScreen() {
                   )}
                 </Pressable>
                 <Text style={styles.utilityLabel}>우편함</Text>
+              </View>
+              <View style={styles.utilityItem}>
+                <Pressable
+                  style={styles.utilityBtn}
+                  onPress={() => {
+                    if (effectiveRestsToday >= 2) {
+                      setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
+                      setBubbleVisible(true);
+                      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                      hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                      return;
+                    }
+                    if (adState.status === 'unsupported') {
+                      setBubbleMessage('아직 준비 중이에요 🌿');
+                      setBubbleVisible(true);
+                      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                      hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                      return;
+                    }
+                    if (adState.status === 'error') {
+                      setBubbleMessage('지금은 조용한 채널이 없어요 🌿');
+                      setBubbleVisible(true);
+                      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+                      hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+                      return;
+                    }
+                    openSheet('rest');
+                  }}
+                >
+                  {({ pressed }) => (
+                    <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                      <Image
+                        source={{ uri: ROOM_FURNITURE_URIS.tv }}
+                        style={styles.iconImage}
+                        resizeMode="contain"
+                      />
+                    </View>
+                  )}
+                </Pressable>
+                <Text style={styles.utilityLabel}>티비</Text>
               </View>
             </View>
           </RoomBackground>
