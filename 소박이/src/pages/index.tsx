@@ -18,7 +18,7 @@ import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
 import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
-import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS, RoomPlacement, ZONE_SLOTS } from '../constants/bagItems';
+import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS } from '../constants/bagItems';
 import { PebbleJar } from '../components/room/PebbleJar';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
@@ -26,6 +26,7 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
+import { keepItem } from '../services/discoveryService';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
 export const Route = createRoute('/', {
@@ -105,7 +106,8 @@ function HomeScreen() {
   const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
   const [hasNewBagItem, setHasNewBagItem] = useState(false);
   const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
-  const [roomPlacements, setRoomPlacements] = useState<RoomPlacement[]>([]);
+  const [discoveryQueue, setDiscoveryQueue] = useState<string[]>([]);
+  const [keptItemIds, setKeptItemIds] = useState<string[]>([]);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -118,8 +120,9 @@ function HomeScreen() {
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
       storageService.load<number>(STORAGE_KEYS.LAST_BAG_OPEN_DAYS),
-      storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays, placements]) => {
+      storageService.load<string[]>(STORAGE_KEYS.KEPT_ITEM_IDS),
+      storageService.load<string[]>(STORAGE_KEYS.DISCOVERY_QUEUE),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays, kept, queue]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) {
@@ -131,7 +134,8 @@ function HomeScreen() {
       if (ALL_BAG_ITEMS.some((item) => item.minDays > days && item.minDays <= recordedDaysCount)) {
         setHasNewBagItem(true);
       }
-      if (placements) setRoomPlacements(placements);
+      if (kept) setKeptItemIds(kept);
+      if (queue) setDiscoveryQueue(queue);
     });
   }, []);
 
@@ -230,7 +234,7 @@ function HomeScreen() {
       recordedDaysCount,
       streak,
       isNoSpendToday: todayExpenses.length > 0 && todayTotal === 0,
-      placedItemIds: roomPlacements.map((p) => p.itemId),
+      placedItemIds: keptItemIds, // objects now live in the bag (kept), not the room
       daysSinceLastVisit: prev ? calendarDaysBetween(getLocalDateString(now), prev) : 0,
       calmActive: calmOpacity > 0,
       restActive: getRestWarmthOpacity(now, lastRestAt) > 0,
@@ -253,7 +257,24 @@ function HomeScreen() {
     setBubbleMessage(sel.line.text);
     setBubbleVisible(true);
     hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
-  }, [recordedDaysCount, streak, todayExpenses, todayTotal, roomPlacements, calmOpacity, lastRestAt, playTapPulse]);
+  }, [recordedDaysCount, streak, todayExpenses, todayTotal, keptItemIds, calmOpacity, lastRestAt, playTapPulse]);
+
+  // Pick up the item the user found in the room: move it from the discovery
+  // queue into the kept bag, persist both, and say a soft line. (Animation: stage 5.)
+  const handlePickUp = useCallback((itemId: string) => {
+    const { queue, kept } = keepItem(itemId, discoveryQueue, keptItemIds);
+    setDiscoveryQueue(queue);
+    setKeptItemIds(kept);
+    void storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, queue);
+    void storageService.save(STORAGE_KEYS.KEPT_ITEM_IDS, kept);
+
+    const trinket = FINDABLE_ITEMS.find((f) => f.id === itemId);
+    const line = trinket?.findLine ?? '주웠어요 🌿';
+    if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    setBubbleMessage(line);
+    setBubbleVisible(true);
+    hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
+  }, [discoveryQueue, keptItemIds]);
 
   return (
     <View style={styles.root}>
@@ -282,20 +303,20 @@ function HomeScreen() {
               <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
               <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
             </View>
-            {roomPlacements.map((placement) => {
-              const item = ALL_BAG_ITEMS.find((i) => i.id === placement.itemId);
-              const slot = ZONE_SLOTS[placement.zone]?.[0];
-              if (!item || !slot) return null;
+            {(() => {
+              // One gentle arrival at a time — the queue front, waiting to be found.
+              const frontId = discoveryQueue[0];
+              if (frontId == null) return null;
+              const item =
+                ALL_BAG_ITEMS.find((i) => i.id === frontId) ??
+                FINDABLE_ITEMS.find((f) => f.id === frontId);
+              if (!item) return null;
               return (
-                <View
-                  key={placement.itemId}
-                  pointerEvents="none"
-                  style={{ position: 'absolute', left: `${slot.x * 100}%`, top: `${slot.y * 100}%` }}
-                >
+                <Pressable style={styles.discoverable} onPress={() => handlePickUp(frontId)}>
                   <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
-                </View>
+                </Pressable>
               );
-            })}
+            })()}
             <PebbleJar
               position={JAR_POSITION}
               pebbleCount={pebbleCount}
@@ -962,5 +983,13 @@ const styles = StyleSheet.create({
   roomItemEmoji: {
     fontSize: 16,
     opacity: 0.60,
+  },
+  // A single gentle arrival waiting to be found & picked up. Calm spot,
+  // comfortable tap target. The bob/glow affordance arrives in stage 5.
+  discoverable: {
+    position: 'absolute',
+    left: '16%',
+    top: '60%',
+    padding: 8,
   },
 });

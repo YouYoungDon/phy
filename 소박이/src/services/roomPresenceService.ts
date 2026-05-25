@@ -4,7 +4,6 @@ import * as storageService from './storageService';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import {
   BagItem,
-  RoomPlacement,
   PendingPlacement,
   ALL_BAG_ITEMS,
 } from '../constants/bagItems';
@@ -393,88 +392,43 @@ export async function checkForPlacement(
 ): Promise<void> {
   const today = getLocalDateString(new Date());
 
-  // Step 1: auto-settle 나중에 items
-  const pending = await storageService.load<PendingPlacement>(STORAGE_KEYS.PENDING_PLACEMENT);
-  if (shouldAutoSettle(pending ?? null, today)) {
-    const placements = (await storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS)) ?? [];
-    if (pending) {
-      const item = ALL_BAG_ITEMS.find((i) => i.id === pending.itemId);
-      const zone = item?.roomPresence?.zones[0];
-      if (zone) {
-        const newPlacement: RoomPlacement = {
-          itemId: pending.itemId,
-          zone,
-          placedAt: today,
-          placementPath: 'C',
-        };
-        await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
-      }
-    }
-    await storageService.save(STORAGE_KEYS.PENDING_PLACEMENT, null);
-    return; // one action per session
-  }
+  // Discover & Keep: presence triggers no longer place items permanently —
+  // they enqueue an arrival to be found in the room and picked up into the bag.
+  // Items already kept or already queued must not be re-offered.
+  const kept = (await storageService.load<string[]>(STORAGE_KEYS.KEPT_ITEM_IDS)) ?? [];
+  const queued = (await storageService.load<string[]>(STORAGE_KEYS.DISCOVERY_QUEUE)) ?? [];
+  const heldIds = new Set<string>([...kept, ...queued]);
 
-  // Step 2: skip if a placement is already pending — wait for its settle window
-  if (pending != null) return;
+  const enqueue = async (itemId: string): Promise<void> => {
+    const q = (await storageService.load<string[]>(STORAGE_KEYS.DISCOVERY_QUEUE)) ?? [];
+    if (!q.includes(itemId)) await storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, [...q, itemId]);
+  };
 
-  // Step 3: category-pattern path. Fires before B/A so a habit signal wins
-  // over a same-session emotion match. Always places directly, never queued.
-  const placements = (await storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS)) ?? [];
-  const placedItemIds = new Set(placements.map((p) => p.itemId));
+  // Category-pattern path — a habit signal brings a specific item early.
 
   for (const trigger of CATEGORY_TRIGGERS) {
     const item = selectCategoryCandidate(
-      ALL_BAG_ITEMS, placedItemIds, trigger.category, expenses, trigger.opts, today,
+      ALL_BAG_ITEMS, heldIds, trigger.category, expenses, trigger.opts, today,
     );
-    if (item) {
-      const zone = item.roomPresence!.zones[0]!;
-      const newPlacement: RoomPlacement = {
-        itemId: item.id,
-        zone,
-        placedAt: today,
-        placementPath: 'P',
-      };
-      await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
-      return; // one action per session
-    }
+    if (item) { await enqueue(item.id); return; } // one arrival per session
   }
 
   // Step 3b: streak path. Fires after category-pattern, before B/A — habits
   // of presence (recording over days) are a quieter signal than category
   // habits, so they get the lower priority within the implicit-accumulation
   // band. Same direct-placement model as P; the streak is the delay.
-  const streakItem = selectStreakCandidate(ALL_BAG_ITEMS, placedItemIds, expenses, today);
-  if (streakItem) {
-    const zone = streakItem.roomPresence!.zones[0]!;
-    const newPlacement: RoomPlacement = {
-      itemId: streakItem.id,
-      zone,
-      placedAt: today,
-      placementPath: 'S',
-    };
-    await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
-    return; // one action per session
-  }
+  const streakItem = selectStreakCandidate(ALL_BAG_ITEMS, heldIds, expenses, today);
+  if (streakItem) { await enqueue(streakItem.id); return; }
 
   // Step 3c: night-activity path. Same model as P/S — direct placement,
   // recurrence gate. Sits after streak because it's a more specific time-of-day
   // habit; if the room is going to absorb only one trace this session, prefer
   // the more general "user is here" signals first.
-  const nightItem = selectNightCandidate(ALL_BAG_ITEMS, placedItemIds, expenses, NIGHT_TRIGGER, today);
-  if (nightItem) {
-    const zone = nightItem.roomPresence!.zones[0]!;
-    const newPlacement: RoomPlacement = {
-      itemId: nightItem.id,
-      zone,
-      placedAt: today,
-      placementPath: 'L',
-    };
-    await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
-    return; // one action per session
-  }
+  const nightItem = selectNightCandidate(ALL_BAG_ITEMS, heldIds, expenses, NIGHT_TRIGGER, today);
+  if (nightItem) { await enqueue(nightItem.id); return; }
 
   // Step 4: emotion / return-gap path (existing)
-  const eligibleItems = pickEligibleItems(ALL_BAG_ITEMS, placedItemIds, recordedDaysCount);
+  const eligibleItems = pickEligibleItems(ALL_BAG_ITEMS, heldIds, recordedDaysCount);
   if (eligibleItems.length === 0) return;
 
   const hasReturnGap =
@@ -482,25 +436,6 @@ export async function checkForPlacement(
   const candidate = selectCandidate(eligibleItems, lastEmotion, hasReturnGap);
   if (!candidate) return;
 
-  const { item, path } = candidate;
-  const zone = item.roomPresence!.zones[0]!;
-  const inDrift = isDriftPhase(placements.length, recordedDaysCount);
-
-  if (!inDrift && item.roomPresence!.promptOnPlace) {
-    const newPending: PendingPlacement = {
-      itemId: item.id,
-      pendingFrom: today,
-      settleAfter: randomSettleAfter(),
-    };
-    await storageService.save(STORAGE_KEYS.PENDING_PLACEMENT, newPending);
-  } else {
-    const newPlacement: RoomPlacement = {
-      itemId: item.id,
-      zone,
-      placedAt: today,
-      placementPath: inDrift ? 'C' : path,
-    };
-    await storageService.save(STORAGE_KEYS.ROOM_PLACEMENTS, [...placements, newPlacement]);
-  }
+  await enqueue(candidate.item.id);
 }
 
