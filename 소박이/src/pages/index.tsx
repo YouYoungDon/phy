@@ -26,7 +26,7 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
-import { keepsakeLineFor } from '../services/discoveryService';
+import { keepsakeLineFor, pickupLineFor } from '../services/discoveryService';
 import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
@@ -257,8 +257,9 @@ function HomeScreen() {
   const handlePickUp = useCallback((itemId: string) => {
     keepDiscovery(itemId); // store action: move queue front → kept + write through to storage
 
-    const trinket = FINDABLE_ITEMS.find((f) => f.id === itemId);
-    const line = trinket?.findLine ?? '주웠어요 🌿';
+    // Item-specific quiet line (its own note, or a trinket's find line) — picking
+    // up reads as noticing & keeping, not a generic acquisition toast.
+    const line = pickupLineFor(itemId);
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
     setBubbleMessage(line);
     setBubbleVisible(true);
