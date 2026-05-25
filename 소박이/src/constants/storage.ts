@@ -18,4 +18,7 @@ export const STORAGE_KEYS = {
   RESTS_TODAY: 'sobagi-rests-today',
   LAST_REST_DATE: 'sobagi-last-rest-date',
   LAST_REST_AT: 'sobagi-last-rest-at',
+  KEPT_ITEM_IDS: 'sobagi-kept-item-ids',
+  DISCOVERY_QUEUE: 'sobagi-discovery-queue',
+  DISCOVERY_MIGRATION_DONE: 'sobagi-discovery-migration-done',
 } as const;
