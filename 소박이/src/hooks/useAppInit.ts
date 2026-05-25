@@ -6,6 +6,8 @@ import { normalizeExpense } from '../services/expenseService';
 import { promoteStaged } from '../services/foundItemService';
 import { checkAndDeliverLetters } from '../services/letterService';
 import { checkForPlacement } from '../services/roomPresenceService';
+import { computeTimeArrivals, enqueueArrivals, seedKeptForMigration } from '../services/discoveryService';
+import { RoomPlacement } from '../constants/bagItems';
 import { STORAGE_KEYS } from '../constants/storage';
 import { VALID_EMOTIONS, EMOTION_MESSAGES } from '../constants/emotion';
 import {
@@ -71,6 +73,31 @@ export function getPrevVisitDate(): string | null {
 
 function computeRecordedDaysCount(expenses: Expense[]): number {
   return new Set(expenses.map((e) => expenseLocalDate(e))).size;
+}
+
+// Seeds the kept/queue model once (migration), then enqueues newly-eligible
+// arrivals. Runs silently in Stage 1 — nothing renders the queue yet.
+async function runDiscoveryInit(recordedDaysCount: number): Promise<void> {
+  const done = await storageService.load<boolean>(STORAGE_KEYS.DISCOVERY_MIGRATION_DONE);
+  let kept = (await storageService.load<string[]>(STORAGE_KEYS.KEPT_ITEM_IDS)) ?? [];
+  let queue = (await storageService.load<string[]>(STORAGE_KEYS.DISCOVERY_QUEUE)) ?? [];
+
+  if (!done) {
+    const placements = (await storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS)) ?? [];
+    const found = (await storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS)) ?? [];
+    // Found trinkets (incl. any pending one) keep their legacy path into the bag;
+    // only catalog items are discovered in the room. Seed kept from what's owned.
+    kept = seedKeptForMigration(recordedDaysCount, placements.map((p) => p.itemId), found);
+    await storageService.save(STORAGE_KEYS.KEPT_ITEM_IDS, kept);
+    await storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, queue);
+    await storageService.save(STORAGE_KEYS.DISCOVERY_MIGRATION_DONE, true);
+    return; // seed before any arrival compute — no re-discovery storm
+  }
+
+  const arrivals = computeTimeArrivals(recordedDaysCount, kept, queue);
+  if (arrivals.length > 0) {
+    await storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, enqueueArrivals(queue, arrivals));
+  }
 }
 
 // Refreshes the visit-date anchor when the app returns to the foreground.
@@ -169,6 +196,7 @@ export function useAppInit(): boolean {
             : 'happy';
 
         await checkForPlacement(emotion, recomputedDays, prevVisitDate, normalized ?? []);
+        await runDiscoveryInit(recomputedDays);
 
         useEmotionStore.setState({
           currentEmotion: emotion,
