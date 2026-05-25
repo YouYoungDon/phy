@@ -1,7 +1,9 @@
 import {
-  computeTimeArrivals, enqueueArrivals, keepItem, seedKeptForMigration,
+  computeTimeArrivals, enqueueArrivals, keepItem, seedKeptForMigration, keepsakeLineFor,
 } from '../src/services/discoveryService';
 import { ALL_BAG_ITEMS } from '../src/constants/bagItems';
+import { OBJECT_LINES } from '../src/constants/ambientDialogue';
+import { FINDABLE_ITEMS } from '../src/constants/findableItems';
 
 const day0Ids = ALL_BAG_ITEMS.filter((i) => i.minDays === 0).map((i) => i.id);
 
@@ -46,5 +48,24 @@ describe('seedKeptForMigration', () => {
       expect(seeded).toContain(i.id);
     }
     expect(new Set(seeded).size).toBe(seeded.length);
+  });
+});
+
+describe('keepsakeLineFor', () => {
+  const first = () => 0; // deterministic rng → first line of a pool
+
+  it('uses an object line when the item has one', () => {
+    expect(keepsakeLineFor('m6', first)).toBe(OBJECT_LINES.m6![0]!.text);
+  });
+  it('falls back to a catalog item desc', () => {
+    const a1 = ALL_BAG_ITEMS.find((i) => i.id === 'a1')!;
+    expect(keepsakeLineFor('a1', first)).toBe(a1.desc);
+  });
+  it('falls back to a trinket findLine', () => {
+    const f1 = FINDABLE_ITEMS.find((f) => f.id === 'f1')!;
+    expect(keepsakeLineFor('f1', first)).toBe(f1.findLine);
+  });
+  it('returns a gentle default for an unknown id', () => {
+    expect(keepsakeLineFor('zzz', first)).toBe('여기 잘 간직하고 있어요 🌿');
   });
 });

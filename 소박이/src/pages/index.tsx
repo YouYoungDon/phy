@@ -26,7 +26,7 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
-import { keepItem } from '../services/discoveryService';
+import { keepItem, keepsakeLineFor } from '../services/discoveryService';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
 export const Route = createRoute('/', {
@@ -98,6 +98,7 @@ function HomeScreen() {
   const [activeSheet, setActiveSheet] = useState<SheetType | null>(null);
   const sheetAnim = useRef(new Animated.Value(400)).current;
   const [selectedKeptId, setSelectedKeptId] = useState<string | null>(null);
+  const [keptMomentLine, setKeptMomentLine] = useState<string>('');
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
@@ -544,7 +545,11 @@ function HomeScreen() {
                           <Pressable
                             key={id}
                             style={[styles.bagCell, isSelected && styles.bagCellSelected]}
-                            onPress={() => setSelectedKeptId(isSelected ? null : id)}
+                            onPress={() => {
+                              if (isSelected) { setSelectedKeptId(null); return; }
+                              setSelectedKeptId(id);
+                              setKeptMomentLine(keepsakeLineFor(id));
+                            }}
                           >
                             <Text style={styles.bagCellEmoji}>{item.emoji}</Text>
                             <Text style={styles.bagCellName}>{item.name}</Text>
@@ -560,18 +565,13 @@ function HomeScreen() {
               </View>
             )}
 
-            {/* Description area — the kept item's quiet note (stage 4 makes it spoken). */}
+            {/* The kept item's quiet moment — Sobagi's note about it, resolved on tap. */}
             <View style={styles.bagDescArea}>
-              {selectedKeptId !== null && (() => {
-                const catalogItem = ALL_BAG_ITEMS.find((i) => i.id === selectedKeptId);
-                const trinket = FINDABLE_ITEMS.find((f) => f.id === selectedKeptId);
-                const text = catalogItem?.desc ?? trinket?.findLine ?? '';
-                return (
-                  <View style={styles.bagDescCard}>
-                    <Text style={styles.bagDescText}>{text}</Text>
-                  </View>
-                );
-              })()}
+              {selectedKeptId !== null && keptMomentLine !== '' && (
+                <View style={styles.bagDescCard}>
+                  <Text style={styles.bagDescText}>{keptMomentLine}</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
