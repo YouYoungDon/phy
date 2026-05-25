@@ -62,6 +62,40 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-25
+**Group:** Bag "Discover & Keep" (stages 1–4 of 5; stage 5 = polish, deferred)
+
+> **Discovery is not a reward queue. It is a gentle arrival queue.**
+
+The bag was a passive day-unlock catalog and the room permanently scattered items (clutter). Now: an item that becomes available **arrives** in the room as a single tappable thing (one at a time); the user **picks it up** into the bag with a soft line; the room stays clean; the bag is a **keepsake box** where tapping a kept item shows a quiet Sobagi note. The full `discover → keep → revisit` loop is functionally complete. Stage 5 (animation/feel) is intentionally split out for a dedicated emotional-polish pass after device dogfooding.
+
+### What changed (stages 1–4)
+- **Discovery model** (`src/services/discoveryService.ts`, pure + tested): `computeTimeArrivals` (minDays cadence preserved as an *arrival schedule*), `enqueueArrivals`, `keepItem` (queue→kept), `seedKeptForMigration` (unlocked+placed+found), `keepsakeLineFor` (object line → catalog desc → trinket findLine → gentle default). New storage: `KEPT_ITEM_IDS`, `DISCOVERY_QUEUE`, `DISCOVERY_MIGRATION_DONE`.
+- **Migration** (`src/hooks/useAppInit.ts`, `runDiscoveryInit`): on first launch seeds `kept` from everything already owned (no re-discovery storm), then enqueues newly-eligible arrivals on later launches.
+- **Room** (`src/pages/index.tsx`): renders the queue front as one tappable discoverable; tap → `keepItem` + persist + soft line. The static `roomPlacements` render is gone. `checkForPlacement` (`roomPresenceService`) now **enqueues** arrivals (category/streak/night/emotion early-bring preserved) instead of writing `ROOM_PLACEMENTS`; the `PendingPlacement` settle path is retired.
+- **Bag** (`src/pages/index.tsx`): a single clean keepsake grid of kept items (no day-locked grid, no tabs); tap a kept item → its note via `keepsakeLineFor`. Ambient object lines now key off **kept** items (objects live in the bag, not the room).
+
+### Direction
+The room is a calm discovery surface, not a display shelf. Picking up is *keeping*, not *earning* — no counts, no completion grid, no rewards. The discovery queue length is never surfaced.
+
+### Deliberately deferred (NOT bugs)
+- **Stage 5 — emotional polish pass** (own task): bob/glow timing, pickup feel, animation softness, queue-advance rhythm. Also folds in two cleanups: the now-dead bag-tab styles and the legacy `pendingNewItemId`/`hasNewBagItem` bag-dot machinery.
+- **Trinket → room-discovery unification** (future follow-up, not bundled): found trinkets (`f*`) still arrive via their legacy "두고 간 것" path straight into the bag; they're *displayed* in the keepsake grid (merged `kept ∪ found`) but don't yet appear as room discoverables.
+
+### Preserved (regression-confirmed)
+Ambient voice, save reactions, observations, DayFeeling, letters, pebbles/rest, the photocard. Room-presence selection helpers unchanged (only the orchestrator's effect changed place→enqueue).
+
+### Test count
+**29 suites · 399 tests · all green.** New: `discoveryService.test.ts` (arrivals / enqueue / keep / migration-seed / keepsakeLineFor fallback).
+
+### Next
+**Device dogfooding before stage 5:** how noticeable discoveries feel; whether the room stays calm/clean; whether tapping keepsakes stays comforting vs repetitive; silence rhythm; whether pickup feels gentle, not reward-y. Spec `docs/superpowers/specs/2026-05-25-bag-discover-and-keep-design.md`, plan `docs/superpowers/plans/2026-05-25-bag-discover-and-keep.md`.
+
+---
+
+### Earlier handoff (Ambient dialogue system)
+
+**Agent:** Engineering
+**Date:** 2026-05-25
 **Group:** Ambient dialogue system (home idle voice)
 
 The home room's idle/tap-to-talk voice — previously a flat `IDLE_MESSAGES` array picked at random — is now a **context-driven ambient engine**. Tapping Sobagi resolves a line (or silence) from the room's current context: time of day, no-spend, accumulated familiarity, return-after-absence, placed objects, and atmosphere. Save-reaction pools, observation lines, and the DayFeeling card are unchanged (out of scope).
@@ -309,10 +343,10 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 | Per-day photocard entry point in stats | `src/pages/stats.tsx` |
 | DayFeelingCard (8 buckets, observational) | `src/components/stats/DayFeelingCard.tsx`, `src/services/dayFeelingService.ts` |
 | Mailbox (dynamic: milestone + seasonal letters) | `src/services/letterService.ts`, `src/constants/letters.ts` |
-| Bag accumulation (21 items across 4 tabs, minDays thresholds) | `src/constants/bagItems.ts`, `src/pages/index.tsx` |
-| Found item system (4 triggers, T3 activity-based not amount-based, eval on first-of-day saveExpense, staged delivery via app-init promote) | `src/services/foundItemService.ts`, `src/services/expenseService.ts`, `src/hooks/useAppInit.ts`, `src/constants/findableItems.ts` |
-| Bag new-item amber dot | `src/pages/index.tsx`, `src/constants/storage.ts` |
-| Room presence — silent ambient placement (B/A/C paths, drift, auto-settle) | `src/services/roomPresenceService.ts`, `src/hooks/useAppInit.ts`, `src/pages/index.tsx` |
+| Bag "Discover & Keep" (room shows one tappable arrival from `DISCOVERY_QUEUE`; tap → kept; bag = keepsake grid of kept items; tap a keepsake → note via `keepsakeLineFor`; minDays = arrival schedule) | `src/services/discoveryService.ts`, `src/pages/index.tsx`, `src/constants/bagItems.ts` |
+| Found item system (4 triggers, T3 activity-based not amount-based, eval on first-of-day saveExpense, staged delivery via app-init promote) — trinkets still use the legacy bag-appear path; *displayed* in the keepsake grid (unification = future follow-up) | `src/services/foundItemService.ts`, `src/services/expenseService.ts`, `src/hooks/useAppInit.ts`, `src/constants/findableItems.ts` |
+| Bag new-item amber dot — **legacy** (`pendingNewItemId`/`hasNewBagItem`); slated for removal in the stage-5 polish pass | `src/pages/index.tsx`, `src/constants/storage.ts` |
+| Room presence — selection now **enqueues** a discovery (category/streak/night/emotion early-bring); no longer writes `ROOM_PLACEMENTS`; `PendingPlacement` settle path retired | `src/services/roomPresenceService.ts`, `src/hooks/useAppInit.ts`, `src/pages/index.tsx` |
 | summaryCard boundary dissolve | `src/pages/index.tsx` |
 | Memo suggestions (5-7 hints per category, append with `', '`, 60-char cap) | `src/components/expense/MemoSuggestions.tsx`, `src/constants/categories.ts` |
 | Wrapped category chip layout (all 12 scene tokens visible at once) | `src/components/expense/CategorySelector.tsx` |
@@ -358,9 +392,12 @@ sobagi-last-item-date          → string (YYYY-MM-DD)  cooldown for found item 
 sobagi-last-bag-open-days      → number               for new-item dot
 sobagi-last-visit-date         → string (YYYY-MM-DD)  gap detection
 sobagi-observation-save-count  → number               cooldown for observation messages
-sobagi-room-placements         → RoomPlacement[]      items currently in the room
-sobagi-pending-placement       → PendingPlacement|null delayed placement (silent settle)
+sobagi-room-placements         → RoomPlacement[]      LEGACY — migrated into kept, no longer rendered/written
+sobagi-pending-placement       → PendingPlacement|null LEGACY — settle path retired (Discover & Keep)
 sobagi-category-migration-done → boolean  one-time flag for legacy category migration
+sobagi-kept-item-ids           → string[]              keepsake bag contents (discovered & picked up)
+sobagi-discovery-queue         → string[]              arrived-but-not-yet-kept; index 0 shows in room
+sobagi-discovery-migration-done→ boolean               one-time Discover & Keep migration guard
 sobagi-pebble-count            → number               accumulates forever (rest TV reward)
 sobagi-rests-today             → number               0-2, normalized via effectiveRestsToday
 sobagi-last-rest-date          → string (YYYY-MM-DD)  day-rollover anchor for rests-today
@@ -438,7 +475,7 @@ Thresholds are slow — no reward for binging, only for consistent presence.
 | 35 | 작은 빵 🍞 | 간식 |
 | 40 | 작은 곰 🧸 | 장난감 |
 
-Hidden items render as vacant cells (opacity 0.38, dot). No unlock animation, no announcement.
+Under "Discover & Keep", `minDays` is the **arrival schedule**: when an item becomes eligible it joins the discovery queue and appears in the room to be found & kept (not a greyed catalog cell). Pattern triggers (cafe/streak/night) can bring specific items earlier. The bag shows only what's been picked up.
 
 ---
 
