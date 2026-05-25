@@ -14,11 +14,11 @@ import { COLORS } from '../constants/colors';
 import { ROOM_TIME_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILITY_ICON_URIS, ROOM_FURNITURE_URIS } from '../constants/assets';
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
-import { FINDABLE_ITEMS, FindableItem } from '../constants/findableItems';
+import { FINDABLE_ITEMS } from '../constants/findableItems';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
 import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
-import { BAG_ITEMS, BAG_TABS, BagItem, BagTab, ALL_BAG_ITEMS } from '../constants/bagItems';
+import { ALL_BAG_ITEMS } from '../constants/bagItems';
 import { PebbleJar } from '../components/room/PebbleJar';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
@@ -97,9 +97,7 @@ function HomeScreen() {
   type SheetType = 'mailbox' | 'bag' | 'rest';
   const [activeSheet, setActiveSheet] = useState<SheetType | null>(null);
   const sheetAnim = useRef(new Animated.Value(400)).current;
-  const [bagTab, setBagTab] = useState<BagTab>('장신구');
-  const [selectedBagItem, setSelectedBagItem] = useState<BagItem | null>(null);
-  const [selectedFoundItem, setSelectedFoundItem] = useState<FindableItem | null>(null);
+  const [selectedKeptId, setSelectedKeptId] = useState<string | null>(null);
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
@@ -108,6 +106,14 @@ function HomeScreen() {
   const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
   const [discoveryQueue, setDiscoveryQueue] = useState<string[]>([]);
   const [keptItemIds, setKeptItemIds] = useState<string[]>([]);
+  // The keepsake grid shows everything kept. Found trinkets still arrive via the
+  // legacy "두고 간 것" path (into foundItemIds); merge them in so they show as
+  // keepsakes too. (Unifying trinket acquisition into the discovery queue is a
+  // follow-up.)
+  const displayedKeptIds = useMemo(
+    () => Array.from(new Set([...keptItemIds, ...foundItemIds])),
+    [keptItemIds, foundItemIds],
+  );
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -145,9 +151,7 @@ function HomeScreen() {
     activeSheetRef.current = type;
     setActiveSheet(type);
     if (type === 'bag') {
-      setBagTab('장신구');
-      setSelectedBagItem(null);
-      setSelectedFoundItem(null);
+      setSelectedKeptId(null);
       void storageService.save(STORAGE_KEYS.LAST_BAG_OPEN_DAYS, recordedDaysCount);
       setHasNewBagItem(false);
       // Move pending item into the found collection
@@ -185,8 +189,7 @@ function HomeScreen() {
     Animated.timing(sheetAnim, { toValue: 400, duration: 210, useNativeDriver: true }).start(() => {
       activeSheetRef.current = null;
       setActiveSheet(null);
-      setSelectedBagItem(null);
-      setSelectedFoundItem(null);
+      setSelectedKeptId(null);
       setExpandedReadIds(new Set());
       if (closingSheet === 'bag' && pendingRef.current !== null) {
         pendingRef.current = null;
@@ -200,13 +203,12 @@ function HomeScreen() {
   // navigation. A selected bag/found item collapses back to the grid first;
   // otherwise the whole sheet closes. No-op when nothing is open (and on iOS).
   const handleAndroidBack = useCallback(() => {
-    if (selectedBagItem !== null || selectedFoundItem !== null) {
-      setSelectedBagItem(null);
-      setSelectedFoundItem(null);
+    if (selectedKeptId !== null) {
+      setSelectedKeptId(null);
       return;
     }
     if (activeSheet !== null) closeSheet();
-  }, [selectedBagItem, selectedFoundItem, activeSheet, closeSheet]);
+  }, [selectedKeptId, activeSheet, closeSheet]);
   useAndroidBack(activeSheet !== null, handleAndroidBack);
 
   useEffect(() => {
@@ -519,104 +521,57 @@ function HomeScreen() {
           <View>
             <Text style={styles.sheetTitle}>소박이의 가방</Text>
 
-            {/* Tab bar */}
-            <View style={styles.bagTabBar}>
-              {BAG_TABS.map((tab) => (
-                <Pressable
-                  key={tab}
-                  style={[styles.bagTabBtn, bagTab === tab && styles.bagTabBtnActive]}
-                  onPress={() => { setBagTab(tab); setSelectedBagItem(null); setSelectedFoundItem(null); }}
-                >
-                  <Text style={[styles.bagTabLabel, bagTab === tab && styles.bagTabLabelActive]}>
-                    {tab}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Grid */}
-            {BAG_ITEMS[bagTab].length === 0 ? (
+            {/* Keepsake grid — only the things you've discovered & kept. */}
+            {displayedKeptIds.length === 0 ? (
               <View style={styles.bagEmptyState}>
                 <Text style={styles.bagEmptyText}>
-                  {'소박이가 아직 모으지 못했어요\n천천히 채워질 거예요 🌿'}
+                  {'아직 간직한 게 없어요\n천천히 모일 거예요 🌿'}
                 </Text>
               </View>
             ) : (
               <View>
-                {Array.from({ length: 4 }, (_, row) => (
-                  <View key={row} style={styles.bagRow}>
-                    {Array.from({ length: 4 }, (_, col) => {
-                      const rawItem = BAG_ITEMS[bagTab][row * 4 + col] ?? null;
-                      const item = rawItem !== null && recordedDaysCount >= rawItem.minDays ? rawItem : null;
-                      const isSelected = item !== null && selectedBagItem?.id === item.id;
-                      return (
-                        <Pressable
-                          key={col}
-                          style={[
-                            styles.bagCell,
-                            item === null && styles.bagCellVacant,
-                            isSelected && styles.bagCellSelected,
-                          ]}
-                          onPress={() => {
-                            if (!item) return;
-                            setSelectedBagItem(isSelected ? null : item);
-                            setSelectedFoundItem(null);
-                          }}
-                          disabled={item === null}
-                        >
-                          {item !== null ? (
-                            <>
-                              <Text style={styles.bagCellEmoji}>{item.emoji}</Text>
-                              <Text style={styles.bagCellName}>{item.name}</Text>
-                            </>
-                          ) : (
-                            <View style={styles.bagCellDot} />
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ))}
+                {Array.from({ length: Math.ceil(displayedKeptIds.length / 4) }, (_, row) => {
+                  const rowIds = displayedKeptIds.slice(row * 4, row * 4 + 4);
+                  return (
+                    <View key={row} style={styles.bagRow}>
+                      {rowIds.map((id) => {
+                        const item =
+                          ALL_BAG_ITEMS.find((i) => i.id === id) ??
+                          FINDABLE_ITEMS.find((f) => f.id === id);
+                        if (!item) return <View key={id} style={styles.bagCellSpacer} />;
+                        const isSelected = selectedKeptId === id;
+                        return (
+                          <Pressable
+                            key={id}
+                            style={[styles.bagCell, isSelected && styles.bagCellSelected]}
+                            onPress={() => setSelectedKeptId(isSelected ? null : id)}
+                          >
+                            <Text style={styles.bagCellEmoji}>{item.emoji}</Text>
+                            <Text style={styles.bagCellName}>{item.name}</Text>
+                          </Pressable>
+                        );
+                      })}
+                      {Array.from({ length: 4 - rowIds.length }, (_, i) => (
+                        <View key={`pad-${i}`} style={styles.bagCellSpacer} />
+                      ))}
+                    </View>
+                  );
+                })}
               </View>
             )}
 
-            {/* Found items section — only when Sobagi has left something */}
-            {foundItemIds.length > 0 && (
-              <View style={styles.foundSection}>
-                <View style={styles.foundDivider} />
-                <Text style={styles.foundSectionTitle}>소박이가 두고 간 것</Text>
-                <View style={styles.foundChipsRow}>
-                  {foundItemIds.map((id) => {
-                    const item = FINDABLE_ITEMS.find((f) => f.id === id) ?? null;
-                    if (item === null) return null;
-                    const isSelected = selectedFoundItem?.id === id;
-                    return (
-                      <Pressable
-                        key={id}
-                        style={[styles.foundChip, isSelected && styles.foundChipSelected]}
-                        onPress={() => {
-                          setSelectedFoundItem(isSelected ? null : item);
-                          setSelectedBagItem(null);
-                        }}
-                      >
-                        <Text style={styles.foundChipEmoji}>{item.emoji}</Text>
-                        <Text style={styles.foundChipName}>{item.name}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            {/* Description area — shows desc for selected bag item or findLine for found item */}
+            {/* Description area — the kept item's quiet note (stage 4 makes it spoken). */}
             <View style={styles.bagDescArea}>
-              {(selectedBagItem !== null || selectedFoundItem !== null) && (
-                <View style={styles.bagDescCard}>
-                  <Text style={styles.bagDescText}>
-                    {selectedBagItem?.desc ?? selectedFoundItem?.findLine ?? ''}
-                  </Text>
-                </View>
-              )}
+              {selectedKeptId !== null && (() => {
+                const catalogItem = ALL_BAG_ITEMS.find((i) => i.id === selectedKeptId);
+                const trinket = FINDABLE_ITEMS.find((f) => f.id === selectedKeptId);
+                const text = catalogItem?.desc ?? trinket?.findLine ?? '';
+                return (
+                  <View style={styles.bagDescCard}>
+                    <Text style={styles.bagDescText}>{text}</Text>
+                  </View>
+                );
+              })()}
             </View>
           </View>
         )}
@@ -795,6 +750,11 @@ const styles = StyleSheet.create({
   },
   bagCellVacant: {
     opacity: 0.38,
+  },
+  // Invisible filler to keep the last keepsake row aligned to 4 columns.
+  bagCellSpacer: {
+    flex: 1,
+    aspectRatio: 1,
   },
   bagCellSelected: {
     borderWidth: 1.5,
