@@ -16,7 +16,7 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
 import { selectStatsObservation } from '../services/statsObservationService';
 import { MonthAmountChart } from '../components/stats/MonthAmountChart';
-import { selectCalendarCellContent, formatCompactAmount, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
+import { selectCalendarCellContent, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -77,22 +77,11 @@ function DayAmountSlot({ cell, isSelected }: { cell: CellDisplay; isSelected: bo
       return <View style={styles.dayAmountPlaceholder} />;
     case 'leaf':
       return <Text style={textStyle} numberOfLines={1}>🌿</Text>;
-    case 'incomeMarker':
-      return <Text style={textStyle} numberOfLines={1}>🍃</Text>;
     case 'amount':
       return (
         <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
-          {cell.compact ? formatCompactAmount(cell.amount) : cell.amount.toLocaleString('ko-KR')}
+          {cell.amount.toLocaleString('ko-KR')}
         </Text>
-      );
-    case 'amountWithIncome':
-      return (
-        <View style={styles.dayAmountRow}>
-          <Text style={[...textStyle, styles.dayAmountFlex]} numberOfLines={1} ellipsizeMode="tail">
-            {cell.amount.toLocaleString('ko-KR')}
-          </Text>
-          <Text style={[styles.dayAmountLeaf, isSelected && styles.dayAmountSelected]}>·🍃</Text>
-        </View>
       );
   }
 }
@@ -458,6 +447,15 @@ function StatsScreen() {
     });
   }, [editSheetAnim]);
 
+  // Single guarded dismiss for every user-initiated close path (backdrop tap,
+  // 취소 button, Android back). While a save/delete is in flight the sheet is
+  // locked, so it can't disappear mid-operation and read as success. The
+  // programmatic closeEdit used by the success paths stays unguarded.
+  const dismissEdit = useCallback(() => {
+    if (editSaving) return;
+    closeEdit();
+  }, [editSaving, closeEdit]);
+
   const commitEdit = useCallback(async () => {
     if (!editingExpense || editSaving) return;
     // Shared parse + validity rule with the create flow (record.tsx):
@@ -514,8 +512,8 @@ function StatsScreen() {
   const handleAndroidBack = useCallback(() => {
     if (showDayPhotocard) { closeDayPhotocard(); return; }
     if (showMonthPicker) { closeMonthPicker(); return; }
-    if (editingExpense !== null) { closeEdit(); return; }
-  }, [showDayPhotocard, showMonthPicker, editingExpense, closeDayPhotocard, closeMonthPicker, closeEdit]);
+    if (editingExpense !== null) { dismissEdit(); return; }
+  }, [showDayPhotocard, showMonthPicker, editingExpense, closeDayPhotocard, closeMonthPicker, dismissEdit]);
   useAndroidBack(
     showDayPhotocard || showMonthPicker || editingExpense !== null,
     handleAndroidBack,
@@ -556,7 +554,7 @@ function StatsScreen() {
             <Pressable onPress={openMonthPicker} style={styles.monthLabelBtn} hitSlop={8}>
               <Text style={styles.monthLabel}>{monthLabel}</Text>
             </Pressable>
-            <Pressable onPress={nextMonth} style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]}>
+            <Pressable onPress={nextMonth} style={[styles.navBtn, isCurrentMonth && styles.navBtnDisabled]} disabled={isCurrentMonth}>
               <Text style={[styles.navArrow, isCurrentMonth && styles.navArrowDisabled]}>›</Text>
             </Pressable>
           </View>
@@ -592,6 +590,7 @@ function StatsScreen() {
                       key={dateStr}
                       style={[styles.cell, isSelected && styles.cellSelected, isToday && !isSelected && styles.cellToday]}
                       onPress={() => !isFuture && setSelectedDay(dateStr)}
+                      disabled={isFuture}
                     >
                       <Text style={[
                         styles.dayNum,
@@ -732,7 +731,7 @@ function StatsScreen() {
 
       {/* Edit backdrop */}
       {editingExpense !== null && (
-        <Pressable style={styles.editBackdrop} onPress={closeEdit} />
+        <Pressable style={styles.editBackdrop} onPress={dismissEdit} />
       )}
 
       {/* Edit sheet */}
@@ -799,7 +798,11 @@ function StatsScreen() {
           >
             <Text style={styles.editSaveBtnText}>고쳐두기</Text>
           </Pressable>
-          <Pressable style={styles.editCancelBtn} onPress={closeEdit}>
+          <Pressable
+            style={[styles.editCancelBtn, editSaving && styles.editCancelBtnDisabled]}
+            onPress={dismissEdit}
+            disabled={editSaving}
+          >
             <Text style={styles.editCancelBtnText}>취소</Text>
           </Pressable>
         </View>
@@ -807,7 +810,7 @@ function StatsScreen() {
         )}
 
         {editError && (
-          <Text style={styles.editErrorText}>저장하지 못했어요. 잠시 후 다시 시도해 주세요</Text>
+          <Text style={styles.editErrorText}>처리하지 못했어요. 잠시 후 다시 시도해 주세요</Text>
         )}
 
         <View style={styles.editDeleteArea}>
@@ -870,6 +873,7 @@ function StatsScreen() {
                   styles.monthPickerArrowBtn,
                   pickerYear >= today.getFullYear() && styles.monthPickerArrowBtnDisabled,
                 ]}
+                disabled={pickerYear >= today.getFullYear()}
                 hitSlop={8}
               >
                 <Text
@@ -1096,21 +1100,6 @@ const styles = StyleSheet.create({
   dayAmount: { fontSize: 9, color: COLORS.textMuted, marginTop: 1, height: 12, lineHeight: 12 },
   dayAmountSelected: { color: 'rgba(255,255,255,0.85)' },
   dayAmountPlaceholder: { height: 12 },
-  dayAmountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 12,
-    maxWidth: '100%',
-  },
-  dayAmountFlex: {
-    flexShrink: 1,
-  },
-  dayAmountLeaf: {
-    fontSize: 9,
-    marginLeft: 1,
-    color: COLORS.textMuted,
-  },
 
   // Day card
   dayCard: {
@@ -1424,6 +1413,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
+  },
+  editCancelBtnDisabled: {
+    opacity: 0.4,
   },
   editCancelBtnText: {
     fontSize: 14,

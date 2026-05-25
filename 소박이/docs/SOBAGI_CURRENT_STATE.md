@@ -61,6 +61,36 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 ## Latest Handoff
 
 **Agent:** Engineering
+**Date:** 2026-05-25
+**Group:** Ambient dialogue system (home idle voice)
+
+The home room's idle/tap-to-talk voice — previously a flat `IDLE_MESSAGES` array picked at random — is now a **context-driven ambient engine**. Tapping Sobagi resolves a line (or silence) from the room's current context: time of day, no-spend, accumulated familiarity, return-after-absence, placed objects, and atmosphere. Save-reaction pools, observation lines, and the DayFeeling card are unchanged (out of scope).
+
+### What changed
+- **Pools + tuning** (`src/constants/ambientDialogue.ts`): 8 categories — `baseline`, `timeOfDay` (sub-pooled by the same `getTimeOfDayBackgroundKey` buckets as the backgrounds, so voice matches lighting), `noSpend`, `accumulation`, `object` (lines keyed by bag item id; lamp `a6` evening/latenight-only), `atmosphere` (calm/rest), `return`, `rare`. `CATEGORY_WEIGHTS` (baseline/timeOfDay dominant) + `RARE_PROBABILITY 0.02`, `RETURN_GAP_DAYS 7`, `SILENCE_PROBABILITY 0.15`, `RECENT_RING_SIZE 7`.
+- **Pure selector** (`src/services/ambientDialogueService.ts`): `selectAmbientLine(ctx, session, rng)` → return override → rare (unshown only) → silence → weighted category pick. Session anti-repeat ring + category-specific no-consecutive (`object`/`rare`/`return` never repeat). Injectable `rng`/`session` → fully unit-tested.
+- **Silence allowance:** ~15% of normal taps produce **no line** — Sobagi just stays quiet. Never on the first tap of a session, never twice in a row; `return`/`rare` are never silenced. **This is intentional, not a bug.** Every tap still plays a small `tapPulse` scale-bounce so a silent tap reads as "noticed, being quiet," not unresponsive.
+- **Wiring** (`src/pages/index.tsx`): `handleSobagiTap` builds the context from values already on screen (time bucket, recordedDays/streak, today no-spend via `todayTotal===0`, `roomPlacements` ids, `getPrevVisitDate()` gap, `calmOpacity>0`, rest-warmth) and renders the selection. Removed `IDLE_MESSAGES`/`REST_IDLE_MESSAGES`/`getIdleMessages`/`lastIndexRef` (REST lines now live in the `atmosphere` category).
+
+### Direction
+The room narrates its own atmosphere, never the user. Variety comes from contextual variation, not large pools (~4–6 lines/category). Return greetings never guilt ("just glad to see you," not "I was waiting"). Rare lines are a *change in the air*, not heightened emotion. A guardrail test scans every pool for banned income/achievement/coaching vocabulary.
+
+### Preserved (regression-confirmed)
+Save reactions (`REACTION_POOLS`/`INCOME_REACTION_POOLS`), observation lines (`detectObservationType`), DayFeeling card, the bubble component + 3.5s auto-hide, and all atmosphere overlays. No storage changes.
+
+### No new storage keys
+
+### Test count
+**28 suites · 388 tests · all green.** New: `ambientDialogue.test.ts` (guardrail: banned-vocab / unique ids / no return-guilt), `ambientDialogueService.test.ts` (eligibility, lines-for-category incl. lamp gating, ring exclusion, weighted no-consecutive, return/rare/silence branches).
+
+### Next
+Device-test the voice across times of day / with objects placed / after a gap, and tune `SILENCE_PROBABILITY` / category weights by feel. Spec `docs/superpowers/specs/2026-05-25-ambient-dialogue-system-design.md`, plan `docs/superpowers/plans/2026-05-25-ambient-dialogue-system.md`.
+
+---
+
+### Earlier handoff (Time-of-day home backgrounds)
+
+**Agent:** Engineering
 **Date:** 2026-05-24
 **Group:** Time-of-day home backgrounds
 
@@ -266,7 +296,7 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 |---|---|
 | HomeScreen room (time-of-day backgrounds) + atmosphere overlays | `src/pages/index.tsx`, `src/services/atmosphereService.ts`, `src/constants/assets.ts` |
 | Sobagi character (float + spring pop) | `src/components/SobagiCharacter.tsx` |
-| Tap-to-talk speech bubble (12 idle messages) | `src/pages/index.tsx` |
+| Tap-to-talk ambient voice (context engine: time/no-spend/accumulation/return/object/atmosphere/rare + silence) | `src/pages/index.tsx`, `src/services/ambientDialogueService.ts`, `src/constants/ambientDialogue.ts` |
 | Level chip + progress bar | `src/pages/index.tsx` |
 | DailySummary card | `src/pages/index.tsx` |
 | Record flow (amount, category, emotion, memo, date chips) | `src/pages/record.tsx` |
