@@ -5,6 +5,7 @@ jest.mock('../src/services/storageService', () => ({
 import { useEmotionStore } from '../src/store/emotionStore';
 import { useExpenseStore } from '../src/store/expenseStore';
 import { useUserStore, getLevel, getNextThreshold } from '../src/store/userStore';
+import { useDiscoveryStore } from '../src/store/discoveryStore';
 import { Expense } from '../src/types';
 
 const mockExpense = (overrides: Partial<Expense> = {}): Expense => ({
@@ -102,6 +103,30 @@ describe('userStore — incrementRecordedDays', () => {
     useUserStore.getState().incrementRecordedDays();
     expect(useUserStore.getState().level).toBe(7);
     expect(useUserStore.getState().roomStage).toBe(1);
+  });
+});
+
+describe('discoveryStore', () => {
+  beforeEach(() => useDiscoveryStore.setState({ queue: [], kept: [] }));
+
+  it('hydrate populates queue and kept as the single source of truth', () => {
+    useDiscoveryStore.getState().hydrate({ queue: ['m6', 'a3'], kept: ['s5'] });
+    expect(useDiscoveryStore.getState().queue).toEqual(['m6', 'a3']);
+    expect(useDiscoveryStore.getState().kept).toEqual(['s5']);
+  });
+
+  it('keep moves an item from the queue front into kept', () => {
+    useDiscoveryStore.setState({ queue: ['m6', 'a3'], kept: [] });
+    useDiscoveryStore.getState().keep('m6');
+    expect(useDiscoveryStore.getState().queue).toEqual(['a3']);
+    expect(useDiscoveryStore.getState().kept).toEqual(['m6']);
+  });
+
+  it('keep does not duplicate an already-kept item', () => {
+    useDiscoveryStore.setState({ queue: ['m6'], kept: ['m6'] });
+    useDiscoveryStore.getState().keep('m6');
+    expect(useDiscoveryStore.getState().kept).toEqual(['m6']);
+    expect(useDiscoveryStore.getState().queue).toEqual([]);
   });
 });
 
