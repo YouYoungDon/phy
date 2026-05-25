@@ -24,6 +24,9 @@ import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
 import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
+import { getPrevVisitDate } from '../hooks/useAppInit';
+import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
+import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
 export const Route = createRoute('/', {
   validateParams: (params) => params,
@@ -43,32 +46,11 @@ function buildLetterLookup(): Map<string, MailboxLetter> {
 const LETTER_LOOKUP = buildLetterLookup();
 
 
-const IDLE_MESSAGES = [
-  '반가워요 🌿',
-  '오늘 하루는 어땠어요?',
-  '차 한잔 하고 싶어요 ☕',
-  '여기 있을게요',
-  '천천히 해요',
-  '오늘도 들렀네요',
-  '조용히 있어도 괜찮아요',
-  '뭔가 마실까요? 🍵',
-  '같이 있을게요',
-  '무슨 생각 하고 있어요?',
-  '바람이 살랑이네요 🌸',
-  '오늘 기분은 어때요?',
-];
-
-const REST_IDLE_MESSAGES = [
-  '잠깐 쉬다 왔어요 🌿',
-  '좋은 채널이었어요 📺',
-  '한 숨 돌리니 좋네요 🌿',
-];
-
-function getIdleMessages(lastRestAtISO: string | null, now: Date): string[] {
-  if (lastRestAtISO === null) return IDLE_MESSAGES;
-  const minsSince = (now.getTime() - Date.parse(lastRestAtISO)) / 60_000;
-  if (minsSince < 0 || minsSince >= 60) return IDLE_MESSAGES;
-  return [...IDLE_MESSAGES, ...REST_IDLE_MESSAGES];
+// Whole calendar days between two YYYY-MM-DD strings (noon-anchored, DST-safe).
+function calendarDaysBetween(laterYmd: string, earlierYmd: string): number {
+  const a = Date.parse(laterYmd + 'T12:00:00');
+  const b = Date.parse(earlierYmd + 'T12:00:00');
+  return Math.round((a - b) / 86_400_000);
 }
 
 // Normalized room coordinate for the pebble jar fixture.
@@ -79,6 +61,7 @@ function HomeScreen() {
   const roomStage = useUserStore((s) => s.roomStage);
   const level = useUserStore((s) => s.level);
   const recordedDaysCount = useUserStore((s) => s.recordedDaysCount);
+  const streak = useUserStore((s) => s.streak);
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
   const pebbleCount = useUserStore((s) => s.pebbleCount);
@@ -107,7 +90,8 @@ function HomeScreen() {
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleMessage, setBubbleMessage] = useState('');
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastIndexRef = useRef(-1);
+  const ambientSessionRef = useRef<AmbientSession>({ recentIds: [], returnGreetingShown: false, lastWasSilence: false });
+  const tapPulse = useRef(new Animated.Value(1)).current;
 
   type SheetType = 'mailbox' | 'bag' | 'rest';
   const [activeSheet, setActiveSheet] = useState<SheetType | null>(null);
@@ -227,20 +211,49 @@ function HomeScreen() {
     };
   }, []);
 
+  const playTapPulse = useCallback(() => {
+    tapPulse.setValue(1);
+    Animated.sequence([
+      Animated.timing(tapPulse, { toValue: 1.06, duration: 90, useNativeDriver: true }),
+      Animated.spring(tapPulse, { toValue: 1, useNativeDriver: true, damping: 8, stiffness: 140 }),
+    ]).start();
+  }, [tapPulse]);
+
   const handleSobagiTap = useCallback(() => {
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    playTapPulse(); // every tap is acknowledged — especially silent ones
 
-    const pool = getIdleMessages(lastRestAt, new Date());
-    let idx = Math.floor(Math.random() * pool.length);
-    if (idx === lastIndexRef.current && pool.length > 1) {
-      idx = (idx + 1) % pool.length;
+    const now = new Date();
+    const prev = getPrevVisitDate();
+    const ctx: AmbientContext = {
+      timeBucket: getTimeOfDayBackgroundKey(now.getHours()),
+      recordedDaysCount,
+      streak,
+      isNoSpendToday: todayExpenses.length > 0 && todayTotal === 0,
+      placedItemIds: roomPlacements.map((p) => p.itemId),
+      daysSinceLastVisit: prev ? calendarDaysBetween(getLocalDateString(now), prev) : 0,
+      calmActive: calmOpacity > 0,
+      restActive: getRestWarmthOpacity(now, lastRestAt) > 0,
+    };
+
+    const session = ambientSessionRef.current;
+    const sel = selectAmbientLine(ctx, session, Math.random);
+
+    if (sel.kind === 'silence') {
+      session.lastWasSilence = true;
+      setBubbleVisible(false); // quiet — the tap pulse is the only acknowledgment
+      return;
     }
-    lastIndexRef.current = idx;
-    setBubbleMessage(pool[idx] ?? '반가워요 🌿');
-    setBubbleVisible(true);
 
+    session.recentIds = [...session.recentIds, sel.line.id].slice(-RECENT_RING_SIZE);
+    if (sel.isReturnGreeting) session.returnGreetingShown = true;
+    session.lastCategory = sel.category;
+    session.lastWasSilence = false;
+
+    setBubbleMessage(sel.line.text);
+    setBubbleVisible(true);
     hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
-  }, [lastRestAt]);
+  }, [recordedDaysCount, streak, todayExpenses, todayTotal, roomPlacements, calmOpacity, lastRestAt, playTapPulse]);
 
   return (
     <View style={styles.root}>
@@ -314,7 +327,9 @@ function HomeScreen() {
               <View style={styles.bubbleContainer} pointerEvents="none">
                 <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
               </View>
-              <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
+              <Animated.View style={{ transform: [{ scale: tapPulse }] }}>
+                <SobagiCharacter emotion={currentEmotion} size="large" imageUri={SOBAGI_IMAGE_URIS[currentEmotion] ?? SOBAGI_DEFAULT_URI} />
+              </Animated.View>
               <View style={styles.sobagiShadow} />
             </TouchableOpacity>
             <View style={styles.utilityStack}>
