@@ -64,3 +64,34 @@ export function showsAmount(r: PhotocardRecord): boolean {
   if (r.category === 'no_spend') return false;
   return r.kind !== 'income' || r.amount > 0;
 }
+
+export interface VisibleRecords {
+  spending: PhotocardRecord[];
+  income: PhotocardRecord[];
+  noSpend: PhotocardRecord[];
+  overflowCount: number;
+}
+
+/**
+ * Pure. Groups records, then takes across groups in fixed order
+ * (spending → income → noSpend) up to `limit` total rows. `overflowCount`
+ * is how many records didn't make the visible cut from any group.
+ */
+export function selectVisibleRecords(
+  records: readonly PhotocardRecord[],
+  limit: number,
+): VisibleRecords {
+  const groups = groupByKind(records);
+  let remaining = Math.max(0, limit);
+  const take = (arr: readonly PhotocardRecord[]): PhotocardRecord[] => {
+    const slice = arr.slice(0, remaining);
+    remaining -= slice.length;
+    return slice;
+  };
+  const spending = take(groups.spending);
+  const income = take(groups.income);
+  const noSpend = take(groups.noSpend);
+  const shownTotal = spending.length + income.length + noSpend.length;
+  const overflowCount = Math.max(0, records.length - shownTotal);
+  return { spending, income, noSpend, overflowCount };
+}

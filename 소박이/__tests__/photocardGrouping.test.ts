@@ -1,4 +1,4 @@
-import { groupByKind, showsAmount, PhotocardRecord } from '../src/components/photocard/photocardGrouping';
+import { groupByKind, showsAmount, selectVisibleRecords, PhotocardRecord } from '../src/components/photocard/photocardGrouping';
 
 const r = (over: Partial<PhotocardRecord> = {}): PhotocardRecord => ({
   amount: 1000,
@@ -97,5 +97,44 @@ describe('showsAmount', () => {
   it('shows the amount for spending and legacy (kind-less) records', () => {
     expect(showsAmount(r({ category: 'cafe', kind: 'spending', amount: 5000 }))).toBe(true);
     expect(showsAmount(r({ category: 'cafe', amount: 5000 }))).toBe(true);
+  });
+});
+
+describe('selectVisibleRecords', () => {
+  it('takes across groups spending→income→noSpend up to the limit', () => {
+    const records = [
+      r({ id: 's1' }), r({ id: 's2' }),
+      r({ id: 'i1', kind: 'income' }),
+      r({ id: 'n1', category: 'no_spend', amount: 0 }),
+    ];
+    const v = selectVisibleRecords(records, 4);
+    expect(v.spending.map((x) => x.id)).toEqual(['s1', 's2']);
+    expect(v.income.map((x) => x.id)).toEqual(['i1']);
+    expect(v.noSpend.map((x) => x.id)).toEqual(['n1']);
+    expect(v.overflowCount).toBe(0);
+  });
+
+  it('caps at the limit and counts the rest as overflow', () => {
+    const records = [
+      r({ id: 's1' }), r({ id: 's2' }), r({ id: 's3' }),
+      r({ id: 'i1', kind: 'income' }), r({ id: 'i2', kind: 'income' }),
+    ];
+    const v = selectVisibleRecords(records, 4);
+    expect(v.spending.map((x) => x.id)).toEqual(['s1', 's2', 's3']);
+    expect(v.income.map((x) => x.id)).toEqual(['i1']);
+    expect(v.overflowCount).toBe(1);
+  });
+
+  it('shows everything with no overflow when limit exceeds total', () => {
+    const records = [r({ id: 's1' }), r({ id: 'i1', kind: 'income' })];
+    const v = selectVisibleRecords(records, 4);
+    expect(v.overflowCount).toBe(0);
+    expect(v.spending.length + v.income.length + v.noSpend.length).toBe(2);
+  });
+
+  it('returns empty groups and zero overflow for no records', () => {
+    expect(selectVisibleRecords([], 4)).toEqual({
+      spending: [], income: [], noSpend: [], overflowCount: 0,
+    });
   });
 });
