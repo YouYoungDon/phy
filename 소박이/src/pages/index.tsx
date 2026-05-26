@@ -27,6 +27,7 @@ import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
 import { keepsakeLineFor, pickupLineFor, trinketCounts } from '../services/discoveryService';
+import { splitMailbox } from '../services/letterService';
 import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
@@ -100,6 +101,8 @@ function HomeScreen() {
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
   const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
+  // Whether the 지난 편지 drawer is expanded. Render-only; resets when the sheet closes.
+  const [archiveOpen, setArchiveOpen] = useState(false);
   // Discovery truth lives in the store (hydrated by useAppInit after migration +
   // arrival compute), so Home reads the same post-arrival state reactively
   // instead of racing useAppInit's storage write with its own mount-time read.
@@ -187,6 +190,7 @@ function HomeScreen() {
       setActiveSheet(null);
       setSelectedKeptId(null);
       setExpandedReadIds(new Set());
+      setArchiveOpen(false);
     });
   }, [sheetAnim]);
 
@@ -429,42 +433,82 @@ function HomeScreen() {
             <Text style={styles.sheetTitle}>편지함</Text>
             {deliveredLetterIds.length === 0 ? (
               <Text style={styles.mailboxEmpty}>아직 도착한 편지가 없어요 🌿</Text>
-            ) : (
-              <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
-                {[...deliveredLetterIds].reverse().map((id, idx) => {
-                  const letter = LETTER_LOOKUP.get(id);
-                  if (!letter) return null;
-                  const isNew = unreadAtOpenRef.current.has(id);
-                  const isExpanded = isNew || expandedReadIds.has(id);
-                  const firstLine = letter.body.split('\n')[0] ?? letter.body;
-                  const preview = firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
-                  return (
-                    <Pressable
-                      key={id}
-                      style={[
-                        styles.letterCard,
-                        idx > 0 && styles.letterCardSpacing,
-                        isNew && styles.letterCardNew,
-                        !isExpanded && styles.letterCardCollapsed,
-                      ]}
-                      onPress={() => { if (!isNew) toggleLetterExpand(id); }}
-                    >
-                      {isExpanded ? (
-                        <>
-                          <Text style={styles.letterText}>{letter.body}</Text>
-                          <Text style={styles.letterSig}>{letter.sig}</Text>
-                        </>
-                      ) : (
-                        <View style={styles.letterFolded}>
-                          <Text style={styles.letterFoldedPreview} numberOfLines={1}>{preview}</Text>
-                          <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
+            ) : (() => {
+              const { currentIds, archivedIds } = splitMailbox(
+                deliveredLetterIds,
+                new Set(unreadAtOpenRef.current),
+              );
+              return (
+                <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
+                  {/* 현재 — the letter(s) on the table, always open. */}
+                  {currentIds.map((id, idx) => {
+                    const letter = LETTER_LOOKUP.get(id);
+                    if (!letter) return null;
+                    const isNew = unreadAtOpenRef.current.has(id);
+                    return (
+                      <View
+                        key={id}
+                        style={[
+                          styles.letterCard,
+                          idx > 0 && styles.letterCardSpacing,
+                          isNew && styles.letterCardNew,
+                        ]}
+                      >
+                        <Text style={styles.letterText}>{letter.body}</Text>
+                        <Text style={styles.letterSig}>{letter.sig}</Text>
+                      </View>
+                    );
+                  })}
+
+                  {/* 지난 편지 — quietly folded; tap the header to look back. */}
+                  {archivedIds.length > 0 && (
+                    <>
+                      <Pressable
+                        style={styles.letterArchiveHeader}
+                        onPress={() => setArchiveOpen((v) => !v)}
+                      >
+                        <Text style={styles.letterArchiveTitle}>지난 편지</Text>
+                        <Text style={styles.letterArchiveChevron}>{archiveOpen ? '▾' : '▸'}</Text>
+                      </Pressable>
+                      {archiveOpen &&
+                        archivedIds.map((id) => {
+                          const letter = LETTER_LOOKUP.get(id);
+                          if (!letter) return null;
+                          const isExpanded = expandedReadIds.has(id);
+                          const firstLine = letter.body.split('\n')[0] ?? letter.body;
+                          const preview =
+                            firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
+                          return (
+                            <Pressable
+                              key={id}
+                              style={[
+                                styles.letterCard,
+                                styles.letterCardSpacing,
+                                !isExpanded && styles.letterCardCollapsed,
+                              ]}
+                              onPress={() => toggleLetterExpand(id)}
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <Text style={styles.letterText}>{letter.body}</Text>
+                                  <Text style={styles.letterSig}>{letter.sig}</Text>
+                                </>
+                              ) : (
+                                <View style={styles.letterFolded}>
+                                  <Text style={styles.letterFoldedPreview} numberOfLines={1}>
+                                    {preview}
+                                  </Text>
+                                  <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
+                                </View>
+                              )}
+                            </Pressable>
+                          );
+                        })}
+                    </>
+                  )}
+                </ScrollView>
+              );
+            })()}
           </View>
         )}
         {activeSheet === 'rest' && (
@@ -922,6 +966,24 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     fontStyle: 'italic',
     flexShrink: 0,
+  },
+  // 지난 편지 drawer header — a quiet, tappable row. No background pill, no count;
+  // muted text + a small chevron, so looking back never reads as an inbox folder.
+  letterArchiveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  letterArchiveTitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
+  letterArchiveChevron: {
+    fontSize: 12,
+    color: COLORS.textLight,
   },
   letterText: {
     fontSize: 14,
