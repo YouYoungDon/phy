@@ -123,11 +123,11 @@ describe('splitMailbox', () => {
   it('puts a single unread letter in current, nothing archived', () => {
     expect(splitMailbox(['a'], new Set(['a']))).toEqual({ currentIds: ['a'], archivedIds: [] });
   });
-  it('falls back to the most recent letter as current when none are unread', () => {
-    // delivery order a,b,c → newest-first c,b,a; none unread → current=[c], archived=[b,a]
+  it('archives every letter (newest-first) when none are unread — no forced-open letter', () => {
+    // delivery order a,b,c → newest-first c,b,a; none unread → current=[], archived=[c,b,a]
     expect(splitMailbox(['a', 'b', 'c'], new Set())).toEqual({
-      currentIds: ['c'],
-      archivedIds: ['b', 'a'],
+      currentIds: [],
+      archivedIds: ['c', 'b', 'a'],
     });
   });
   it('keeps all unread letters in current (newest-first), read ones archived', () => {

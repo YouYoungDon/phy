@@ -100,7 +100,10 @@ function HomeScreen() {
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
-  const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
+  // Letters the user has explicitly toggled away from their default fold state: a new
+  // letter (expanded by default) toggles to folded; a read letter (folded by default)
+  // toggles to expanded. Render-only; resets when the sheet closes.
+  const [toggledLetterIds, setToggledLetterIds] = useState<ReadonlySet<string>>(new Set());
   // Whether the 지난 편지 drawer is expanded. Render-only; resets when the sheet closes.
   const [archiveOpen, setArchiveOpen] = useState(false);
   // Discovery truth lives in the store (hydrated by useAppInit after migration +
@@ -175,8 +178,8 @@ function HomeScreen() {
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
   }, [sheetAnim, readIds, deliveredLetterIds]);
 
-  const toggleLetterExpand = useCallback((id: string) => {
-    setExpandedReadIds((prev) => {
+  const toggleLetter = useCallback((id: string) => {
+    setToggledLetterIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -189,7 +192,7 @@ function HomeScreen() {
       activeSheetRef.current = null;
       setActiveSheet(null);
       setSelectedKeptId(null);
-      setExpandedReadIds(new Set());
+      setToggledLetterIds(new Set());
       setArchiveOpen(false);
     });
   }, [sheetAnim]);
@@ -438,72 +441,67 @@ function HomeScreen() {
                 deliveredLetterIds,
                 new Set(unreadAtOpenRef.current),
               );
-              return (
-                <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
-                  {/* 현재 — the letter(s) on the table, always open. */}
-                  {currentIds.map((id, idx) => {
-                    const letter = LETTER_LOOKUP.get(id);
-                    if (!letter) return null;
-                    const isNew = unreadAtOpenRef.current.has(id);
-                    return (
-                      <View
-                        key={id}
-                        style={[
-                          styles.letterCard,
-                          idx > 0 && styles.letterCardSpacing,
-                          isNew && styles.letterCardNew,
-                        ]}
-                      >
+              const hasCurrent = currentIds.length > 0;
+              // When nothing is new, past letters ARE the content — show them folded
+              // directly (no drawer to tap open). Otherwise they hide behind the drawer.
+              const archiveShown = hasCurrent ? archiveOpen : true;
+              // One renderer for both zones: a new letter is open by default, a read
+              // letter folded by default; tapping toggles either. Folded = preview line.
+              const renderLetter = (id: string, isNew: boolean, spaced: boolean) => {
+                const letter = LETTER_LOOKUP.get(id);
+                if (!letter) return null;
+                const isExpanded = isNew ? !toggledLetterIds.has(id) : toggledLetterIds.has(id);
+                const firstLine = letter.body.split('\n')[0] ?? letter.body;
+                const preview =
+                  firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
+                return (
+                  <Pressable
+                    key={id}
+                    style={[
+                      styles.letterCard,
+                      spaced && styles.letterCardSpacing,
+                      isNew && styles.letterCardNew,
+                      !isExpanded && styles.letterCardCollapsed,
+                    ]}
+                    onPress={() => toggleLetter(id)}
+                  >
+                    {isExpanded ? (
+                      <>
                         <Text style={styles.letterText}>{letter.body}</Text>
                         <Text style={styles.letterSig}>{letter.sig}</Text>
+                      </>
+                    ) : (
+                      <View style={styles.letterFolded}>
+                        <Text style={styles.letterFoldedPreview} numberOfLines={1}>{preview}</Text>
+                        <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
                       </View>
-                    );
-                  })}
+                    )}
+                  </Pressable>
+                );
+              };
+              return (
+                <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
+                  {/* 현재 — new letters, open by default, tap to fold. */}
+                  {currentIds.map((id, idx) => renderLetter(id, true, idx > 0))}
 
-                  {/* 지난 편지 — quietly folded; tap the header to look back. */}
+                  {/* 지난 편지 — read letters, folded. With new mail above they hide behind a
+                      quiet drawer; with nothing new they show directly under a plain label. */}
                   {archivedIds.length > 0 && (
                     <>
-                      <Pressable
-                        style={styles.letterArchiveHeader}
-                        onPress={() => setArchiveOpen((v) => !v)}
-                      >
-                        <Text style={styles.letterArchiveTitle}>지난 편지</Text>
-                        <Text style={styles.letterArchiveChevron}>{archiveOpen ? '▾' : '▸'}</Text>
-                      </Pressable>
-                      {archiveOpen &&
-                        archivedIds.map((id) => {
-                          const letter = LETTER_LOOKUP.get(id);
-                          if (!letter) return null;
-                          const isExpanded = expandedReadIds.has(id);
-                          const firstLine = letter.body.split('\n')[0] ?? letter.body;
-                          const preview =
-                            firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
-                          return (
-                            <Pressable
-                              key={id}
-                              style={[
-                                styles.letterCard,
-                                styles.letterCardSpacing,
-                                !isExpanded && styles.letterCardCollapsed,
-                              ]}
-                              onPress={() => toggleLetterExpand(id)}
-                            >
-                              {isExpanded ? (
-                                <>
-                                  <Text style={styles.letterText}>{letter.body}</Text>
-                                  <Text style={styles.letterSig}>{letter.sig}</Text>
-                                </>
-                              ) : (
-                                <View style={styles.letterFolded}>
-                                  <Text style={styles.letterFoldedPreview} numberOfLines={1}>
-                                    {preview}
-                                  </Text>
-                                  <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
-                                </View>
-                              )}
-                            </Pressable>
-                          );
-                        })}
+                      {hasCurrent ? (
+                        <Pressable
+                          style={styles.letterArchiveHeader}
+                          onPress={() => setArchiveOpen((v) => !v)}
+                        >
+                          <Text style={styles.letterArchiveTitle}>지난 편지</Text>
+                          <Text style={styles.letterArchiveChevron}>{archiveOpen ? '▾' : '▸'}</Text>
+                        </Pressable>
+                      ) : (
+                        <View style={styles.letterArchiveHeader}>
+                          <Text style={styles.letterArchiveTitle}>지난 편지</Text>
+                        </View>
+                      )}
+                      {archiveShown && archivedIds.map((id) => renderLetter(id, false, true))}
                     </>
                   )}
                 </ScrollView>
