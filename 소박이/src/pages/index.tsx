@@ -19,7 +19,7 @@ import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
 import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { ALL_BAG_ITEMS } from '../constants/bagItems';
-import { PebbleJar } from '../components/room/PebbleJar';
+import { DiscoverableItem } from '../components/room/DiscoverableItem';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -55,9 +55,6 @@ function calendarDaysBetween(laterYmd: string, earlierYmd: string): number {
   return Math.round((a - b) / 86_400_000);
 }
 
-// Normalized room coordinate for the pebble jar fixture.
-const JAR_POSITION = { x: 0.18, y: 0.66 } as const;
-
 function HomeScreen() {
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const roomStage = useUserStore((s) => s.roomStage);
@@ -66,7 +63,6 @@ function HomeScreen() {
   const streak = useUserStore((s) => s.streak);
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
-  const pebbleCount = useUserStore((s) => s.pebbleCount);
   const restsToday = useUserStore((s) => s.restsToday);
   const lastRestDate = useUserStore((s) => s.lastRestDate);
   const lastRestAt = useUserStore((s) => s.lastRestAt);
@@ -293,16 +289,6 @@ function HomeScreen() {
               <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
               <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
             </View>
-            <PebbleJar
-              position={JAR_POSITION}
-              pebbleCount={pebbleCount}
-              onPress={() => {
-                setBubbleMessage(`조약돌 ${pebbleCount}개`);
-                setBubbleVisible(true);
-                if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-                hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 2000);
-              }}
-            />
             <View style={styles.header}>
               <View style={styles.levelCard}>
                 <View style={styles.levelRow}>
@@ -413,11 +399,7 @@ function HomeScreen() {
                 ALL_BAG_ITEMS.find((i) => i.id === frontId) ??
                 FINDABLE_ITEMS.find((f) => f.id === frontId);
               if (!item) return null;
-              return (
-                <Pressable style={styles.discoverable} onPress={() => handlePickUp(frontId)}>
-                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
-                </Pressable>
-              );
+              return <DiscoverableItem emoji={item.emoji} onPress={() => handlePickUp(frontId)} />;
             })()}
           </RoomBackground>
 
@@ -935,19 +917,5 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontStyle: 'italic',
     textAlign: 'right',
-  },
-  roomItemEmoji: {
-    fontSize: 16,
-    opacity: 0.60,
-  },
-  // A single gentle arrival waiting to be found & picked up. Sits on the floor
-  // to the right — opposite the pebble jar (left), clear of the centered
-  // character and the left-edge utility column. Calm spot, comfortable tap
-  // target. The bob/glow affordance arrives in stage 5.
-  discoverable: {
-    position: 'absolute',
-    right: '10%',
-    top: '62%',
-    padding: 8,
   },
 });
