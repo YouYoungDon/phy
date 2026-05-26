@@ -46,7 +46,9 @@ interface PhotocardViewProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export const CARD_WIDTH = SCREEN_WIDTH - 48;
-export const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.667);
+// Top mood banner aspect — 3:2 landscape. Single knob for framing the art.
+const TOP_ASPECT = 0.667;
+const TOP_IMAGE_HEIGHT = Math.round(CARD_WIDTH * TOP_ASPECT);
 
 const VISIBLE_RECORDS = 4;
 
@@ -121,70 +123,63 @@ export function PhotocardView({
 
   return (
     <View style={styles.card}>
-      <View style={styles.row}>
-        {/* LEFT — emotional visual panel (mood asset). Image fills the panel via cover;
-            tiny time badge sits top-right if provided. */}
-        <View style={styles.leftPanel}>
-          <Image source={{ uri: assetUri }} style={styles.leftImage} resizeMode="cover" />
-          {timeLabel ? (
-            <View style={styles.timeBadge} pointerEvents="none">
-              <Text style={styles.timeBadgeText}>{timeLabel}</Text>
-            </View>
+      {/* TOP — mood scene banner, full width. Image fills via cover; tiny time
+          badge sits top-right if provided. */}
+      <View style={styles.topPanel}>
+        <Image source={{ uri: assetUri }} style={styles.topImage} resizeMode="cover" />
+        {timeLabel ? (
+          <View style={styles.timeBadge} pointerEvents="none">
+            <Text style={styles.timeBadgeText}>{timeLabel}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* BOTTOM — the day's record on cream paper. */}
+      <View style={styles.bottomPanel}>
+        <View style={styles.headerBlock}>
+          <Text style={styles.dateHeader}>{dateStr}</Text>
+          {weekdayLabel ? (
+            <Text style={styles.weekdaySub}>{weekdayLabel} · 오늘의 기록</Text>
           ) : null}
         </View>
 
-        {/* RIGHT — structured spending summary on cream paper. */}
-        <View style={styles.rightPanel}>
-          <View style={styles.headerBlock}>
-            <Text style={styles.dateHeader}>{dateStr}</Text>
-            {weekdayLabel ? (
-              <Text style={styles.weekdaySub}>{weekdayLabel} · 오늘의 기록</Text>
-            ) : null}
+        <View style={styles.divider} />
+
+        {/* Records grouped by kind. Group labels are quiet separators, not
+            section titles. No per-group subtotals; no aggregate total block —
+            the Sobagi quote carries the emotional weight. */}
+        {shownTotal > 0 && (
+          <View style={styles.recordsBlock}>
+            {shownSpending.length > 0 && (
+              <View style={styles.groupSection}>
+                <Text style={styles.groupLabel}>쓴 기록</Text>
+                {shownSpending.map(renderRecordRow)}
+              </View>
+            )}
+            {shownIncome.length > 0 && (
+              <View style={styles.groupSection}>
+                <Text style={styles.groupLabel}>들어온 기록</Text>
+                {shownIncome.map(renderRecordRow)}
+              </View>
+            )}
+            {shownNoSpend.length > 0 && (
+              // No group label: the 🌿 무지출 row is self-describing and never
+              // coexists with 쓴/들어온 groups (callers pass it alone).
+              <View style={styles.groupSection}>
+                {shownNoSpend.map(renderRecordRow)}
+              </View>
+            )}
+            {overflowCount > 0 && (
+              <Text style={styles.overflowText}>+ {overflowCount}개 더</Text>
+            )}
           </View>
+        )}
 
-          <View style={styles.divider} />
-
-          {/* Records grouped by kind. Each group renders only when it has
-              visible rows. Group labels are 9pt muted — quiet separators,
-              not section titles. No per-group subtotals; no aggregate total
-              block (removed in sub-spec B; the Sobagi quote at the bottom
-              carries the emotional weight instead). */}
-          {shownTotal > 0 && (
-            <View style={styles.recordsBlock}>
-              {shownSpending.length > 0 && (
-                <View style={styles.groupSection}>
-                  <Text style={styles.groupLabel}>쓴 기록</Text>
-                  {shownSpending.map(renderRecordRow)}
-                </View>
-              )}
-              {shownIncome.length > 0 && (
-                <View style={styles.groupSection}>
-                  <Text style={styles.groupLabel}>들어온 기록</Text>
-                  {shownIncome.map(renderRecordRow)}
-                </View>
-              )}
-              {shownNoSpend.length > 0 && (
-                // No group label: the 🌿 무지출 row is self-describing, and the
-                // no_spend group never coexists with 쓴/들어온 groups (callers
-                // pass it alone), so a "무지출" header would only double the row.
-                <View style={styles.groupSection}>
-                  {shownNoSpend.map(renderRecordRow)}
-                </View>
-              )}
-              {overflowCount > 0 && (
-                <Text style={styles.overflowText}>+ {overflowCount}개 더</Text>
-              )}
-            </View>
-          )}
-
-          <View style={styles.spacer} />
-
-          <View style={styles.noteBlock}>
-            <Text style={styles.noteHeading}>🌱 오늘의 한 줄</Text>
-            <Animated.View style={{ opacity: quoteOpacity }}>
-              <Text style={styles.noteText}>{displayQuote}</Text>
-            </Animated.View>
-          </View>
+        <View style={styles.noteBlock}>
+          <Text style={styles.noteHeading}>🌱 오늘의 한 줄</Text>
+          <Animated.View style={{ opacity: quoteOpacity }}>
+            <Text style={styles.noteText}>{displayQuote}</Text>
+          </Animated.View>
         </View>
       </View>
     </View>
@@ -200,23 +195,19 @@ const DIVIDER = 'rgba(61, 48, 32, 0.10)';
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    height: CARD_HEIGHT,
     borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: PAPER_BG,
   },
-  row: {
-    flex: 1,
-    flexDirection: 'row',
-  },
 
-  // ─── Left panel — ~48% width, asset fills via cover ─────────────────────────
-  leftPanel: {
-    flex: 0.92,
+  // ─── Top — full-width mood banner, fixed 3:2 height ─────────────────────────
+  topPanel: {
+    width: '100%',
+    height: TOP_IMAGE_HEIGHT,
     overflow: 'hidden',
     backgroundColor: PAPER_BG_SOFT,
   },
-  leftImage: {
+  topImage: {
     width: '100%',
     height: '100%',
   },
@@ -230,107 +221,106 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(250, 246, 238, 0.82)',
   },
   timeBadgeText: {
-    fontSize: 9,
+    fontSize: 10,
     color: TEXT_DARK,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
 
-  // ─── Right panel — ~52% width, compact landscape density ────────────────────
-  rightPanel: {
-    flex: 1.08,
+  // ─── Bottom — the day's record, full width ──────────────────────────────────
+  bottomPanel: {
     backgroundColor: PAPER_BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
   },
   headerBlock: {
-    marginBottom: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 4,
   },
   dateHeader: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: TEXT_DARK,
     letterSpacing: 0.4,
   },
   weekdaySub: {
-    fontSize: 9,
+    fontSize: 11,
     color: TEXT_MUTED,
-    marginTop: 2,
     letterSpacing: 0.3,
   },
   divider: {
     height: 1,
     backgroundColor: DIVIDER,
-    marginVertical: 6,
+    marginVertical: 10,
   },
   recordsBlock: {
     gap: 0,
   },
   groupSection: {
-    marginTop: 6,
+    marginTop: 10,
   },
   groupLabel: {
-    fontSize: 9,
+    fontSize: 11,
     color: TEXT_MUTED,
     letterSpacing: 0.3,
-    marginBottom: 4,
+    marginBottom: 6,
     fontWeight: '500',
   },
   recordDivider: {
     height: 1,
     backgroundColor: DIVIDER,
-    marginVertical: 5,
+    marginVertical: 7,
   },
   recordRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   recordIcon: {
-    fontSize: 12,
-    width: 16,
+    fontSize: 15,
+    width: 20,
     textAlign: 'center',
   },
   recordLine: {
     flex: 1,
     minWidth: 0,
-    fontSize: 10,
+    fontSize: 13,
     color: TEXT_DARK,
     letterSpacing: 0.2,
   },
   recordAmount: {
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '600',
     color: TEXT_DARK,
     letterSpacing: 0.2,
   },
   overflowText: {
-    fontSize: 9,
+    fontSize: 11,
     color: TEXT_MUTED,
-    marginTop: 5,
+    marginTop: 8,
     textAlign: 'right',
-  },
-  spacer: {
-    flex: 1,
-    minHeight: 4,
   },
   noteBlock: {
     backgroundColor: PAPER_BG_SOFT,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 14,
   },
   noteHeading: {
-    fontSize: 9,
+    fontSize: 11,
     color: TEXT_MUTED,
     fontWeight: '600',
     letterSpacing: 0.3,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   noteText: {
-    fontSize: 11,
+    fontSize: 14,
     color: TEXT_DARK,
-    lineHeight: 15,
+    lineHeight: 19,
     letterSpacing: 0.2,
   },
 });
