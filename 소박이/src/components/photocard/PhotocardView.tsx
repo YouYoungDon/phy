@@ -12,7 +12,7 @@ import {
   PhotocardWeather,
 } from '../../services/photocardMoodService';
 import { CATEGORY_BY_TOKEN } from '../../constants/categories';
-import { PhotocardRecord, groupByKind, showsAmount } from './photocardGrouping';
+import { PhotocardRecord, selectVisibleRecords, showsAmount } from './photocardGrouping';
 
 // Re-export so existing callers continue to import from PhotocardView
 export type { PhotocardRecord } from './photocardGrouping';
@@ -48,7 +48,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export const CARD_WIDTH = SCREEN_WIDTH - 48;
 export const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.667);
 
-const VISIBLE_RECORDS = 3;
+const VISIBLE_RECORDS = 4;
 
 export function PhotocardView({
   quote,
@@ -86,22 +86,14 @@ export function PhotocardView({
     });
   const assetUri = PHOTOCARD_MOOD_URIS[resolvedAsset];
 
-  // Group records by kind first, then slice across groups in order
-  // (spending → income → noSpend) capped at VISIBLE_RECORDS total. Overflow
-  // counts records that didn't make the visible cut from any group.
-  const allRecords = records ?? [];
-  const allGroups = groupByKind(allRecords);
-  let remaining = VISIBLE_RECORDS;
-  const take = <T,>(arr: readonly T[]): T[] => {
-    const slice = arr.slice(0, Math.max(0, remaining));
-    remaining -= slice.length;
-    return slice;
-  };
-  const shownSpending = take(allGroups.spending);
-  const shownIncome = take(allGroups.income);
-  const shownNoSpend = take(allGroups.noSpend);
+  // Group + cap + overflow now live in the pure selectVisibleRecords helper.
+  const {
+    spending: shownSpending,
+    income: shownIncome,
+    noSpend: shownNoSpend,
+    overflowCount,
+  } = selectVisibleRecords(records ?? [], VISIBLE_RECORDS);
   const shownTotal = shownSpending.length + shownIncome.length + shownNoSpend.length;
-  const overflowCount = Math.max(0, allRecords.length - shownTotal);
 
   const displayQuote = quote.trim() || '오늘의 기록이 조용히 남았어요.';
 
