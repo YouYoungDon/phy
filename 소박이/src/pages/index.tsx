@@ -26,7 +26,7 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
-import { keepsakeLineFor, pickupLineFor } from '../services/discoveryService';
+import { keepsakeLineFor, pickupLineFor, trinketCounts } from '../services/discoveryService';
 import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
@@ -114,6 +114,9 @@ function HomeScreen() {
     () => Array.from(new Set([...keptItemIds, ...foundItemIds])),
     [keptItemIds, foundItemIds],
   );
+
+  // Per-id occurrence counts for found trinkets; catalog ids resolve to 1 via `?? 1`.
+  const keepsakeCounts = useMemo(() => trinketCounts(foundItemIds), [foundItemIds]);
   const activeSheetRef = useRef<SheetType | null>(null);
   const pendingRef = useRef<string | null>(null);
   // letters that were unread at the moment the sheet opened — used to show "새 편지" indicator
@@ -151,7 +154,8 @@ function HomeScreen() {
         pendingRef.current = null;
         void storageService.save(STORAGE_KEYS.PENDING_NEW_ITEM_ID, null);
         setFoundItemIds((prev) => {
-          if (prev.includes(pendingId)) return prev;
+          // Always append — a re-found trinket adds another copy (its ×N trace).
+          // FOUND_ITEM_IDS is a multiset; tiles still group by id at render.
           const next = [...prev, pendingId];
           storageService.save(STORAGE_KEYS.FOUND_ITEM_IDS, next);
           return next;
@@ -526,6 +530,9 @@ function HomeScreen() {
                           >
                             <Text style={styles.bagCellEmoji}>{item.emoji}</Text>
                             <Text style={styles.bagCellName}>{item.name}</Text>
+                            {(keepsakeCounts[id] ?? 1) >= 2 && (
+                              <Text style={styles.bagCellCount}>×{keepsakeCounts[id]}</Text>
+                            )}
                           </Pressable>
                         );
                       })}
@@ -753,6 +760,15 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 3,
+  },
+  // Quiet "turned up again" trace in the cell corner. Softer than the name (textLight,
+  // not textMuted), no background pill — a trace, never a badge. Shown only at ×2+.
+  bagCellCount: {
+    position: 'absolute',
+    right: 6,
+    bottom: 5,
+    fontSize: 11,
+    color: COLORS.textLight,
   },
   bagDescArea: {
     height: 68,
