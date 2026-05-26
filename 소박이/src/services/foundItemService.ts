@@ -106,8 +106,12 @@ export async function checkForFoundItem(
   if (lastItemDate != null && daysSince(lastItemDate) < COOLDOWN_DAYS) return;
 
   const foundIds = (await storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS)) ?? [];
-  const unfound = FINDABLE_ITEMS.filter((item) => !foundIds.includes(item.id));
-  if (unfound.length === 0) return;
+  // New first, repeats later: always prefer trinkets the user hasn't discovered yet.
+  // Only once every trinket has turned up at least once does the pool open to owned
+  // ones, so a gentle re-find (the ×N trace) becomes possible. The same GRACE/COOLDOWN
+  // gating below still applies to re-finds — they can't be farmed.
+  const undiscovered = FINDABLE_ITEMS.filter((item) => !foundIds.includes(item.id));
+  const pool = undiscovered.length > 0 ? undiscovered : FINDABLE_ITEMS;
 
   const now = new Date();
   const today = getLocalDateString(now);
@@ -117,7 +121,7 @@ export async function checkForFoundItem(
 
   if (!hasTrigger(expenses, today, yesterday)) return;
 
-  const item = unfound[Math.floor(Math.random() * unfound.length)];
+  const item = pool[Math.floor(Math.random() * pool.length)];
   if (!item) return;
 
   await storageService.save(STORAGE_KEYS.STAGED_ITEM_ID, item.id);

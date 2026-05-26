@@ -49,14 +49,32 @@ describe('checkForFoundItem', () => {
     expect(storageService.save).not.toHaveBeenCalled();
   });
 
-  it('does nothing if all 8 items already found', async () => {
+  it('stages a re-find when all 8 are already found and a trigger fires', async () => {
+    // "New first, repeats later": once every trinket has been discovered, the pool
+    // opens up to owned ones so a gentle re-find can happen. makeExpense() is a small
+    // cafe purchase (T4 trigger); no cooldown is set, so staging proceeds.
     mockLoad.mockImplementation(async (key: string) => {
       if (key === 'sobagi-found-item-ids')
         return ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8'];
       return null;
     });
     await checkForFoundItem([makeExpense()], 10);
-    expect(storageService.save).not.toHaveBeenCalled();
+    expect(storageService.save).toHaveBeenCalledWith(
+      'sobagi-staged-item-id',
+      expect.any(String),
+    );
+  });
+
+  it('prefers an undiscovered trinket while some remain', async () => {
+    // f1..f7 found, only f8 undiscovered: the staged id must be f8 (deterministic —
+    // the pool is the single-item [f8], so randomness cannot pick anything else).
+    mockLoad.mockImplementation(async (key: string) => {
+      if (key === 'sobagi-found-item-ids')
+        return ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7'];
+      return null;
+    });
+    await checkForFoundItem([makeExpense()], 10);
+    expect(storageService.save).toHaveBeenCalledWith('sobagi-staged-item-id', 'f8');
   });
 
   it('stages an item when trigger fires and no cooldown is active', async () => {
