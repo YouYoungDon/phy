@@ -293,20 +293,6 @@ function HomeScreen() {
               <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
               <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
             </View>
-            {(() => {
-              // One gentle arrival at a time — the queue front, waiting to be found.
-              const frontId = discoveryQueue[0];
-              if (frontId == null) return null;
-              const item =
-                ALL_BAG_ITEMS.find((i) => i.id === frontId) ??
-                FINDABLE_ITEMS.find((f) => f.id === frontId);
-              if (!item) return null;
-              return (
-                <Pressable style={styles.discoverable} onPress={() => handlePickUp(frontId)}>
-                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
-                </Pressable>
-              );
-            })()}
             <PebbleJar
               position={JAR_POSITION}
               pebbleCount={pebbleCount}
@@ -414,6 +400,25 @@ function HomeScreen() {
                 <Text style={styles.utilityLabel}>티비</Text>
               </View>
             </View>
+            {(() => {
+              // One gentle arrival at a time — the queue front, waiting to be
+              // found on the right side of the floor (the jar sits opposite, on
+              // the left, with Sobagi centered between them). Rendered last so it
+              // layers above the full-width character touch zone — otherwise the
+              // character's tap area, which on small screens covers most of the
+              // floor, would swallow the pickup tap.
+              const frontId = discoveryQueue[0];
+              if (frontId == null) return null;
+              const item =
+                ALL_BAG_ITEMS.find((i) => i.id === frontId) ??
+                FINDABLE_ITEMS.find((f) => f.id === frontId);
+              if (!item) return null;
+              return (
+                <Pressable style={styles.discoverable} onPress={() => handlePickUp(frontId)}>
+                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
+                </Pressable>
+              );
+            })()}
           </RoomBackground>
 
       <View style={styles.summaryCard}>
@@ -935,12 +940,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     opacity: 0.60,
   },
-  // A single gentle arrival waiting to be found & picked up. Calm spot,
-  // comfortable tap target. The bob/glow affordance arrives in stage 5.
+  // A single gentle arrival waiting to be found & picked up. Sits on the floor
+  // to the right — opposite the pebble jar (left), clear of the centered
+  // character and the left-edge utility column. Calm spot, comfortable tap
+  // target. The bob/glow affordance arrives in stage 5.
   discoverable: {
     position: 'absolute',
-    left: '16%',
-    top: '60%',
+    right: '10%',
+    top: '62%',
     padding: 8,
   },
 });
