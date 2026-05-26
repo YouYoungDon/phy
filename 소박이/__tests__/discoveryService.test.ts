@@ -1,6 +1,6 @@
 import {
   computeTimeArrivals, enqueueArrivals, keepItem, seedKeptForMigration, keepsakeLineFor,
-  pickupLineFor, isFreshInstall,
+  pickupLineFor, isFreshInstall, trinketCounts,
 } from '../src/services/discoveryService';
 import { ALL_BAG_ITEMS } from '../src/constants/bagItems';
 import { OBJECT_LINES } from '../src/constants/ambientDialogue';
@@ -104,5 +104,17 @@ describe('isFreshInstall', () => {
   });
   it('is false when found trinkets exist (existing user)', () => {
     expect(isFreshInstall(0, [], ['f1'])).toBe(false);
+  });
+});
+
+describe('trinketCounts', () => {
+  it('returns an empty map for no found items', () => {
+    expect(trinketCounts([])).toEqual({});
+  });
+  it('counts each id once when there are no repeats', () => {
+    expect(trinketCounts(['f1', 'f3'])).toEqual({ f1: 1, f3: 1 });
+  });
+  it('counts repeated ids as their occurrence count', () => {
+    expect(trinketCounts(['f1', 'f1', 'f3'])).toEqual({ f1: 2, f3: 1 });
   });
 });
