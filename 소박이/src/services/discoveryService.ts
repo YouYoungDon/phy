@@ -98,3 +98,13 @@ export function pickupLineFor(itemId: string): string {
   if (trinket) return trinket.findLine;
   return '주웠어요 🌿';
 }
+
+// Occurrence count per found-trinket id, derived from the FOUND_ITEM_IDS multiset.
+// Repeats in the array mean a trinket turned up more than once; the bag shows this
+// as a quiet ×N. Catalog ids never appear here, so they resolve to 1 at the call site
+// (`counts[id] ?? 1`). A trace of repetition — not a collection count.
+export function trinketCounts(foundItemIds: string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const id of foundItemIds) counts[id] = (counts[id] ?? 0) + 1;
+  return counts;
+}

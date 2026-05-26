@@ -136,6 +136,11 @@ function SobagiReactionScreen() {
   // Photocard entry is gated on the context day having at least one *spending*
   // record (sub-spec B §5.2). Income-only and no-spend-only saves never expose
   // the photocard handoff. Auto-dismiss still runs; just no button.
+  // NOTE: this is an INTENTIONAL divergence from Stats, which opens a card for
+  // any recorded day. Reaction is the immediate emotional moment and is kept
+  // quiet — surfacing a CTA on every income/no-spend save would make the flow
+  // noisier; Stats is the reflective archive where any day can be revisited.
+  // Not an unfinished inconsistency.
   const dateHasSpending = contextExpenses.some(
     (e) => e.kind !== 'income' && e.category !== 'no_spend',
   );

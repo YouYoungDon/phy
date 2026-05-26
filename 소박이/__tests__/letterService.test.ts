@@ -4,7 +4,7 @@ jest.mock('../src/services/storageService', () => ({
 }));
 
 import * as storageService from '../src/services/storageService';
-import { checkAndDeliverLetters } from '../src/services/letterService';
+import { checkAndDeliverLetters, splitMailbox } from '../src/services/letterService';
 
 const mockLoad = storageService.load as jest.MockedFunction<typeof storageService.load>;
 
@@ -113,5 +113,28 @@ describe('checkAndDeliverLetters — letter content safety', () => {
     await checkAndDeliverLetters(7, new Date('2026-05-16'));
     const secondCallIds = spy.mock.calls.find(c => c[0] === 'sobagi-mailbox-delivered-ids')?.[1];
     expect(firstCallIds).toEqual(secondCallIds);
+  });
+});
+
+describe('splitMailbox', () => {
+  it('returns empty groups when nothing is delivered', () => {
+    expect(splitMailbox([], new Set())).toEqual({ currentIds: [], archivedIds: [] });
+  });
+  it('puts a single unread letter in current, nothing archived', () => {
+    expect(splitMailbox(['a'], new Set(['a']))).toEqual({ currentIds: ['a'], archivedIds: [] });
+  });
+  it('falls back to the most recent letter as current when none are unread', () => {
+    // delivery order a,b,c → newest-first c,b,a; none unread → current=[c], archived=[b,a]
+    expect(splitMailbox(['a', 'b', 'c'], new Set())).toEqual({
+      currentIds: ['c'],
+      archivedIds: ['b', 'a'],
+    });
+  });
+  it('keeps all unread letters in current (newest-first), read ones archived', () => {
+    // a,b read; c,d unread. newest-first d,c,b,a → current=[d,c], archived=[b,a]
+    expect(splitMailbox(['a', 'b', 'c', 'd'], new Set(['c', 'd']))).toEqual({
+      currentIds: ['d', 'c'],
+      archivedIds: ['b', 'a'],
+    });
   });
 });
