@@ -9,7 +9,7 @@ import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { parseAmountInput, formatAmountInput } from '../utils/amount';
 import { amountValidForKind } from '../utils/recordValidation';
 import { BottomTabs } from '../components/common/BottomTabs';
-import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
+import { PhotocardView, PhotocardRecord, CARD_WIDTH } from '../components/photocard/PhotocardView';
 import { getDayFeeling } from '../services/dayFeelingService';
 import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -837,20 +837,29 @@ function StatsScreen() {
           (stopPropagation) so tapping the card never closes it. */}
       {showDayPhotocard && canOpenDayPhotocard && (
         <Pressable style={styles.photocardModal} onPress={closeDayPhotocard}>
-          <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
-            <PhotocardView
-              quote={photocardQuote}
-              dateStr={photocardDateStr}
-              weekdayLabel={photocardWeekday}
-              records={photocardRecords}
-              currentEmotion={photocardEmotion}
-              quoteAnimated
-            />
-            <Animated.View
-              style={[styles.revealOverlay, { opacity: dayRevealAnim }]}
-              pointerEvents="none"
-            />
-          </Pressable>
+          {/* Bounded scroll: card-width so taps beside it still hit the backdrop
+              and close. Fits and centers on normal screens; scrolls instead of
+              clipping when a tall day's card exceeds a small screen. */}
+          <ScrollView
+            style={styles.cardScroll}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
+              <PhotocardView
+                quote={photocardQuote}
+                dateStr={photocardDateStr}
+                weekdayLabel={photocardWeekday}
+                records={photocardRecords}
+                currentEmotion={photocardEmotion}
+                quoteAnimated
+              />
+              <Animated.View
+                style={[styles.revealOverlay, { opacity: dayRevealAnim }]}
+                pointerEvents="none"
+              />
+            </Pressable>
+          </ScrollView>
           <View style={styles.closeHint} pointerEvents="none">
             <Text style={styles.closeHintText}>✕</Text>
           </View>
@@ -1271,6 +1280,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardArea: {},
+  // Card-width + maxHeight: shrinks to the card (centered, no scroll) when it
+  // fits; caps and scrolls on small screens so a tall card never clips.
+  cardScroll: {
+    width: CARD_WIDTH,
+    maxHeight: '85%',
+  },
   revealOverlay: {
     position: 'absolute',
     top: 0,

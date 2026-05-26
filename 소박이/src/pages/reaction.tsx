@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Animated, ScrollView } from 'react-native';
 import { createRoute, useNavigation } from '@granite-js/react-native';
 import { SobagiReaction } from '../components/sobagi/SobagiReaction';
-import { PhotocardView, PhotocardRecord } from '../components/photocard/PhotocardView';
+import { PhotocardView, PhotocardRecord, CARD_WIDTH } from '../components/photocard/PhotocardView';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { COLORS } from '../constants/colors';
@@ -277,22 +277,32 @@ function SobagiReactionScreen() {
           own presses (stopPropagation) so tapping the card never closes. */}
       {showPhotocardModal && (
         <Pressable style={styles.photocardModal} onPress={isRevealing ? undefined : closePhotocard}>
-          <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
-            <PhotocardView
-              quote={currentMessage}
-              dateStr={dateStr}
-              weekdayLabel={weekdayLabel}
-              timeLabel={timeLabel}
-              records={photocardRecords}
-              currentEmotion={currentEmotion}
-              quoteAnimated
-            />
-            {/* White overlay fades out as the card develops */}
-            <Animated.View
-              style={[StyleSheet.absoluteFillObject, styles.revealOverlay, { opacity: revealAnim }]}
-              pointerEvents="none"
-            />
-          </Pressable>
+          {/* Bounded scroll: card-width so taps beside it still hit the backdrop
+              and close. On normal screens the card fits — centered, no scroll,
+              reads as a photo. On small screens a long quote + 4 records +
+              overflow scrolls instead of clipping the card bottom. */}
+          <ScrollView
+            style={styles.cardScroll}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Pressable style={styles.cardArea} onPress={(e) => e.stopPropagation()}>
+              <PhotocardView
+                quote={currentMessage}
+                dateStr={dateStr}
+                weekdayLabel={weekdayLabel}
+                timeLabel={timeLabel}
+                records={photocardRecords}
+                currentEmotion={currentEmotion}
+                quoteAnimated
+              />
+              {/* White overlay fades out as the card develops */}
+              <Animated.View
+                style={[StyleSheet.absoluteFillObject, styles.revealOverlay, { opacity: revealAnim }]}
+                pointerEvents="none"
+              />
+            </Pressable>
+          </ScrollView>
 
           {/* Visual close affordance — pointer-transparent, so taps fall through
               to the backdrop Pressable and close. */}
@@ -381,6 +391,12 @@ const styles = StyleSheet.create({
   },
   cardArea: {
     // PhotocardView provides its own fixed dimensions
+  },
+  // Card-width + maxHeight: shrinks to the card (centered, no scroll) when it
+  // fits; caps and scrolls on small screens so a tall card never clips.
+  cardScroll: {
+    width: CARD_WIDTH,
+    maxHeight: '85%',
   },
   revealOverlay: {
     borderRadius: 14,
