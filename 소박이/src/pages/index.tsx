@@ -20,6 +20,7 @@ import { REST_LETTERS } from '../constants/restLetters';
 import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { ALL_BAG_ITEMS } from '../constants/bagItems';
 import { PebbleJar } from '../components/room/PebbleJar';
+import { DiscoverableItem } from '../components/room/DiscoverableItem';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
 import { useAndroidBack } from '../hooks/useAndroidBack';
@@ -413,11 +414,7 @@ function HomeScreen() {
                 ALL_BAG_ITEMS.find((i) => i.id === frontId) ??
                 FINDABLE_ITEMS.find((f) => f.id === frontId);
               if (!item) return null;
-              return (
-                <Pressable style={styles.discoverable} onPress={() => handlePickUp(frontId)}>
-                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
-                </Pressable>
-              );
+              return <DiscoverableItem emoji={item.emoji} onPress={() => handlePickUp(frontId)} />;
             })()}
           </RoomBackground>
 
@@ -935,19 +932,5 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontStyle: 'italic',
     textAlign: 'right',
-  },
-  roomItemEmoji: {
-    fontSize: 16,
-    opacity: 0.60,
-  },
-  // A single gentle arrival waiting to be found & picked up. Sits on the floor
-  // to the right — opposite the pebble jar (left), clear of the centered
-  // character and the left-edge utility column. Calm spot, comfortable tap
-  // target. The bob/glow affordance arrives in stage 5.
-  discoverable: {
-    position: 'absolute',
-    right: '10%',
-    top: '62%',
-    padding: 8,
   },
 });
