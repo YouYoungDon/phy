@@ -62,33 +62,34 @@ Strike through in SOBAGI_NEXT_PRIORITIES.md, then move to "Recently completed." 
 
 **Agent:** Engineering
 **Date:** 2026-05-25
-**Group:** Bag "Discover & Keep" (stages 1–4 of 5; stage 5 = polish, deferred)
+**Group:** Bag "Discover & Keep" — functional loop + sync hardening + first-experience (Stage 5 polish deferred)
 
 > **Discovery is not a reward queue. It is a gentle arrival queue.**
 
-The bag was a passive day-unlock catalog and the room permanently scattered items (clutter). Now: an item that becomes available **arrives** in the room as a single tappable thing (one at a time); the user **picks it up** into the bag with a soft line; the room stays clean; the bag is a **keepsake box** where tapping a kept item shows a quiet Sobagi note. The full `discover → keep → revisit` loop is functionally complete. Stage 5 (animation/feel) is intentionally split out for a dedicated emotional-polish pass after device dogfooding.
+The bag was a passive day-unlock catalog and the room permanently scattered items (clutter). Now: an item that becomes available **arrives** in the room as a single tappable thing (one at a time); the user **picks it up** into the bag with a soft, item-specific line; the room stays clean; the bag is a **keepsake box** where tapping a kept item shows a quiet Sobagi note. The full `discover → keep → revisit` loop is functionally complete and sync-hardened. Stage 5 (animation/feel) is intentionally split out for a dedicated emotional-polish pass after device dogfooding.
 
-### What changed (stages 1–4)
-- **Discovery model** (`src/services/discoveryService.ts`, pure + tested): `computeTimeArrivals` (minDays cadence preserved as an *arrival schedule*), `enqueueArrivals`, `keepItem` (queue→kept), `seedKeptForMigration` (unlocked+placed+found), `keepsakeLineFor` (object line → catalog desc → trinket findLine → gentle default). New storage: `KEPT_ITEM_IDS`, `DISCOVERY_QUEUE`, `DISCOVERY_MIGRATION_DONE`.
-- **Migration** (`src/hooks/useAppInit.ts`, `runDiscoveryInit`): on first launch seeds `kept` from everything already owned (no re-discovery storm), then enqueues newly-eligible arrivals on later launches.
-- **Room** (`src/pages/index.tsx`): renders the queue front as one tappable discoverable; tap → `keepItem` + persist + soft line. The static `roomPlacements` render is gone. `checkForPlacement` (`roomPresenceService`) now **enqueues** arrivals (category/streak/night/emotion early-bring preserved) instead of writing `ROOM_PLACEMENTS`; the `PendingPlacement` settle path is retired.
-- **Bag** (`src/pages/index.tsx`): a single clean keepsake grid of kept items (no day-locked grid, no tabs); tap a kept item → its note via `keepsakeLineFor`. Ambient object lines now key off **kept** items (objects live in the bag, not the room).
+### Model + wiring
+- **Discovery model** (`src/services/discoveryService.ts`, pure + tested): `computeTimeArrivals` (minDays cadence preserved as an *arrival schedule*), `enqueueArrivals`, `keepItem` (queue→kept), `seedKeptForMigration` (unlocked+placed+found), `isFreshInstall` (no recorded days/placements/found), `keepsakeLineFor` (object line → desc → trinket findLine → default; for **revisiting** a kept item), `pickupLineFor` (**desc-first** → trinket findLine → `주웠어요 🌿`; for the **moment of picking up**, so lines are item-specific and never repeat). Storage: `KEPT_ITEM_IDS`, `DISCOVERY_QUEUE`, `DISCOVERY_MIGRATION_DONE`.
+- **State source of truth** (`src/store/discoveryStore.ts`): `{queue, kept}` live in a Zustand store. `useAppInit` is the authoritative loader — it persists then **hydrates** the store; Home consumes it **reactively** and no longer reads those keys on its own mount. This fixes the init race where Home read the pre-arrival queue and a new discoverable only showed on the next launch. Pickup goes through the store's `keep` action (write-through to storage).
+- **Init** (`src/hooks/useAppInit.ts`, `runDiscoveryInit`): **existing** user → migration seeds `kept` from everything owned (no re-discovery storm); **true fresh install** → empty keepsake bag, day-eligible items go into the room **queue** so the very first loop is arrival → notice → keep (not pre-filled inventory). Newly-eligible arrivals flow through the normal branch on later launches.
+- **Room** (`src/pages/index.tsx`): renders the queue front as one tappable discoverable; tap → store `keep` + item-specific `pickupLineFor` line. The static `roomPlacements` render is gone; `checkForPlacement` (`roomPresenceService`) **enqueues** arrivals (category/streak/night/emotion early-bring preserved) instead of writing `ROOM_PLACEMENTS`; the `PendingPlacement` settle path is retired.
+- **Bag** (`src/pages/index.tsx`): a single clean keepsake grid of kept items (no day-locked grid, no tabs, **no new-item dot**), bounded in a `ScrollView` as it grows; tap a kept item → its note via `keepsakeLineFor`. A pending found trinket is promoted to the keepsake collection and `PENDING_NEW_ITEM_ID` cleared **atomically on bag open**. Ambient object lines key off **kept** items.
 
 ### Direction
-The room is a calm discovery surface, not a display shelf. Picking up is *keeping*, not *earning* — no counts, no completion grid, no rewards. The discovery queue length is never surfaced.
+The room is a calm discovery surface, not a display shelf. Picking up is *keeping*, not *earning* — no counts, no completion grid, no rewards, no notification dot. The discovery queue length is never surfaced.
 
 ### Deliberately deferred (NOT bugs)
-- **Stage 5 — emotional polish pass** (own task): bob/glow timing, pickup feel, animation softness, queue-advance rhythm. Also folds in two cleanups: the now-dead bag-tab styles and the legacy `pendingNewItemId`/`hasNewBagItem` bag-dot machinery.
-- **Trinket → room-discovery unification** (future follow-up, not bundled): found trinkets (`f*`) still arrive via their legacy "두고 간 것" path straight into the bag; they're *displayed* in the keepsake grid (merged `kept ∪ found`) but don't yet appear as room discoverables.
+- **Stage 5 — emotional polish pass** (own task): bob/glow timing, pickup feel, animation softness, queue-advance rhythm. Folds in the dead `bagTab*` styles and the now-unreferenced `LAST_BAG_OPEN_DAYS` storage key. (The legacy bag-dot machinery — `pendingNewItemId`/`hasNewBagItem` — has **already been removed**.)
+- **Trinket → room-discovery unification** (future follow-up, not bundled): found trinkets (`f*`) still arrive via their legacy "두고 간 것" path straight into the bag; *displayed* in the keepsake grid (merged `kept ∪ found`) but don't yet appear as room discoverables.
 
 ### Preserved (regression-confirmed)
-Ambient voice, save reactions, observations, DayFeeling, letters, pebbles/rest, the photocard. Room-presence selection helpers unchanged (only the orchestrator's effect changed place→enqueue).
+Ambient voice, save reactions, observations, DayFeeling, letters, pebbles/rest, the photocard. Room-presence selection helpers unchanged.
 
 ### Test count
-**29 suites · 399 tests · all green.** New: `discoveryService.test.ts` (arrivals / enqueue / keep / migration-seed / keepsakeLineFor fallback).
+**29 suites · 410 tests · all green.** `discoveryService.test.ts` (arrivals / enqueue / keep / migration-seed / `keepsakeLineFor` + `pickupLineFor` + `isFreshInstall`); `stores.test.ts` (`discoveryStore` hydrate/keep).
 
 ### Next
-**Device dogfooding before stage 5:** how noticeable discoveries feel; whether the room stays calm/clean; whether tapping keepsakes stays comforting vs repetitive; silence rhythm; whether pickup feels gentle, not reward-y. Spec `docs/superpowers/specs/2026-05-25-bag-discover-and-keep-design.md`, plan `docs/superpowers/plans/2026-05-25-bag-discover-and-keep.md`.
+**Device dogfooding before stage 5, ideally from a fresh wipe:** whether the first arrival reads as *quietly discovered* vs *spawned*; room stays calm/clean; keepsake taps stay comforting vs repetitive; silence rhythm; whether pickup feels gentle, not reward-y. Spec `docs/superpowers/specs/2026-05-25-bag-discover-and-keep-design.md`, plan `docs/superpowers/plans/2026-05-25-bag-discover-and-keep.md`.
 
 ---
 
@@ -338,14 +339,13 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 | Emotion engine (5-rule priority chain) | `src/services/emotionEngine.ts` |
 | Dialogue tier system (3 tiers × 5 emotions + 4 observation types) | `src/constants/dialogue.ts`, `src/services/dialogueService.ts` |
 | Reaction screen (tier-aware title, floating hearts, photocard button) | `src/pages/reaction.tsx` |
-| Photocard — split-layout landscape (mood asset + spending summary) | `src/components/photocard/PhotocardView.tsx`, `src/services/photocardMoodService.ts` |
+| Photocard — **vertical** card (landscape mood scene banner on top via `getPhotocardMoodAsset`, the day's record below; `selectVisibleRecords` caps visible rows at 4 + overflow; scene-centered — grouped records + 🌱 quote, no totals/breakdowns); 3:2 landscape mood assets | `src/components/photocard/PhotocardView.tsx`, `src/components/photocard/photocardGrouping.ts`, `src/services/photocardMoodService.ts` |
 | Stats / calendar + trend graph | `src/pages/stats.tsx` |
 | Per-day photocard entry point in stats | `src/pages/stats.tsx` |
 | DayFeelingCard (8 buckets, observational) | `src/components/stats/DayFeelingCard.tsx`, `src/services/dayFeelingService.ts` |
 | Mailbox (dynamic: milestone + seasonal letters) | `src/services/letterService.ts`, `src/constants/letters.ts` |
-| Bag "Discover & Keep" (room shows one tappable arrival from `DISCOVERY_QUEUE`; tap → kept; bag = keepsake grid of kept items; tap a keepsake → note via `keepsakeLineFor`; minDays = arrival schedule) | `src/services/discoveryService.ts`, `src/pages/index.tsx`, `src/constants/bagItems.ts` |
-| Found item system (4 triggers, T3 activity-based not amount-based, eval on first-of-day saveExpense, staged delivery via app-init promote) — trinkets still use the legacy bag-appear path; *displayed* in the keepsake grid (unification = future follow-up) | `src/services/foundItemService.ts`, `src/services/expenseService.ts`, `src/hooks/useAppInit.ts`, `src/constants/findableItems.ts` |
-| Bag new-item amber dot — **legacy** (`pendingNewItemId`/`hasNewBagItem`); slated for removal in the stage-5 polish pass | `src/pages/index.tsx`, `src/constants/storage.ts` |
+| Bag "Discover & Keep" (`{queue,kept}` in `discoveryStore`, hydrated by `useAppInit`, consumed reactively by Home; room shows one tappable arrival from the queue; tap → kept via store `keep` + item-specific `pickupLineFor`; bag = keepsake grid of kept items, `ScrollView`-bounded; tap a keepsake → note via `keepsakeLineFor`; fresh install starts empty + arrives in-room, existing user migrates owned→kept; minDays = arrival schedule) | `src/services/discoveryService.ts`, `src/store/discoveryStore.ts`, `src/hooks/useAppInit.ts`, `src/pages/index.tsx`, `src/constants/bagItems.ts` |
+| Found item system (4 triggers, T3 activity-based not amount-based, eval on first-of-day saveExpense, staged delivery via app-init promote) — trinkets still use the legacy bag-appear path (pending promoted + cleared atomically on bag open); *displayed* in the keepsake grid (unification = future follow-up) | `src/services/foundItemService.ts`, `src/services/expenseService.ts`, `src/hooks/useAppInit.ts`, `src/constants/findableItems.ts` |
 | Room presence — selection now **enqueues** a discovery (category/streak/night/emotion early-bring); no longer writes `ROOM_PLACEMENTS`; `PendingPlacement` settle path retired | `src/services/roomPresenceService.ts`, `src/hooks/useAppInit.ts`, `src/pages/index.tsx` |
 | summaryCard boundary dissolve | `src/pages/index.tsx` |
 | Memo suggestions (5-7 hints per category, append with `', '`, 60-char cap) | `src/components/expense/MemoSuggestions.tsx`, `src/constants/categories.ts` |
@@ -389,7 +389,7 @@ sobagi-found-item-ids          → string[]
 sobagi-pending-item-id         → string | null
 sobagi-staged-item-id          → string | null
 sobagi-last-item-date          → string (YYYY-MM-DD)  cooldown for found item staging
-sobagi-last-bag-open-days      → number               for new-item dot
+sobagi-last-bag-open-days      → number               LEGACY — drove the removed bag dot; now unreferenced (Stage-5 cleanup)
 sobagi-last-visit-date         → string (YYYY-MM-DD)  gap detection
 sobagi-observation-save-count  → number               cooldown for observation messages
 sobagi-room-placements         → RoomPlacement[]      LEGACY — migrated into kept, no longer rendered/written
@@ -421,7 +421,7 @@ sobagi-last-rest-at            → ISO string           drives 60-min rest-warmt
 
 **Stack:** React Native 0.84 · React 19 · TypeScript 5.8 (`noUncheckedIndexedAccess: true`) · Zustand 5 · Granite SDK 1.0.25
 
-**Stores:** `useEmotionStore` (emotion, message) · `useExpenseStore` (expenses[]) · `useUserStore` (level, streak, recordedDaysCount, roomStage)
+**Stores:** `useEmotionStore` (emotion, message) · `useExpenseStore` (expenses[]) · `useUserStore` (level, streak, recordedDaysCount, roomStage) · `useDiscoveryStore` (discovery queue, kept)
 
 **Services:** `storageService` · `expenseService` · `emotionEngine` · `dayFeelingService` · `foundItemService` · `atmosphereService` · `dialogueService` · `letterService`
 

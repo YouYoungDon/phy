@@ -6,7 +6,8 @@ import { normalizeExpense } from '../services/expenseService';
 import { promoteStaged } from '../services/foundItemService';
 import { checkAndDeliverLetters } from '../services/letterService';
 import { checkForPlacement } from '../services/roomPresenceService';
-import { computeTimeArrivals, enqueueArrivals, seedKeptForMigration } from '../services/discoveryService';
+import { computeTimeArrivals, enqueueArrivals, seedKeptForMigration, isFreshInstall } from '../services/discoveryService';
+import { useDiscoveryStore } from '../store/discoveryStore';
 import { RoomPlacement } from '../constants/bagItems';
 import { STORAGE_KEYS } from '../constants/storage';
 import { VALID_EMOTIONS, EMOTION_MESSAGES } from '../constants/emotion';
@@ -76,7 +77,10 @@ function computeRecordedDaysCount(expenses: Expense[]): number {
 }
 
 // Seeds the kept/queue model once (migration), then enqueues newly-eligible
-// arrivals. Runs silently in Stage 1 — nothing renders the queue yet.
+// arrivals. Authoritative loader for the Discover & Keep model: persists to
+// storage AND hydrates the discovery store so Home (a separate, concurrent
+// reader) sees the same post-arrival truth reactively instead of racing the
+// storage write with its own mount-time read.
 async function runDiscoveryInit(recordedDaysCount: number): Promise<void> {
   const done = await storageService.load<boolean>(STORAGE_KEYS.DISCOVERY_MIGRATION_DONE);
   let kept = (await storageService.load<string[]>(STORAGE_KEYS.KEPT_ITEM_IDS)) ?? [];
@@ -85,19 +89,31 @@ async function runDiscoveryInit(recordedDaysCount: number): Promise<void> {
   if (!done) {
     const placements = (await storageService.load<RoomPlacement[]>(STORAGE_KEYS.ROOM_PLACEMENTS)) ?? [];
     const found = (await storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS)) ?? [];
-    // Found trinkets (incl. any pending one) keep their legacy path into the bag;
-    // only catalog items are discovered in the room. Seed kept from what's owned.
-    kept = seedKeptForMigration(recordedDaysCount, placements.map((p) => p.itemId), found);
+    const placedItemIds = placements.map((p) => p.itemId);
+    if (isFreshInstall(recordedDaysCount, placedItemIds, found)) {
+      // Brand-new user: empty keepsake bag. Surface the day-eligible items in the
+      // ROOM (the queue) rather than seeding them as kept, so the very first
+      // experience is arrival → notice → keep instead of opening to inventory.
+      kept = [];
+      queue = enqueueArrivals(queue, computeTimeArrivals(recordedDaysCount, kept, queue));
+    } else {
+      // Existing (pre-discovery) user: seed everything already owned so they don't
+      // re-discover it. Found trinkets keep their legacy path into the bag.
+      kept = seedKeptForMigration(recordedDaysCount, placedItemIds, found);
+    }
     await storageService.save(STORAGE_KEYS.KEPT_ITEM_IDS, kept);
     await storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, queue);
     await storageService.save(STORAGE_KEYS.DISCOVERY_MIGRATION_DONE, true);
-    return; // seed before any arrival compute — no re-discovery storm
+    useDiscoveryStore.getState().hydrate({ queue, kept });
+    return; // migration runs once; arrivals flow through the normal branch after
   }
 
   const arrivals = computeTimeArrivals(recordedDaysCount, kept, queue);
   if (arrivals.length > 0) {
-    await storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, enqueueArrivals(queue, arrivals));
+    queue = enqueueArrivals(queue, arrivals);
+    await storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, queue);
   }
+  useDiscoveryStore.getState().hydrate({ queue, kept });
 }
 
 // Refreshes the visit-date anchor when the app returns to the foreground.

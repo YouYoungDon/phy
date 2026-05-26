@@ -1,5 +1,6 @@
 import {
   computeTimeArrivals, enqueueArrivals, keepItem, seedKeptForMigration, keepsakeLineFor,
+  pickupLineFor, isFreshInstall,
 } from '../src/services/discoveryService';
 import { ALL_BAG_ITEMS } from '../src/constants/bagItems';
 import { OBJECT_LINES } from '../src/constants/ambientDialogue';
@@ -67,5 +68,41 @@ describe('keepsakeLineFor', () => {
   });
   it('returns a gentle default for an unknown id', () => {
     expect(keepsakeLineFor('zzz', first)).toBe('여기 잘 간직하고 있어요 🌿');
+  });
+});
+
+describe('pickupLineFor', () => {
+  // Pickup is desc-first, NOT object-line-first: the catalog desc reads as
+  // "here's what I just noticed", while OBJECT_LINES are ongoing-interaction
+  // voice that fits revisiting a kept item, not a fresh pickup.
+  it('uses the catalog desc even when the item also has ambient object lines', () => {
+    const m6 = ALL_BAG_ITEMS.find((i) => i.id === 'm6')!;
+    expect(pickupLineFor('m6')).toBe(m6.desc);
+  });
+  it('uses the catalog desc for a day-0 item', () => {
+    const a1 = ALL_BAG_ITEMS.find((i) => i.id === 'a1')!;
+    expect(pickupLineFor('a1')).toBe(a1.desc);
+  });
+  it('falls back to a trinket findLine', () => {
+    const f1 = FINDABLE_ITEMS.find((f) => f.id === 'f1')!;
+    expect(pickupLineFor('f1')).toBe(f1.findLine);
+  });
+  it('returns the gentle pickup default for an unknown id', () => {
+    expect(pickupLineFor('zzz')).toBe('주웠어요 🌿');
+  });
+});
+
+describe('isFreshInstall', () => {
+  it('is true only with no recorded days, no placements, and no found items', () => {
+    expect(isFreshInstall(0, [], [])).toBe(true);
+  });
+  it('is false once any day has been recorded', () => {
+    expect(isFreshInstall(1, [], [])).toBe(false);
+  });
+  it('is false when prior room placements exist (existing user)', () => {
+    expect(isFreshInstall(0, ['a1'], [])).toBe(false);
+  });
+  it('is false when found trinkets exist (existing user)', () => {
+    expect(isFreshInstall(0, [], ['f1'])).toBe(false);
   });
 });

@@ -26,7 +26,8 @@ import { useAndroidBack } from '../hooks/useAndroidBack';
 import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
-import { keepItem, keepsakeLineFor } from '../services/discoveryService';
+import { keepsakeLineFor, pickupLineFor } from '../services/discoveryService';
+import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
 export const Route = createRoute('/', {
@@ -102,11 +103,13 @@ function HomeScreen() {
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
-  const [pendingNewItemId, setPendingNewItemId] = useState<string | null>(null);
-  const [hasNewBagItem, setHasNewBagItem] = useState(false);
   const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
-  const [discoveryQueue, setDiscoveryQueue] = useState<string[]>([]);
-  const [keptItemIds, setKeptItemIds] = useState<string[]>([]);
+  // Discovery truth lives in the store (hydrated by useAppInit after migration +
+  // arrival compute), so Home reads the same post-arrival state reactively
+  // instead of racing useAppInit's storage write with its own mount-time read.
+  const discoveryQueue = useDiscoveryStore((s) => s.queue);
+  const keptItemIds = useDiscoveryStore((s) => s.kept);
+  const keepDiscovery = useDiscoveryStore((s) => s.keep);
   // The keepsake grid shows everything kept. Found trinkets still arrive via the
   // legacy "두고 간 것" path (into foundItemIds); merge them in so they show as
   // keepsakes too. (Unifying trinket acquisition into the discovery queue is a
@@ -121,28 +124,19 @@ function HomeScreen() {
   const unreadAtOpenRef = useRef<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
+    // Discovery queue/kept come from the store (hydrated by useAppInit); Home
+    // only loads its own local surfaces here: mailbox state, found trinkets, and
+    // any pending trinket awaiting promotion on next bag open.
     Promise.all([
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_READ_IDS),
       storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS),
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
-      storageService.load<number>(STORAGE_KEYS.LAST_BAG_OPEN_DAYS),
-      storageService.load<string[]>(STORAGE_KEYS.KEPT_ITEM_IDS),
-      storageService.load<string[]>(STORAGE_KEYS.DISCOVERY_QUEUE),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, lastBagDays, kept, queue]) => {
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
-      if (pending != null) {
-        pendingRef.current = pending;
-        setPendingNewItemId(pending);
-      }
+      if (pending != null) pendingRef.current = pending;
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
-      const days = lastBagDays ?? 0;
-      if (ALL_BAG_ITEMS.some((item) => item.minDays > days && item.minDays <= recordedDaysCount)) {
-        setHasNewBagItem(true);
-      }
-      if (kept) setKeptItemIds(kept);
-      if (queue) setDiscoveryQueue(queue);
     });
   }, []);
 
@@ -153,11 +147,13 @@ function HomeScreen() {
     setActiveSheet(type);
     if (type === 'bag') {
       setSelectedKeptId(null);
-      void storageService.save(STORAGE_KEYS.LAST_BAG_OPEN_DAYS, recordedDaysCount);
-      setHasNewBagItem(false);
-      // Move pending item into the found collection
+      // Promote a pending found trinket into the keepsake collection AND clear the
+      // pending marker atomically on open — so a kill before close can't leave a
+      // stale PENDING_NEW_ITEM_ID pointing at an item that's already been kept.
       const pendingId = pendingRef.current;
       if (pendingId !== null) {
+        pendingRef.current = null;
+        void storageService.save(STORAGE_KEYS.PENDING_NEW_ITEM_ID, null);
         setFoundItemIds((prev) => {
           if (prev.includes(pendingId)) return prev;
           const next = [...prev, pendingId];
@@ -174,7 +170,7 @@ function HomeScreen() {
       }
     }
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
-  }, [sheetAnim, readIds, recordedDaysCount]);
+  }, [sheetAnim, readIds]);
 
   const toggleLetterExpand = useCallback((id: string) => {
     setExpandedReadIds((prev) => {
@@ -186,17 +182,11 @@ function HomeScreen() {
   }, []);
 
   const closeSheet = useCallback(() => {
-    const closingSheet = activeSheetRef.current;
     Animated.timing(sheetAnim, { toValue: 400, duration: 210, useNativeDriver: true }).start(() => {
       activeSheetRef.current = null;
       setActiveSheet(null);
       setSelectedKeptId(null);
       setExpandedReadIds(new Set());
-      if (closingSheet === 'bag' && pendingRef.current !== null) {
-        pendingRef.current = null;
-        setPendingNewItemId(null);
-        storageService.save(STORAGE_KEYS.PENDING_NEW_ITEM_ID, null);
-      }
     });
   }, [sheetAnim]);
 
@@ -265,19 +255,16 @@ function HomeScreen() {
   // Pick up the item the user found in the room: move it from the discovery
   // queue into the kept bag, persist both, and say a soft line. (Animation: stage 5.)
   const handlePickUp = useCallback((itemId: string) => {
-    const { queue, kept } = keepItem(itemId, discoveryQueue, keptItemIds);
-    setDiscoveryQueue(queue);
-    setKeptItemIds(kept);
-    void storageService.save(STORAGE_KEYS.DISCOVERY_QUEUE, queue);
-    void storageService.save(STORAGE_KEYS.KEPT_ITEM_IDS, kept);
+    keepDiscovery(itemId); // store action: move queue front → kept + write through to storage
 
-    const trinket = FINDABLE_ITEMS.find((f) => f.id === itemId);
-    const line = trinket?.findLine ?? '주웠어요 🌿';
+    // Item-specific quiet line (its own note, or a trinket's find line) — picking
+    // up reads as noticing & keeping, not a generic acquisition toast.
+    const line = pickupLineFor(itemId);
     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
     setBubbleMessage(line);
     setBubbleVisible(true);
     hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
-  }, [discoveryQueue, keptItemIds]);
+  }, [keepDiscovery]);
 
   return (
     <View style={styles.root}>
@@ -306,20 +293,6 @@ function HomeScreen() {
               <View style={[styles.fadeSlice, { opacity: 0.60 }]} />
               <View style={[styles.fadeSlice, { opacity: 0.82 }]} />
             </View>
-            {(() => {
-              // One gentle arrival at a time — the queue front, waiting to be found.
-              const frontId = discoveryQueue[0];
-              if (frontId == null) return null;
-              const item =
-                ALL_BAG_ITEMS.find((i) => i.id === frontId) ??
-                FINDABLE_ITEMS.find((f) => f.id === frontId);
-              if (!item) return null;
-              return (
-                <Pressable style={styles.discoverable} onPress={() => handlePickUp(frontId)}>
-                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
-                </Pressable>
-              );
-            })()}
             <PebbleJar
               position={JAR_POSITION}
               pebbleCount={pebbleCount}
@@ -366,7 +339,6 @@ function HomeScreen() {
                         style={styles.iconImage}
                         resizeMode="contain"
                       />
-                      {(pendingNewItemId !== null || hasNewBagItem) && <View style={styles.utilityDot} />}
                     </View>
                   )}
                 </Pressable>
@@ -428,6 +400,25 @@ function HomeScreen() {
                 <Text style={styles.utilityLabel}>티비</Text>
               </View>
             </View>
+            {(() => {
+              // One gentle arrival at a time — the queue front, waiting to be
+              // found on the right side of the floor (the jar sits opposite, on
+              // the left, with Sobagi centered between them). Rendered last so it
+              // layers above the full-width character touch zone — otherwise the
+              // character's tap area, which on small screens covers most of the
+              // floor, would swallow the pickup tap.
+              const frontId = discoveryQueue[0];
+              if (frontId == null) return null;
+              const item =
+                ALL_BAG_ITEMS.find((i) => i.id === frontId) ??
+                FINDABLE_ITEMS.find((f) => f.id === frontId);
+              if (!item) return null;
+              return (
+                <Pressable style={styles.discoverable} onPress={() => handlePickUp(frontId)}>
+                  <Text style={styles.roomItemEmoji}>{item.emoji}</Text>
+                </Pressable>
+              );
+            })()}
           </RoomBackground>
 
       <View style={styles.summaryCard}>
@@ -530,7 +521,7 @@ function HomeScreen() {
                 </Text>
               </View>
             ) : (
-              <View>
+              <ScrollView style={styles.bagScroll} showsVerticalScrollIndicator={false}>
                 {Array.from({ length: Math.ceil(displayedKeptIds.length / 4) }, (_, row) => {
                   const rowIds = displayedKeptIds.slice(row * 4, row * 4 + 4);
                   return (
@@ -562,7 +553,7 @@ function HomeScreen() {
                     </View>
                   );
                 })}
-              </View>
+              </ScrollView>
             )}
 
             {/* The kept item's quiet moment — Sobagi's note about it, resolved on tap. */}
@@ -733,6 +724,11 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  // Bounded so the keepsake grid scrolls as kept accumulates instead of pushing
+  // the sheet (and the desc card below it) off-screen.
+  bagScroll: {
+    maxHeight: 360,
   },
   bagRow: {
     flexDirection: 'row',
@@ -944,12 +940,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     opacity: 0.60,
   },
-  // A single gentle arrival waiting to be found & picked up. Calm spot,
-  // comfortable tap target. The bob/glow affordance arrives in stage 5.
+  // A single gentle arrival waiting to be found & picked up. Sits on the floor
+  // to the right — opposite the pebble jar (left), clear of the centered
+  // character and the left-edge utility column. Calm spot, comfortable tap
+  // target. The bob/glow affordance arrives in stage 5.
   discoverable: {
     position: 'absolute',
-    left: '16%',
-    top: '60%',
+    right: '10%',
+    top: '62%',
     padding: 8,
   },
 });
