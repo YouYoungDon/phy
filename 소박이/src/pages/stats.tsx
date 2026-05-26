@@ -97,6 +97,14 @@ const NO_SPEND_PHOTOCARD_QUOTES = [
   '가볍게 지나간 날을 남겨두었어요',
 ];
 
+// Quiet lines for income-only photocard days. Kept deliberately observational:
+// no totals, no earning praise, no finance framing.
+const INCOME_PHOTOCARD_QUOTES = [
+  '들어온 일을 조용히 남겨두었어요 🍃',
+  '오늘의 들어온 기록도 함께 두었어요',
+  '생활에 들어온 흐름을 살짝 적어두었어요',
+];
+
 function StatsScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
   const streak = useUserStore((s) => s.streak);
@@ -321,10 +329,11 @@ function StatsScreen() {
     [selectedSpendingExpenses, selectedDay],
   );
 
-  // Photocard records include both spending and income (sub-spec B), so
-  // PhotocardView's groupByKind can render the 들어온 기록 section on mixed
-  // days. The entry-point gate (canOpenDayPhotocard below) hides the button
-  // for income-only days, so an income-only day never reaches PhotocardView.
+  // Photocard records include both spending and income, so PhotocardView's
+  // grouping can render the 들어온 기록 section. Stats is a retrospective
+  // surface: if the selected day already shows a record row, the photocard
+  // entry should be available too. Reaction still keeps its stricter handoff
+  // gate for income-only saves.
   // A no-spend-only day surfaces a single quiet 🌿 무지출 line (its amount is
   // hidden by PhotocardView's showsAmount — no ₩0) so the card isn't
   // record-less; the line is dropped the moment any spending/income exists.
@@ -369,15 +378,18 @@ function StatsScreen() {
   // No-spend-only days have no spending feeling, so the photocard can still open
   // (sub-spec: 무지출도 하나의 기록) using a quiet line + calm emotion + a single
   // 🌿 무지출 record row (built in photocardRecords above).
-  const isNoSpendOnlyDay =
+  const isIncomeOnlyDay =
     selectedSpendingExpenses.length === 0 &&
-    selectedIncomeExpenses.length === 0 &&
-    selectedNoSpendExpenses.length > 0;
-  const canOpenDayPhotocard = selectedSpendingExpenses.length > 0 || isNoSpendOnlyDay;
+    selectedIncomeExpenses.length > 0 &&
+    selectedNoSpendExpenses.length === 0;
+  const canOpenDayPhotocard = photocardRecords.length > 0;
   const photocardQuote = dayFeeling
     ? dayFeeling.mainLine
-    : (NO_SPEND_PHOTOCARD_QUOTES[selectedDt.getDate() % NO_SPEND_PHOTOCARD_QUOTES.length]
-        ?? '오늘은 조용히 지나간 하루 🌿');
+    : isIncomeOnlyDay
+      ? (INCOME_PHOTOCARD_QUOTES[selectedDt.getDate() % INCOME_PHOTOCARD_QUOTES.length]
+          ?? '들어온 일을 조용히 남겨두었어요 🍃')
+      : (NO_SPEND_PHOTOCARD_QUOTES[selectedDt.getDate() % NO_SPEND_PHOTOCARD_QUOTES.length]
+          ?? '오늘은 조용히 지나간 하루 🌿');
   const photocardEmotion = dayFeeling ? dayFeeling.sobagiEmotion : ('happy' as const);
 
   const openDayPhotocard = useCallback(() => {
@@ -687,8 +699,10 @@ function StatsScreen() {
           </View>
         )}
 
-        {/* Photocard entry — shown for spending days and no-spend-only days.
-            Income-only days stay without a card (sub-spec B D2 unchanged). */}
+        {/* Photocard entry — opens for any day with a record (spending, income,
+            or no-spend), per canOpenDayPhotocard. Reaction's CTA stays
+            spending-only by design (see reaction.tsx) — Stats is the reflective
+            archive where any recorded day can be revisited. */}
         {canOpenDayPhotocard && (
           <Pressable style={styles.photocardEntryBtn} onPress={openDayPhotocard}>
             <Text style={styles.photocardEntryText}>포토카드 생성</Text>

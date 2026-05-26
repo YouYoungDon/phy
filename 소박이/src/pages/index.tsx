@@ -166,7 +166,7 @@ function HomeScreen() {
       }
     }
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
-  }, [sheetAnim, readIds]);
+  }, [sheetAnim, readIds, deliveredLetterIds]);
 
   const toggleLetterExpand = useCallback((id: string) => {
     setExpandedReadIds((prev) => {
