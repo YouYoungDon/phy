@@ -339,7 +339,7 @@ The "Income records" decomposition (A → B → C) is complete. Backlog items in
 | Emotion engine (5-rule priority chain) | `src/services/emotionEngine.ts` |
 | Dialogue tier system (3 tiers × 5 emotions + 4 observation types) | `src/constants/dialogue.ts`, `src/services/dialogueService.ts` |
 | Reaction screen (tier-aware title, floating hearts, photocard button) | `src/pages/reaction.tsx` |
-| Photocard — split-layout landscape (mood asset + spending summary) | `src/components/photocard/PhotocardView.tsx`, `src/services/photocardMoodService.ts` |
+| Photocard — **vertical** card (landscape mood scene banner on top via `getPhotocardMoodAsset`, the day's record below; `selectVisibleRecords` caps visible rows at 4 + overflow; scene-centered — grouped records + 🌱 quote, no totals/breakdowns); 3:2 landscape mood assets | `src/components/photocard/PhotocardView.tsx`, `src/components/photocard/photocardGrouping.ts`, `src/services/photocardMoodService.ts` |
 | Stats / calendar + trend graph | `src/pages/stats.tsx` |
 | Per-day photocard entry point in stats | `src/pages/stats.tsx` |
 | DayFeelingCard (8 buckets, observational) | `src/components/stats/DayFeelingCard.tsx`, `src/services/dayFeelingService.ts` |
