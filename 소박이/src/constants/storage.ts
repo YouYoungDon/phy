@@ -10,7 +10,6 @@ export const STORAGE_KEYS = {
   LAST_VISIT_DATE: 'sobagi-last-visit-date',
   OBSERVATION_SAVE_COUNT: 'sobagi-observation-save-count',
   MAILBOX_DELIVERED_IDS: 'sobagi-mailbox-delivered-ids',
-  LAST_BAG_OPEN_DAYS: 'sobagi-last-bag-open-days',
   MAILBOX_REMOTE_LETTERS: 'sobagi-mailbox-remote-letters',
   ADMIN_USER_ID: 'sobagi-admin-user-id',
   ROOM_PLACEMENTS: 'sobagi-room-placements',

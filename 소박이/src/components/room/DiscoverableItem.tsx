@@ -46,9 +46,8 @@ export function DiscoverableItem({ emoji, onPress }: { emoji: string; onPress: (
 }
 
 const styles = StyleSheet.create({
-  // Sits on the floor to the right — opposite the pebble jar (left), clear of the
-  // centered character and the left-edge utility column. Calm spot, comfortable
-  // tap target.
+  // Sits on the floor to the right — clear of the centered character and the
+  // left-edge utility column. Calm spot, comfortable tap target.
   discoverable: {
     position: 'absolute',
     right: '10%',

@@ -413,8 +413,8 @@ function HomeScreen() {
             </View>
             {(() => {
               // One gentle arrival at a time — the queue front, waiting to be
-              // found on the right side of the floor (the jar sits opposite, on
-              // the left, with Sobagi centered between them). Rendered last so it
+              // found on the right side of the floor, clear of the centered
+              // character and the left-edge utility column. Rendered last so it
               // layers above the full-width character touch zone — otherwise the
               // character's tap area, which on small screens covers most of the
               // floor, would swallow the pickup tap.
@@ -533,12 +533,14 @@ function HomeScreen() {
                 // unlike fire-and-forget saves, a rejection here means the
                 // user watched an ad and got nothing. Log instead of dropping.
                 grantRest()
-                  .then((result) => {
-                    // Quiet post-watch line. Shared bubble surface with
-                    // Sobagi tap and the daily-done message; just update text.
-                    setBubbleMessage(
-                      `소박이가 한 숨 돌렸어요 🌿  +${result.pebbleDelta}`,
-                    );
+                  .then(() => {
+                    // Quiet post-watch line. Shared bubble surface with Sobagi
+                    // tap and the daily-done message; just update text. Pebbles
+                    // still accrue inside grantRest (toward the future rare-item
+                    // reward), but the count is no longer surfaced — the jar that
+                    // displayed it was removed, and a bare "+N" reads as a reward
+                    // tally, which this space deliberately avoids.
+                    setBubbleMessage('소박이가 한 숨 돌렸어요 🌿');
                     setBubbleVisible(true);
                     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
                     hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
@@ -734,30 +736,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 16,
-  },
-  bagTabBar: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-  },
-  bagTabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
-  },
-  bagTabBtnActive: {
-    backgroundColor: COLORS.oliveGreen,
-  },
-  bagTabLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  bagTabLabelActive: {
-    color: '#fff',
-    fontWeight: '600',
   },
   bagEmptyState: {
     height: 180,
