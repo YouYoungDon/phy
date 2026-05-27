@@ -14,6 +14,14 @@ export type SeasonalLetter = {
   body: string;
 };
 
+export type RemoteLetter = {
+  id: string;
+  body: string;
+  sig: string;
+  createdAt?: string;
+  target?: 'all' | 'user';
+};
+
 // id '001' matches the old hardcoded letter so existing users' read state stays valid.
 export const PERSONAL_LETTERS: PersonalLetter[] = [
   {

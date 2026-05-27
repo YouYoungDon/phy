@@ -15,7 +15,7 @@ import { ROOM_TIME_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILI
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS } from '../constants/findableItems';
-import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
+import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS, RemoteLetter } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
 import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { ALL_BAG_ITEMS } from '../constants/bagItems';
@@ -27,7 +27,7 @@ import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
 import { keepsakeLineFor, pickupLineFor, trinketCounts } from '../services/discoveryService';
-import { splitMailbox } from '../services/letterService';
+import { splitMailbox, syncRemoteLetters } from '../services/letterService';
 import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
@@ -99,6 +99,7 @@ function HomeScreen() {
   const [keptMomentLine, setKeptMomentLine] = useState<string>('');
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
+  const [remoteLetters, setRemoteLetters] = useState<RemoteLetter[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
   // Letters the user has explicitly toggled away from their default fold state: a new
   // letter (expanded by default) toggles to folded; a read letter (folded by default)
@@ -120,6 +121,13 @@ function HomeScreen() {
     () => Array.from(new Set([...keptItemIds, ...foundItemIds])),
     [keptItemIds, foundItemIds],
   );
+  const letterLookup = useMemo(() => {
+    const map = new Map(LETTER_LOOKUP);
+    for (const letter of remoteLetters) {
+      map.set(letter.id, { id: letter.id, body: letter.body, sig: letter.sig || '— 소박이' });
+    }
+    return map;
+  }, [remoteLetters]);
 
   // Per-id occurrence counts for found trinkets; catalog ids resolve to 1 via `?? 1`.
   const keepsakeCounts = useMemo(() => trinketCounts(foundItemIds), [foundItemIds]);
@@ -137,11 +145,17 @@ function HomeScreen() {
       storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS),
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds]) => {
+      storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) pendingRef.current = pending;
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
+      if (storedRemoteLetters) setRemoteLetters(storedRemoteLetters);
+      syncRemoteLetters().then(({ letters, deliveredIds: syncedDeliveredIds }) => {
+        setRemoteLetters(letters);
+        setDeliveredLetterIds(syncedDeliveredIds);
+      });
     });
   }, []);
 
@@ -448,7 +462,7 @@ function HomeScreen() {
               // One renderer for both zones: a new letter is open by default, a read
               // letter folded by default; tapping toggles either. Folded = preview line.
               const renderLetter = (id: string, isNew: boolean, spaced: boolean) => {
-                const letter = LETTER_LOOKUP.get(id);
+                const letter = letterLookup.get(id);
                 if (!letter) return null;
                 const isExpanded = isNew ? !toggledLetterIds.has(id) : toggledLetterIds.has(id);
                 const firstLine = letter.body.split('\n')[0] ?? letter.body;

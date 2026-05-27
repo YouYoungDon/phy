@@ -4,13 +4,14 @@ jest.mock('../src/services/storageService', () => ({
 }));
 
 import * as storageService from '../src/services/storageService';
-import { checkAndDeliverLetters, splitMailbox } from '../src/services/letterService';
+import { checkAndDeliverLetters, splitMailbox, syncRemoteLetters } from '../src/services/letterService';
 
 const mockLoad = storageService.load as jest.MockedFunction<typeof storageService.load>;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockLoad.mockResolvedValue(null);
+  (global.fetch as jest.Mock | undefined) = undefined;
 });
 
 describe('checkAndDeliverLetters — personal letters', () => {
@@ -136,5 +137,52 @@ describe('splitMailbox', () => {
       currentIds: ['d', 'c'],
       archivedIds: ['b', 'a'],
     });
+  });
+});
+
+describe('syncRemoteLetters', () => {
+  it('fetches admin letters and merges them into delivered ids', async () => {
+    mockLoad.mockImplementation(async (key: string) => {
+      if (key === 'sobagi-admin-user-id') return 'user-1';
+      if (key === 'sobagi-mailbox-delivered-ids') return ['001'];
+      if (key === 'sobagi-mailbox-remote-letters') return [];
+      return null;
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        letters: [
+          { id: 'admin-letter-1', body: '관리자 편지', sig: '— 소박이', target: 'all' },
+        ],
+      }),
+    }) as jest.Mock;
+
+    const result = await syncRemoteLetters();
+
+    expect(result.userId).toBe('user-1');
+    expect(result.deliveredIds).toEqual(['001', 'admin-letter-1']);
+    expect(storageService.save).toHaveBeenCalledWith(
+      'sobagi-mailbox-remote-letters',
+      expect.arrayContaining([expect.objectContaining({ id: 'admin-letter-1' })]),
+    );
+    expect(storageService.save).toHaveBeenCalledWith(
+      'sobagi-mailbox-delivered-ids',
+      ['001', 'admin-letter-1'],
+    );
+  });
+
+  it('keeps stored remote letters when the admin server is unavailable', async () => {
+    mockLoad.mockImplementation(async (key: string) => {
+      if (key === 'sobagi-admin-user-id') return 'user-1';
+      if (key === 'sobagi-mailbox-delivered-ids') return ['001'];
+      if (key === 'sobagi-mailbox-remote-letters') return [{ id: 'admin-old', body: 'old', sig: '— 소박이' }];
+      return null;
+    });
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline')) as jest.Mock;
+
+    const result = await syncRemoteLetters();
+
+    expect(result.letters).toEqual([{ id: 'admin-old', body: 'old', sig: '— 소박이' }]);
+    expect(result.deliveredIds).toEqual(['001']);
   });
 });
