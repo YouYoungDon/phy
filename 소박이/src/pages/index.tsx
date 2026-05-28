@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { createRoute } from '@granite-js/react-native';
+import { createRoute, useNavigation } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
 import { EmotionBubble } from '../components/sobagi/EmotionBubble';
 import { DailySummary } from '../components/common/DailySummary';
+import { TodaySurface } from '../components/home/TodaySurface';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
@@ -57,6 +58,7 @@ function calendarDaysBetween(laterYmd: string, earlierYmd: string): number {
 }
 
 function HomeScreen() {
+  const navigation = useNavigation();
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const roomStage = useUserStore((s) => s.roomStage);
   const level = useUserStore((s) => s.level);
@@ -330,6 +332,14 @@ function HomeScreen() {
                 </View>
               </View>
             </View>
+
+            <TodaySurface
+              todayDate={new Date()}
+              totalAmount={todayTotal}
+              recordCount={todayExpenses.length}
+              spendingCount={todaySpendingRecords.length}
+              onPress={() => navigation.navigate('/record')}
+            />
 
             <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
               <View style={styles.bubbleContainer} pointerEvents="none">
