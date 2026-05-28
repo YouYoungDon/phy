@@ -27,3 +27,10 @@ export function localDateToISOString(localDateStr: string): string {
 export function expenseLocalDate(e: { localDate?: string; createdAt: string }): string {
   return e.localDate ?? getLocalDateString(new Date(e.createdAt));
 }
+
+// Korean-format short date — "5월 26일" — for the home today-surface overlay. Plain
+// non-padded numbers (no leading zeros), matching how Korean dates are written in
+// everyday memo / handwritten contexts. Pure: no locale config, no Intl.
+export function formatKoreanMonthDay(date: Date): string {
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
