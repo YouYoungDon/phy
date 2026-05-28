@@ -45,21 +45,27 @@ delete logic, and `MAILBOX_DELIVERED_IDS` stays intact so nothing re-delivers.
 
 ## Behavior
 
+> **Correction (2026-05-26, post-dogfood):** the original design kept the single most-recent
+> letter forced-open when nothing was new ("never empty / letter on the table"). In use this
+> felt wrong — a read letter stuck open and couldn't fold. Per user feedback ("읽은건 접게
+> 해줘"), **read letters always fold; there is no forced-open fallback**, and current letters
+> are now **tappable to fold** too. The sections below reflect the corrected behavior.
+
 Two zones, both derived at render time:
 
-- **현재 (top):** every letter unread at this open, newest-first, shown **expanded**. If none
-  are unread this open, the top shows the **single most recent delivered letter** expanded —
-  so the mailbox is never empty; there is always one letter on the table.
-- **지난 편지 (drawer):** everything else, **collapsed into one quiet header row**
-  ("지난 편지" + a chevron). Tapping it reveals the existing folded-preview cards; tapping a
-  preview opens that letter inline (today's `toggleLetterExpand` / `expandedReadIds`). Folded
-  by default.
+- **현재 (top):** every letter unread at this open, newest-first, shown **expanded** but
+  **tap-to-fold**. Read letters never sit here — once seen, a letter folds away.
+- **지난 편지 (read letters, folded):** with new mail above, read letters hide behind a quiet
+  collapsible "지난 편지" drawer (folded by default; tap the header to look back, tap a preview
+  to open it inline). With **nothing new**, read letters ARE the content: shown directly as
+  folded previews under a plain "지난 편지" label (no drawer toggle), still tap-to-expand.
 
 ### Empty / boundary states
-- **0 delivered:** existing empty state ("아직 도착한 편지가 없어요 🌿"); no drawer.
-- **1 delivered:** it is the current letter (expanded); archive empty → drawer is not rendered.
-- **All read, multiple:** current = [most recent], drawer = the rest (folded).
-- **New letters this open:** current = all unread-at-open (expanded), drawer = previously-read.
+- **0 delivered:** existing empty state ("아직 도착한 편지가 없어요 🌿"); no archive.
+- **1 unread:** it is the current letter (open, foldable); nothing archived.
+- **1 read (nothing new):** current empty; the read letter shows as a folded preview under the 지난 편지 label.
+- **All read, multiple:** current empty; every letter shown as a folded preview (지난 편지 label, no toggle).
+- **New letters this open:** current = all unread-at-open (open, foldable); read ones behind the 지난 편지 drawer.
 
 ## The split is a pure, testable helper
 
@@ -71,10 +77,7 @@ export function splitMailbox(
   unreadAtOpen: Set<string>,
 ): { currentIds: string[]; archivedIds: string[] } {
   const newestFirst = [...deliveredIds].reverse();
-  let currentIds = newestFirst.filter((id) => unreadAtOpen.has(id));
-  if (currentIds.length === 0 && newestFirst.length > 0) {
-    currentIds = [newestFirst[0]!];
-  }
+  const currentIds = newestFirst.filter((id) => unreadAtOpen.has(id));
   const currentSet = new Set(currentIds);
   const archivedIds = newestFirst.filter((id) => !currentSet.has(id));
   return { currentIds, archivedIds };
@@ -85,22 +88,25 @@ Both arrays are newest-first (matching the current render's `[...deliveredLetter
 
 ## UI details
 
-- **현재 letters:** rendered expanded (full `letterText` body + `letterSig`), reusing the
-  existing `letterCard` / `letterCardNew` styling. New-this-open letters keep the warm
-  `letterCardNew` background; the read fallback letter uses the normal `letterCard`.
-- **Drawer header:** a muted row — "지난 편지" + chevron (▸ folded / ▾ open). One new style
-  (`letterArchiveHeader` + its text/chevron). No background pill, no count.
-- **Drawer body (when open):** the archived letters as the existing folded-preview cards
-  (`letterFolded`, opacity 0.6), each `Pressable` toggling inline expand via the existing
-  `expandedReadIds` / `toggleLetterExpand`.
-- **State:** new local `archiveOpen: boolean` (default false), toggled by the header, **reset
-  on sheet close** alongside `expandedReadIds` in `closeSheet`.
+- **One `renderLetter` for both zones:** a new letter is open by default, a read letter folded
+  by default; both are `Pressable` and tapping toggles fold/expand. Fold state derives from a
+  single `toggledLetterIds` set — "ids the user toggled away from their default":
+  `isExpanded = isNew ? !toggledLetterIds.has(id) : toggledLetterIds.has(id)`. New letters keep
+  the warm `letterCardNew` background; folded = the existing `letterFolded` preview line.
+- **지난 편지 label:** when there IS new mail, a muted tappable drawer header — "지난 편지" +
+  chevron (▸ folded / ▾ open), default folded. When there is **no** new mail, the same label
+  renders as a plain non-tappable `View` and the folded previews show directly beneath it. One
+  new style group (`letterArchiveHeader` / `letterArchiveTitle` / `letterArchiveChevron`). No
+  background pill, no count.
+- **State:** `toggledLetterIds` (replaces the old `expandedReadIds`; `toggleLetter` replaces
+  `toggleLetterExpand`) and `archiveOpen: boolean` (default false). Both **reset on sheet
+  close** in `closeSheet`. Effective archive visibility = `archiveOpen || currentIds.length === 0`.
 
 ## Philosophy check
 
 - Letters are never deleted (keepsake-respecting).
 - Archiving is automatic, zero management chrome (implicit-signals ethos).
-- Surface becomes one open letter + one quiet drawer — not a list.
+- Surface is the new letter(s) open + read ones quietly folded — not a flat list.
 - No counts, badges, notification dots, or reward energy on the drawer.
 
 ## Files touched
@@ -114,7 +120,7 @@ Both arrays are newest-first (matching the current render's `[...deliveredLetter
 `__tests__/letterService.test.ts` — `splitMailbox`:
 - 0 delivered → `{ currentIds: [], archivedIds: [] }`.
 - 1 delivered, unread → current = [it], archived = [].
-- All read (unreadAtOpen empty), multiple → current = [most recent], archived = the rest, newest-first.
+- All read (unreadAtOpen empty), multiple → current = [] (no forced-open fallback), archived = every id, newest-first.
 - New letters this open → current = the unread set (newest-first), archived = the read ones.
 
 ## Explicitly NOT doing

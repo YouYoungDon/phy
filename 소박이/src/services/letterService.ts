@@ -1,6 +1,36 @@
 import * as storageService from './storageService';
 import { STORAGE_KEYS } from '../constants/storage';
-import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
+import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS, RemoteLetter } from '../constants/letters';
+
+const DEFAULT_ADMIN_LETTER_ENDPOINT = 'http://127.0.0.1:4173/api/letters';
+
+declare global {
+  // Optional dev override for a LAN/ngrok/admin-host URL. Kept off product UI.
+  // eslint-disable-next-line no-var
+  var SOBAGI_ADMIN_LETTER_ENDPOINT: string | undefined;
+}
+
+function adminLetterEndpoint(): string {
+  return globalThis.SOBAGI_ADMIN_LETTER_ENDPOINT || DEFAULT_ADMIN_LETTER_ENDPOINT;
+}
+
+function createAdminUserId(): string {
+  return `sobagi-user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function validRemoteLetter(value: unknown): value is RemoteLetter {
+  if (typeof value !== 'object' || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === 'string' && typeof row.body === 'string';
+}
+
+async function getOrCreateAdminUserId(): Promise<string> {
+  const existing = await storageService.load<string>(STORAGE_KEYS.ADMIN_USER_ID);
+  if (existing) return existing;
+  const userId = createAdminUserId();
+  await storageService.save(STORAGE_KEYS.ADMIN_USER_ID, userId);
+  return userId;
+}
 
 // Checks personal and seasonal delivery conditions and persists newly-eligible letter IDs.
 // Takes today as a parameter so it is testable without mocking Date.
@@ -40,21 +70,59 @@ export async function checkAndDeliverLetters(
   }
 }
 
+export async function syncRemoteLetters(): Promise<{
+  userId: string;
+  letters: RemoteLetter[];
+  deliveredIds: string[];
+}> {
+  const userId = await getOrCreateAdminUserId();
+  const storedLetters = (await storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS)) ?? [];
+  const deliveredIds = (await storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS)) ?? [];
+
+  try {
+    const response = await fetch(`${adminLetterEndpoint()}?userId=${encodeURIComponent(userId)}`);
+    if (!response.ok) {
+      return { userId, letters: storedLetters, deliveredIds };
+    }
+
+    const payload = await response.json() as { letters?: unknown[] };
+    const fetchedLetters = Array.isArray(payload.letters)
+      ? payload.letters.filter(validRemoteLetter).map((letter) => ({
+          id: letter.id,
+          body: letter.body,
+          sig: letter.sig || '— 소박이',
+          createdAt: letter.createdAt,
+          target: letter.target,
+        }))
+      : [];
+
+    const remoteIds = fetchedLetters.map((letter) => letter.id);
+    const nextDeliveredIds = [...new Set([...deliveredIds, ...remoteIds])];
+
+    await storageService.save(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS, fetchedLetters);
+    if (nextDeliveredIds.length !== deliveredIds.length) {
+      await storageService.save(STORAGE_KEYS.MAILBOX_DELIVERED_IDS, nextDeliveredIds);
+    }
+
+    return { userId, letters: fetchedLetters, deliveredIds: nextDeliveredIds };
+  } catch {
+    return { userId, letters: storedLetters, deliveredIds };
+  }
+}
+
 // Splits delivered letters into the ones to show open ("current") and the ones to
 // tuck into the 지난 편지 drawer ("archived"). A letter is current only while it is
 // still unread at this open (the caller passes the unread-at-open set); once seen it
-// archives on its own. If nothing is unread, the most recent letter stays on the table
-// so the mailbox is never empty. Both arrays are newest-first. Pure — read state lives
-// in MAILBOX_READ_IDS; this adds no storage and never touches the delivered set.
+// folds away on its own. When nothing is unread, current is empty and every letter is
+// archived (folded) — read letters always fold, never stay forced-open. Both arrays are
+// newest-first. Pure — read state lives in MAILBOX_READ_IDS; this adds no storage and
+// never touches the delivered set.
 export function splitMailbox(
   deliveredIds: string[],
   unreadAtOpen: Set<string>,
 ): { currentIds: string[]; archivedIds: string[] } {
   const newestFirst = [...deliveredIds].reverse();
-  let currentIds = newestFirst.filter((id) => unreadAtOpen.has(id));
-  if (currentIds.length === 0 && newestFirst.length > 0) {
-    currentIds = [newestFirst[0]!];
-  }
+  const currentIds = newestFirst.filter((id) => unreadAtOpen.has(id));
   const currentSet = new Set(currentIds);
   const archivedIds = newestFirst.filter((id) => !currentSet.has(id));
   return { currentIds, archivedIds };

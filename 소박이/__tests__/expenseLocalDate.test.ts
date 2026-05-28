@@ -1,4 +1,4 @@
-import { expenseLocalDate, getLocalDateString } from '../src/utils/date';
+import { expenseLocalDate, getLocalDateString, formatKoreanMonthDay } from '../src/utils/date';
 
 describe('expenseLocalDate', () => {
   it('prefers the stored localDate when present', () => {
@@ -35,5 +35,21 @@ describe('expenseLocalDate', () => {
     // chosen date, localDate is that date string. They agree.
     const e = { localDate: '2026-02-10', createdAt: '2026-02-10T03:00:00.000Z' };
     expect(expenseLocalDate(e)).toBe('2026-02-10');
+  });
+});
+
+describe('formatKoreanMonthDay', () => {
+  it('formats a mid-month date', () => {
+    // Date months are 0-indexed: month 4 = May.
+    expect(formatKoreanMonthDay(new Date(2026, 4, 26))).toBe('5월 26일');
+  });
+  it('formats day 1', () => {
+    expect(formatKoreanMonthDay(new Date(2026, 4, 1))).toBe('5월 1일');
+  });
+  it('formats the last day of a 31-day month', () => {
+    expect(formatKoreanMonthDay(new Date(2026, 6, 31))).toBe('7월 31일');
+  });
+  it('formats January (single-digit month)', () => {
+    expect(formatKoreanMonthDay(new Date(2026, 0, 5))).toBe('1월 5일');
   });
 });

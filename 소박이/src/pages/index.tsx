@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { createRoute } from '@granite-js/react-native';
+import { createRoute, useNavigation } from '@granite-js/react-native';
 import { RoomBackground } from '../components/room/RoomBackground';
 import { SobagiCharacter } from '../components/sobagi/SobagiCharacter';
 import { EmotionBubble } from '../components/sobagi/EmotionBubble';
 import { DailySummary } from '../components/common/DailySummary';
+import { TodaySurface } from '../components/home/TodaySurface';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
@@ -15,7 +16,7 @@ import { ROOM_TIME_BACKGROUND_URIS, SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS, UTILI
 import * as storageService from '../services/storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { FINDABLE_ITEMS } from '../constants/findableItems';
-import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS } from '../constants/letters';
+import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS, RemoteLetter } from '../constants/letters';
 import { REST_LETTERS } from '../constants/restLetters';
 import { getTimeOfDayBackgroundKey, getWarmthOpacity, getCalmAtmosphereOpacity, CALM_OVERLAY_COLOR, getRestWarmthOpacity } from '../services/atmosphereService';
 import { ALL_BAG_ITEMS } from '../constants/bagItems';
@@ -27,7 +28,7 @@ import { getEffectiveRestsToday, grantRest } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
 import { keepsakeLineFor, pickupLineFor, trinketCounts } from '../services/discoveryService';
-import { splitMailbox } from '../services/letterService';
+import { splitMailbox, syncRemoteLetters } from '../services/letterService';
 import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
@@ -57,6 +58,7 @@ function calendarDaysBetween(laterYmd: string, earlierYmd: string): number {
 }
 
 function HomeScreen() {
+  const navigation = useNavigation();
   const currentEmotion = useEmotionStore((s) => s.currentEmotion);
   const roomStage = useUserStore((s) => s.roomStage);
   const level = useUserStore((s) => s.level);
@@ -99,8 +101,12 @@ function HomeScreen() {
   const [keptMomentLine, setKeptMomentLine] = useState<string>('');
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
+  const [remoteLetters, setRemoteLetters] = useState<RemoteLetter[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
-  const [expandedReadIds, setExpandedReadIds] = useState<ReadonlySet<string>>(new Set());
+  // Letters the user has explicitly toggled away from their default fold state: a new
+  // letter (expanded by default) toggles to folded; a read letter (folded by default)
+  // toggles to expanded. Render-only; resets when the sheet closes.
+  const [toggledLetterIds, setToggledLetterIds] = useState<ReadonlySet<string>>(new Set());
   // Whether the 지난 편지 drawer is expanded. Render-only; resets when the sheet closes.
   const [archiveOpen, setArchiveOpen] = useState(false);
   // Discovery truth lives in the store (hydrated by useAppInit after migration +
@@ -117,6 +123,13 @@ function HomeScreen() {
     () => Array.from(new Set([...keptItemIds, ...foundItemIds])),
     [keptItemIds, foundItemIds],
   );
+  const letterLookup = useMemo(() => {
+    const map = new Map(LETTER_LOOKUP);
+    for (const letter of remoteLetters) {
+      map.set(letter.id, { id: letter.id, body: letter.body, sig: letter.sig || '— 소박이' });
+    }
+    return map;
+  }, [remoteLetters]);
 
   // Per-id occurrence counts for found trinkets; catalog ids resolve to 1 via `?? 1`.
   const keepsakeCounts = useMemo(() => trinketCounts(foundItemIds), [foundItemIds]);
@@ -134,11 +147,17 @@ function HomeScreen() {
       storageService.load<string[]>(STORAGE_KEYS.FOUND_ITEM_IDS),
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds]) => {
+      storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) pendingRef.current = pending;
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
+      if (storedRemoteLetters) setRemoteLetters(storedRemoteLetters);
+      syncRemoteLetters().then(({ letters, deliveredIds: syncedDeliveredIds }) => {
+        setRemoteLetters(letters);
+        setDeliveredLetterIds(syncedDeliveredIds);
+      });
     });
   }, []);
 
@@ -175,8 +194,8 @@ function HomeScreen() {
     Animated.spring(sheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
   }, [sheetAnim, readIds, deliveredLetterIds]);
 
-  const toggleLetterExpand = useCallback((id: string) => {
-    setExpandedReadIds((prev) => {
+  const toggleLetter = useCallback((id: string) => {
+    setToggledLetterIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -189,7 +208,7 @@ function HomeScreen() {
       activeSheetRef.current = null;
       setActiveSheet(null);
       setSelectedKeptId(null);
-      setExpandedReadIds(new Set());
+      setToggledLetterIds(new Set());
       setArchiveOpen(false);
     });
   }, [sheetAnim]);
@@ -314,6 +333,14 @@ function HomeScreen() {
               </View>
             </View>
 
+            <TodaySurface
+              todayDate={new Date()}
+              totalAmount={todayTotal}
+              recordCount={todayExpenses.length}
+              spendingCount={todaySpendingRecords.length}
+              onPress={() => navigation.navigate('/record')}
+            />
+
             <TouchableOpacity style={styles.characterArea} onPress={handleSobagiTap} activeOpacity={1}>
               <View style={styles.bubbleContainer} pointerEvents="none">
                 <EmotionBubble message={bubbleMessage} visible={bubbleVisible} />
@@ -396,8 +423,8 @@ function HomeScreen() {
             </View>
             {(() => {
               // One gentle arrival at a time — the queue front, waiting to be
-              // found on the right side of the floor (the jar sits opposite, on
-              // the left, with Sobagi centered between them). Rendered last so it
+              // found on the right side of the floor, clear of the centered
+              // character and the left-edge utility column. Rendered last so it
               // layers above the full-width character touch zone — otherwise the
               // character's tap area, which on small screens covers most of the
               // floor, would swallow the pickup tap.
@@ -438,72 +465,67 @@ function HomeScreen() {
                 deliveredLetterIds,
                 new Set(unreadAtOpenRef.current),
               );
-              return (
-                <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
-                  {/* 현재 — the letter(s) on the table, always open. */}
-                  {currentIds.map((id, idx) => {
-                    const letter = LETTER_LOOKUP.get(id);
-                    if (!letter) return null;
-                    const isNew = unreadAtOpenRef.current.has(id);
-                    return (
-                      <View
-                        key={id}
-                        style={[
-                          styles.letterCard,
-                          idx > 0 && styles.letterCardSpacing,
-                          isNew && styles.letterCardNew,
-                        ]}
-                      >
+              const hasCurrent = currentIds.length > 0;
+              // When nothing is new, past letters ARE the content — show them folded
+              // directly (no drawer to tap open). Otherwise they hide behind the drawer.
+              const archiveShown = hasCurrent ? archiveOpen : true;
+              // One renderer for both zones: a new letter is open by default, a read
+              // letter folded by default; tapping toggles either. Folded = preview line.
+              const renderLetter = (id: string, isNew: boolean, spaced: boolean) => {
+                const letter = letterLookup.get(id);
+                if (!letter) return null;
+                const isExpanded = isNew ? !toggledLetterIds.has(id) : toggledLetterIds.has(id);
+                const firstLine = letter.body.split('\n')[0] ?? letter.body;
+                const preview =
+                  firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
+                return (
+                  <Pressable
+                    key={id}
+                    style={[
+                      styles.letterCard,
+                      spaced && styles.letterCardSpacing,
+                      isNew && styles.letterCardNew,
+                      !isExpanded && styles.letterCardCollapsed,
+                    ]}
+                    onPress={() => toggleLetter(id)}
+                  >
+                    {isExpanded ? (
+                      <>
                         <Text style={styles.letterText}>{letter.body}</Text>
                         <Text style={styles.letterSig}>{letter.sig}</Text>
+                      </>
+                    ) : (
+                      <View style={styles.letterFolded}>
+                        <Text style={styles.letterFoldedPreview} numberOfLines={1}>{preview}</Text>
+                        <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
                       </View>
-                    );
-                  })}
+                    )}
+                  </Pressable>
+                );
+              };
+              return (
+                <ScrollView style={styles.letterScroll} showsVerticalScrollIndicator={false}>
+                  {/* 현재 — new letters, open by default, tap to fold. */}
+                  {currentIds.map((id, idx) => renderLetter(id, true, idx > 0))}
 
-                  {/* 지난 편지 — quietly folded; tap the header to look back. */}
+                  {/* 지난 편지 — read letters, folded. With new mail above they hide behind a
+                      quiet drawer; with nothing new they show directly under a plain label. */}
                   {archivedIds.length > 0 && (
                     <>
-                      <Pressable
-                        style={styles.letterArchiveHeader}
-                        onPress={() => setArchiveOpen((v) => !v)}
-                      >
-                        <Text style={styles.letterArchiveTitle}>지난 편지</Text>
-                        <Text style={styles.letterArchiveChevron}>{archiveOpen ? '▾' : '▸'}</Text>
-                      </Pressable>
-                      {archiveOpen &&
-                        archivedIds.map((id) => {
-                          const letter = LETTER_LOOKUP.get(id);
-                          if (!letter) return null;
-                          const isExpanded = expandedReadIds.has(id);
-                          const firstLine = letter.body.split('\n')[0] ?? letter.body;
-                          const preview =
-                            firstLine.length > 38 ? firstLine.slice(0, 38) + '…' : firstLine + '…';
-                          return (
-                            <Pressable
-                              key={id}
-                              style={[
-                                styles.letterCard,
-                                styles.letterCardSpacing,
-                                !isExpanded && styles.letterCardCollapsed,
-                              ]}
-                              onPress={() => toggleLetterExpand(id)}
-                            >
-                              {isExpanded ? (
-                                <>
-                                  <Text style={styles.letterText}>{letter.body}</Text>
-                                  <Text style={styles.letterSig}>{letter.sig}</Text>
-                                </>
-                              ) : (
-                                <View style={styles.letterFolded}>
-                                  <Text style={styles.letterFoldedPreview} numberOfLines={1}>
-                                    {preview}
-                                  </Text>
-                                  <Text style={styles.letterFoldedSig}>{letter.sig}</Text>
-                                </View>
-                              )}
-                            </Pressable>
-                          );
-                        })}
+                      {hasCurrent ? (
+                        <Pressable
+                          style={styles.letterArchiveHeader}
+                          onPress={() => setArchiveOpen((v) => !v)}
+                        >
+                          <Text style={styles.letterArchiveTitle}>지난 편지</Text>
+                          <Text style={styles.letterArchiveChevron}>{archiveOpen ? '▾' : '▸'}</Text>
+                        </Pressable>
+                      ) : (
+                        <View style={styles.letterArchiveHeader}>
+                          <Text style={styles.letterArchiveTitle}>지난 편지</Text>
+                        </View>
+                      )}
+                      {archiveShown && archivedIds.map((id) => renderLetter(id, false, true))}
                     </>
                   )}
                 </ScrollView>
@@ -521,12 +543,14 @@ function HomeScreen() {
                 // unlike fire-and-forget saves, a rejection here means the
                 // user watched an ad and got nothing. Log instead of dropping.
                 grantRest()
-                  .then((result) => {
-                    // Quiet post-watch line. Shared bubble surface with
-                    // Sobagi tap and the daily-done message; just update text.
-                    setBubbleMessage(
-                      `소박이가 한 숨 돌렸어요 🌿  +${result.pebbleDelta}`,
-                    );
+                  .then(() => {
+                    // Quiet post-watch line. Shared bubble surface with Sobagi
+                    // tap and the daily-done message; just update text. Pebbles
+                    // still accrue inside grantRest (toward the future rare-item
+                    // reward), but the count is no longer surfaced — the jar that
+                    // displayed it was removed, and a bare "+N" reads as a reward
+                    // tally, which this space deliberately avoids.
+                    setBubbleMessage('소박이가 한 숨 돌렸어요 🌿');
                     setBubbleVisible(true);
                     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
                     hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3500);
@@ -722,30 +746,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 16,
-  },
-  bagTabBar: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-  },
-  bagTabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
-  },
-  bagTabBtnActive: {
-    backgroundColor: COLORS.oliveGreen,
-  },
-  bagTabLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.textMuted,
-  },
-  bagTabLabelActive: {
-    color: '#fff',
-    fontWeight: '600',
   },
   bagEmptyState: {
     height: 180,
