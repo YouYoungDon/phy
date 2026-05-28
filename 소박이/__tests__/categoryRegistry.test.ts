@@ -23,6 +23,7 @@ describe('kindForCategory', () => {
     expect(kindForCategory('refund')).toBe('income');
     expect(kindForCategory('received_gift')).toBe('income');
     expect(kindForCategory('received_allowance')).toBe('income');
+    expect(kindForCategory('investment_income')).toBe('income');
   });
 });
 
@@ -39,8 +40,8 @@ describe('category registry partitions', () => {
     expect(GENERAL_SPENDING_CATEGORIES.some(c => c.key === 'no_spend')).toBe(false);
   });
 
-  it('INCOME_CATEGORIES contains exactly 5 income tokens', () => {
-    expect(INCOME_CATEGORIES.length).toBe(5);
+  it('INCOME_CATEGORIES contains exactly 6 income tokens', () => {
+    expect(INCOME_CATEGORIES.length).toBe(6);
     expect(INCOME_CATEGORIES.every(c => c.kind === 'income')).toBe(true);
   });
 
