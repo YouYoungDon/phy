@@ -186,3 +186,171 @@ Rolling read after the full pass:
   product change, intentionally **not** done here.
 - Confirm the framework `Storage` method surface (`clear`/`getAllKeys`) against
   Toss docs when the docs index is free, in case it simplifies future reset tooling.
+
+---
+
+# Update — 2026-05-30
+
+Five additional surfaces and five new storage keys have landed since the
+original prep was written. The §1 wipe procedure is **unchanged** (full
+host-app storage clear + cold relaunch still gets everything). This section
+supplements §2 (zero-state checklist) and §3 (walkthrough plan); read it
+alongside the originals.
+
+## Storage keys delta
+
+### Added (since 2026-05-24)
+
+| Storage key | Subsystem it controls | Written by | Read / hydrated by |
+|---|---|---|---|
+| `sobagi-discovery-queue` | bag Discover & Keep: gentle arrival queue (room front-id) | discoveryStore, useAppInit | discoveryStore.hydrate → Home discoverable render |
+| `sobagi-kept-item-ids` | bag Discover & Keep: items kept after pickup (replaces direct catalog fill) | discoveryStore, useAppInit | discoveryStore.hydrate → bag keepsake grid |
+| `sobagi-discovery-migration-done` | one-time migration flag for the Discover & Keep model | useAppInit | useAppInit init guard |
+| `sobagi-mailbox-remote-letters` | admin remote-letter sync cache (letterService.syncRemoteLetters) | letterService | letterService + home letter lookup |
+| `sobagi-admin-user-id` | per-install user id used by remote-letter sync | letterService | letterService |
+
+### Deprecated (still safe to ignore; not in current `STORAGE_KEYS`)
+
+| Storage key | Note |
+|---|---|
+| `sobagi-last-bag-open-days` | Removed when the bag-dot machinery was retired (Discover & Keep replaced it). No longer written or read; the row in §2's original table is stale. |
+
+A full host wipe still clears all of the above by virtue of clearing the
+underlying key-value store — no per-key handling required.
+
+## Checkpoints to add / update (supplements to §3)
+
+The original 1–8 checkpoints stay; the changes below either expand an
+existing checkpoint or insert a new one. Keep the same observation format
+(§4) for each.
+
+### ▶ Checkpoint 1 — *expand:* TodaySurface in the upper-right
+The home now has a soft cream **TodaySurface** at `top:48 right:16`
+([TodaySurface.tsx](../src/components/home/TodaySurface.tsx)), mirroring
+the level card on the left. On a 0-record first launch it shows only:
+- `5월 N일` (faint date line)
+- `오늘의 기록` (the only framing line)
+
+No count line, no won amount — `recordCount === 0` and
+`spendingCount === 0` both gate their lines off (intentional empty state).
+
+Add to the existing checkpoint-1 observations:
+- Does the empty TodaySurface (date + label only) read as **gentle and
+  intentionally-quiet** or **barren / unfinished**?
+- Note which time-of-day background was active (morning / afternoon /
+  evening / latenight) and whether the cream-on-room text is comfortably
+  legible. If any single background loses the text, the opacity ladder in
+  TodaySurface styles is the tuning surface — flag, don't patch in pass.
+- Does it pull the eye away from Sobagi, or sit politely in the corner?
+
+### ▶ NEW checkpoint 1.5 — First room discoverable + first pickup
+This is the **Discover & Keep loop** ([bag memory](
+../../.claude/projects/c--Users-toodo-workspace-phy/memory/project_sobagi_bag_discover_and_keep.md))
+and it can only be felt on a true fresh state. On a brand-new install
+(no records, no placements, no found trinkets), the day-0 catalog item
+that resolves first arrives **as a single soft-breathing emoji on the
+right side of the floor** at `~top:62% right:10%` — **before any record
+exists**. This is deliberate (it teaches the arrival → notice → keep loop
+from move zero).
+
+Sub-checkpoints, in order:
+
+1. **▶ Discoverable arrival** — see the gentle breathing emoji on the
+   floor. Confirm: ONLY one item visible (not multiple), gentle scale +
+   float (no glow / pulse / sparkle), positioned to the right of the
+   centered character.
+2. **▶ Pickup** — tap the discoverable. Confirm: a quiet item-specific
+   line appears (the catalog item's own desc, not the old generic
+   "주웠어요 🌿"); the room goes clean (no replacement appears immediately).
+3. **▶ Bag check** — open 가방. Confirm: the item now lives in the
+   keepsake grid; tapping it reveals a quiet object-voice line if the
+   item has one (else the catalog desc, else a default).
+
+Feel-tests:
+- Did the arrival read as **quietly noticed** or **spawned / announced**?
+- Does pickup feel like **keeping** or **collecting**?
+- Does the bag read as **a keepsake space** or **inventory**?
+
+These map to feel-tests (1), (5), and adjacent rows in the
+[bag memory's five dogfooding gates](
+../../.claude/projects/c--Users-toodo-workspace-phy/memory/project_sobagi_bag_discover_and_keep.md).
+
+### ▶ Checkpoint 6 — *expand:* income picker now has 6 cards
+The income picker today is six tokens (was five). Confirm the layout:
+
+```
+💼 월급        ✨ 보너스       🧾 환급
+💝 선물 받음   🤲 용돈 받음    🪙 투자수익
+```
+
+The `🪙 투자수익` row is the most finance-vocab token in the registry and
+was added 2026-05-28 as a deliberately-scoped exception (see
+[categories memory](
+../../.claude/projects/c--Users-toodo-workspace-phy/memory/feedback_sobagi_categories_life_scenes.md)).
+Sub-observations:
+
+- Confirm 🪙 투자수익 appears with the **same card chrome** as siblings —
+  no different color, no badge, no chart emoji.
+- Pick any income token (용돈 받음 or 투자수익 — both exercise the income
+  path), save with a small amount.
+- After save, return home and confirm:
+  - **TodaySurface** shows `1개의 기록` but **NO won amount line** (income
+    doesn't contribute to spendingCount).
+  - **DailySummary** shows `소소한 기록 1건` only, no `오늘 쓴 기록` row.
+  - No "오늘 들어온 돈" / income total appears anywhere in the home or
+    photocard surfaces. (Photocard button shouldn't appear for income-only
+    days — original constraint, unchanged.)
+
+This is the **income-amount-leak guard** — the most-likely place a future
+regression would surface as a stray "0원" or income total.
+
+### ▶ Checkpoint 7 — *replace:* mailbox is now "letter on the table"
+The flat newest-first scroll was retired 2026-05-26 ([mailbox memory](
+../../.claude/projects/c--Users-toodo-workspace-phy/memory/project_sobagi_mailbox_letter_on_table.md)).
+The current model: **new letters open + tap-to-fold** at the top; **read
+letters fold into 지난 편지** automatically; with no new mail, the read
+letters show directly as folded previews under a plain "지난 편지" label
+(no toggle).
+
+Sub-observations:
+
+1. **▶ First letter arrives** — open the mailbox: the new letter sits open
+   at the top with the warm `letterCardNew` background. Confirm: only one
+   open letter, no header chrome above it.
+2. **▶ Fold a new letter** — tap the open letter. Confirm: it folds to a
+   preview line (the post-2026-05-26 fold fix; before the fix new letters
+   couldn't be folded). Tap again → re-expands.
+3. **▶ Close + reopen** — close the sheet, reopen. The previously-read
+   letter has **settled into 지난 편지**. With only one delivered letter,
+   no drawer chrome appears — the read letter is the page content directly.
+4. **▶ Multiple letters, mixed states** — once you have ≥ 2 letters and at
+   least one read, confirm: new letters render open on top; the 지난 편지
+   drawer with a chevron sits below, folded by default; tap header to look
+   back.
+
+Feel-tests:
+- Does it read as **one letter quietly on the table** or **an inbox list**?
+- Does the auto-archive after reopen feel **invisible/right** or **a step
+  was missed**?
+- Did a read letter ever feel **forced open** when it should have folded?
+  (If yes, the "no forced-open fallback" guard has regressed — flag.)
+
+### ▶ Trinket re-find ×N — won't surface in fresh state
+The trinket re-find stacking only opens up once **all eight trinkets**
+(`f1`–`f8`) have been discovered, after which the gentle found-item
+trigger can occasionally re-deliver an owned one (
+[trinket stacking spec](../docs/superpowers/specs/2026-05-26-bag-trinket-refind-stacking-design.md)).
+A fresh-state pass cannot reach this — the cooldown + GRACE_DAYS + 8-token
+threshold means it surfaces only after weeks of use. **Skip during this
+pass; defer to a later, time-aged dogfood pass.**
+
+## Quick-reference: changed observation moments
+
+If you only have time for the *additions*, the four moments worth feeling
+this pass (vs. the original 1–8) are:
+
+1. **TodaySurface empty state** — date + label alone, no count, no amount.
+2. **Discoverable arrival + pickup** — the new Discover & Keep loop in its
+   freshest form.
+3. **Income-only day with 🪙 투자수익** — confirm zero income-amount leak.
+4. **Mailbox auto-archive after read** — letter settles on its own.
