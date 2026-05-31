@@ -5,6 +5,8 @@ import { useUserStore, getLevel } from '../store/userStore';
 import { UserState } from '../types';
 import { getOrCreateAdminUserId, adminApiUrl } from './letterService';
 
+declare const __DEV__: boolean;
+
 type AdminOperation = {
   id: string;
   type: string;
@@ -106,6 +108,12 @@ async function applyOperation(op: AdminOperation): Promise<void> {
 }
 
 export async function syncAdminOperations(): Promise<void> {
+  // Production safety gate: admin ops can mutate mailbox / discovery / user
+  // state remotely (set_user_state, reset_mailbox, reset_discovery, etc.).
+  // Shipped builds (ait build sets __DEV__=false) must never touch the admin
+  // endpoint.
+  if (!__DEV__) return;
+
   const userId = await getOrCreateAdminUserId();
   const applied = new Set((await storageService.load<string[]>(STORAGE_KEYS.ADMIN_APPLIED_OP_IDS)) ?? []);
 
