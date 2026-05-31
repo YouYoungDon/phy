@@ -18,7 +18,14 @@ interface UseRestedAdResult {
 // component handles this by reducing opacity and redirecting taps to a bubble
 // message.
 export function useRestedAd(): UseRestedAdResult {
-  const supported = loadFullScreenAd.isSupported() && showFullScreenAd.isSupported();
+  // Treat an empty ad group id as unsupported. Production builds with the
+  // PROD_REST_AD_GROUP_ID slot still empty resolve REST_AD_GROUP_ID to ''
+  // — the SDK would reject the load with a confusing error, and a stale
+  // dev id must never be used in production per AppsInToss policy. The TV
+  // surface already handles 'unsupported' as a soft, non-error state.
+  const supported = loadFullScreenAd.isSupported()
+    && showFullScreenAd.isSupported()
+    && REST_AD_GROUP_ID.length > 0;
   const [status, setStatus] = useState<RestAdStatus>(supported ? 'loading' : 'unsupported');
   const unregisterRef = useRef<(() => void) | null>(null);
   const mountedRef = useRef(true);
