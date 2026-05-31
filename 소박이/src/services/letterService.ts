@@ -10,8 +10,10 @@ declare global {
   var SOBAGI_ADMIN_LETTER_ENDPOINT: string | undefined;
 }
 
-function adminLetterEndpoint(): string {
-  return globalThis.SOBAGI_ADMIN_LETTER_ENDPOINT || DEFAULT_ADMIN_LETTER_ENDPOINT;
+export function adminApiUrl(path: string): string {
+  const base = globalThis.SOBAGI_ADMIN_LETTER_ENDPOINT || DEFAULT_ADMIN_LETTER_ENDPOINT;
+  const root = base.replace(/\/api\/letters$/, '');
+  return `${root}${path}`;
 }
 
 function createAdminUserId(): string {
@@ -24,7 +26,7 @@ function validRemoteLetter(value: unknown): value is RemoteLetter {
   return typeof row.id === 'string' && typeof row.body === 'string';
 }
 
-async function getOrCreateAdminUserId(): Promise<string> {
+export async function getOrCreateAdminUserId(): Promise<string> {
   const existing = await storageService.load<string>(STORAGE_KEYS.ADMIN_USER_ID);
   if (existing) return existing;
   const userId = createAdminUserId();
@@ -80,7 +82,7 @@ export async function syncRemoteLetters(): Promise<{
   const deliveredIds = (await storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS)) ?? [];
 
   try {
-    const response = await fetch(`${adminLetterEndpoint()}?userId=${encodeURIComponent(userId)}`);
+    const response = await fetch(`${adminApiUrl('/api/letters')}?userId=${encodeURIComponent(userId)}`);
     if (!response.ok) {
       return { userId, letters: storedLetters, deliveredIds };
     }

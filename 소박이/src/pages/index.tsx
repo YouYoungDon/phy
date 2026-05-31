@@ -29,6 +29,7 @@ import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
 import { keepsakeLineFor, pickupLineFor, trinketCounts } from '../services/discoveryService';
 import { splitMailbox, syncRemoteLetters } from '../services/letterService';
+import { syncAdminOperations } from '../services/adminOpsService';
 import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
@@ -154,9 +155,21 @@ function HomeScreen() {
       if (pending != null) pendingRef.current = pending;
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
       if (storedRemoteLetters) setRemoteLetters(storedRemoteLetters);
-      syncRemoteLetters().then(({ letters, deliveredIds: syncedDeliveredIds }) => {
-        setRemoteLetters(letters);
-        setDeliveredLetterIds(syncedDeliveredIds);
+      syncAdminOperations().then(() => {
+        Promise.all([
+          storageService.load<string[]>(STORAGE_KEYS.MAILBOX_READ_IDS),
+          storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
+          storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS),
+        ]).then(([nextReadIds, nextDeliveredIds, nextRemoteLetters]) => {
+          if (nextReadIds) setReadIds(new Set(nextReadIds));
+          if (nextDeliveredIds) setDeliveredLetterIds(nextDeliveredIds);
+          if (nextRemoteLetters) setRemoteLetters(nextRemoteLetters);
+        });
+      }).then(() => {
+        syncRemoteLetters().then(({ letters, deliveredIds: syncedDeliveredIds }) => {
+          setRemoteLetters(letters);
+          setDeliveredLetterIds(syncedDeliveredIds);
+        });
       });
     });
   }, []);
