@@ -12,6 +12,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockLoad.mockResolvedValue(null);
   (global.fetch as jest.Mock | undefined) = undefined;
+  (global as unknown as { SOBAGI_ADMIN_API_BASE_URL?: string }).SOBAGI_ADMIN_API_BASE_URL = undefined;
+  (global as unknown as { SOBAGI_ADMIN_LETTER_ENDPOINT?: string }).SOBAGI_ADMIN_LETTER_ENDPOINT = undefined;
 });
 
 describe('syncAdminOperations', () => {
@@ -57,6 +59,33 @@ describe('syncAdminOperations', () => {
     expect(storageService.save).toHaveBeenCalledWith(
       'sobagi-admin-applied-op-ids',
       ['op-1'],
+    );
+  });
+
+  it('fetches and applies operations in production when an https admin endpoint is configured', async () => {
+    (global as unknown as { __DEV__: boolean }).__DEV__ = false;
+    (global as unknown as { SOBAGI_ADMIN_API_BASE_URL: string }).SOBAGI_ADMIN_API_BASE_URL = 'https://admin.example.test';
+    mockLoad.mockImplementation(async (key: string) => {
+      if (key === 'sobagi-admin-user-id') return 'user-1';
+      if (key === 'sobagi-admin-applied-op-ids') return [];
+      if (key === 'sobagi-mailbox-delivered-ids') return [];
+      return null;
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        operations: [
+          { id: 'op-prod', type: 'deliver_letter', payload: { letterId: 'l-prod' } },
+        ],
+      }),
+    }) as jest.Mock;
+
+    await syncAdminOperations();
+
+    expect(global.fetch).toHaveBeenCalledWith('https://admin.example.test/api/ops/pending?userId=user-1');
+    expect(storageService.save).toHaveBeenCalledWith(
+      'sobagi-mailbox-delivered-ids',
+      ['l-prod'],
     );
   });
 });

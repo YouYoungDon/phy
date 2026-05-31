@@ -12,6 +12,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockLoad.mockResolvedValue(null);
   (global.fetch as jest.Mock | undefined) = undefined;
+  (global as unknown as { SOBAGI_ADMIN_API_BASE_URL?: string }).SOBAGI_ADMIN_API_BASE_URL = undefined;
+  (global as unknown as { SOBAGI_ADMIN_LETTER_ENDPOINT?: string }).SOBAGI_ADMIN_LETTER_ENDPOINT = undefined;
   // Preserve dev-mode behavior for the existing happy-path tests; the
   // production gate is exercised by the dedicated no-op test below.
   (global as unknown as { __DEV__: boolean }).__DEV__ = true;
@@ -207,5 +209,29 @@ describe('syncRemoteLetters', () => {
     expect(result.deliveredIds).toEqual(['001']);
     expect(result.letters).toEqual([{ id: 'local-1', body: 'b', sig: '— 소박이' }]);
     expect(storageService.save).not.toHaveBeenCalled();
+  });
+
+  it('fetches remote letters in production when an https admin endpoint is configured', async () => {
+    (global as unknown as { __DEV__: boolean }).__DEV__ = false;
+    (global as unknown as { SOBAGI_ADMIN_API_BASE_URL: string }).SOBAGI_ADMIN_API_BASE_URL = 'https://admin.example.test';
+    mockLoad.mockImplementation(async (key: string) => {
+      if (key === 'sobagi-admin-user-id') return 'user-1';
+      if (key === 'sobagi-mailbox-delivered-ids') return [];
+      if (key === 'sobagi-mailbox-remote-letters') return [];
+      return null;
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        letters: [
+          { id: 'admin-prod-letter', body: 'prod', sig: '소박이' },
+        ],
+      }),
+    }) as jest.Mock;
+
+    const result = await syncRemoteLetters();
+
+    expect(global.fetch).toHaveBeenCalledWith('https://admin.example.test/api/letters?userId=user-1');
+    expect(result.deliveredIds).toEqual(['admin-prod-letter']);
   });
 });

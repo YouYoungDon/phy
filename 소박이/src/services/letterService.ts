@@ -4,17 +4,35 @@ import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS, RemoteLetter } from '../constan
 
 declare const __DEV__: boolean;
 
-const DEFAULT_ADMIN_LETTER_ENDPOINT = 'http://127.0.0.1:4173/api/letters';
+const DEV_ADMIN_API_BASE_URL = 'http://127.0.0.1:4173';
+// Fill this with the deployed HTTPS admin API base URL before enabling
+// production operator letters/commands.
+const PROD_ADMIN_API_BASE_URL = '';
 
 declare global {
   // Optional dev override for a LAN/ngrok/admin-host URL. Kept off product UI.
   // eslint-disable-next-line no-var
   var SOBAGI_ADMIN_LETTER_ENDPOINT: string | undefined;
+  // eslint-disable-next-line no-var
+  var SOBAGI_ADMIN_API_BASE_URL: string | undefined;
 }
 
-export function adminApiUrl(path: string): string {
-  const base = globalThis.SOBAGI_ADMIN_LETTER_ENDPOINT || DEFAULT_ADMIN_LETTER_ENDPOINT;
-  const root = base.replace(/\/api\/letters$/, '');
+function configuredAdminApiBaseUrl(): string | null {
+  const legacyEndpoint = globalThis.SOBAGI_ADMIN_LETTER_ENDPOINT?.replace(/\/api\/letters$/, '');
+  const configured =
+    globalThis.SOBAGI_ADMIN_API_BASE_URL ||
+    legacyEndpoint ||
+    (__DEV__ ? DEV_ADMIN_API_BASE_URL : PROD_ADMIN_API_BASE_URL);
+  const base = configured.trim().replace(/\/$/, '');
+
+  if (!base) return null;
+  if (!__DEV__ && !base.startsWith('https://')) return null;
+  return base;
+}
+
+export function adminApiUrl(path: string): string | null {
+  const root = configuredAdminApiBaseUrl();
+  if (!root) return null;
   return `${root}${path}`;
 }
 
@@ -83,15 +101,13 @@ export async function syncRemoteLetters(): Promise<{
   const storedLetters = (await storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS)) ?? [];
   const deliveredIds = (await storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS)) ?? [];
 
-  // Production safety gate: never reach out to the admin host from shipped
-  // builds. The dev override global SOBAGI_ADMIN_LETTER_ENDPOINT is dev-only
-  // tooling; in ait build (__DEV__ === false) we always return local state.
-  if (!__DEV__) {
+  const url = adminApiUrl('/api/letters');
+  if (!url) {
     return { userId, letters: storedLetters, deliveredIds };
   }
 
   try {
-    const response = await fetch(`${adminApiUrl('/api/letters')}?userId=${encodeURIComponent(userId)}`);
+    const response = await fetch(`${url}?userId=${encodeURIComponent(userId)}`);
     if (!response.ok) {
       return { userId, letters: storedLetters, deliveredIds };
     }
