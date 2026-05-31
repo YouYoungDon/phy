@@ -2,6 +2,8 @@ import * as storageService from './storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { PERSONAL_LETTERS, ALL_SEASONAL_LETTERS, RemoteLetter } from '../constants/letters';
 
+declare const __DEV__: boolean;
+
 const DEFAULT_ADMIN_LETTER_ENDPOINT = 'http://127.0.0.1:4173/api/letters';
 
 declare global {
@@ -80,6 +82,13 @@ export async function syncRemoteLetters(): Promise<{
   const userId = await getOrCreateAdminUserId();
   const storedLetters = (await storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS)) ?? [];
   const deliveredIds = (await storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS)) ?? [];
+
+  // Production safety gate: never reach out to the admin host from shipped
+  // builds. The dev override global SOBAGI_ADMIN_LETTER_ENDPOINT is dev-only
+  // tooling; in ait build (__DEV__ === false) we always return local state.
+  if (!__DEV__) {
+    return { userId, letters: storedLetters, deliveredIds };
+  }
 
   try {
     const response = await fetch(`${adminApiUrl('/api/letters')}?userId=${encodeURIComponent(userId)}`);

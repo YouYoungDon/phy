@@ -12,6 +12,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockLoad.mockResolvedValue(null);
   (global.fetch as jest.Mock | undefined) = undefined;
+  // Preserve dev-mode behavior for the existing happy-path tests; the
+  // production gate is exercised by the dedicated no-op test below.
+  (global as unknown as { __DEV__: boolean }).__DEV__ = true;
 });
 
 describe('checkAndDeliverLetters — personal letters', () => {
@@ -184,5 +187,25 @@ describe('syncRemoteLetters', () => {
 
     expect(result.letters).toEqual([{ id: 'admin-old', body: 'old', sig: '— 소박이' }]);
     expect(result.deliveredIds).toEqual(['001']);
+  });
+
+  it('is a no-op in production builds (no fetch, returns local state)', async () => {
+    (global as unknown as { __DEV__: boolean }).__DEV__ = false;
+    mockLoad.mockImplementation(async (key: string) => {
+      if (key === 'sobagi-admin-user-id') return 'user-1';
+      if (key === 'sobagi-mailbox-delivered-ids') return ['001'];
+      if (key === 'sobagi-mailbox-remote-letters') return [{ id: 'local-1', body: 'b', sig: '— 소박이' }];
+      return null;
+    });
+    const fetchSpy = jest.fn();
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await syncRemoteLetters();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.userId).toBe('user-1');
+    expect(result.deliveredIds).toEqual(['001']);
+    expect(result.letters).toEqual([{ id: 'local-1', body: 'b', sig: '— 소박이' }]);
+    expect(storageService.save).not.toHaveBeenCalled();
   });
 });
