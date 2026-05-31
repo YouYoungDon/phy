@@ -11,7 +11,7 @@ export default defineConfig({
       brand: {
         displayName: '소박이',
         primaryColor: '#6B7C4A',
-        icon: '',
+        icon: 'https://static.toss.im/appsintoss/33565/c393e5d1-4648-47cd-8b44-41b43102f890.png',
       },
       permissions: [],
     }),

@@ -32,14 +32,26 @@ export function TodaySurface({
     <Pressable
       style={({ pressed }) => [styles.todaySurface, pressed && styles.todaySurfacePressed]}
       onPress={onPress}
+      // Extend the tap area without changing the visual layout — keeps the surface
+      // comfortable to tap without making it look button-like. Larger on the inside
+      // (bottom/left, where the room has room) than at the screen edges.
+      hitSlop={{ top: 8, right: 8, bottom: 12, left: 16 }}
     >
-      <Text style={styles.todayDate}>{formatKoreanMonthDay(todayDate)}</Text>
-      <Text style={styles.todayLabel}>오늘의 기록</Text>
+      <Text style={styles.todayDate} numberOfLines={1} ellipsizeMode="tail">
+        {formatKoreanMonthDay(todayDate)}
+      </Text>
+      <Text style={styles.todayLabel} numberOfLines={1} ellipsizeMode="tail">
+        오늘의 기록
+      </Text>
       {showAmount && (
-        <Text style={styles.todayAmount}>{totalAmount.toLocaleString()}원</Text>
+        <Text style={styles.todayAmount} numberOfLines={1} ellipsizeMode="tail">
+          {totalAmount.toLocaleString()}원
+        </Text>
       )}
       {showCount && (
-        <Text style={styles.todayCount}>{recordCount}개의 기록</Text>
+        <Text style={styles.todayCount} numberOfLines={1} ellipsizeMode="tail">
+          {recordCount}개의 기록
+        </Text>
       )}
     </Pressable>
   );
@@ -51,6 +63,13 @@ const styles = StyleSheet.create({
     top: 48,
     right: 16,
     alignItems: 'flex-end',
+    // Conservative cap so the surface stays in the upper-right lane even when the
+    // amount text is long. The header level card on the left has minWidth 160 +
+    // ~16px left margin + paddings, so it can reach ~200px from the left edge on
+    // a narrow phone; 130px on the right + 16px right margin keeps a comfortable
+    // gap from the level card on screens ≥ ~360px. Lines that ever exceed 130px
+    // get ellipsized (numberOfLines={1} on each Text below).
+    maxWidth: 130,
   },
   // Press feedback: brief opacity dip on the whole container. No color change, no scale,
   // no border highlight — discoverable, not button-like.

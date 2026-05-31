@@ -5,6 +5,7 @@ import { runExpenseCategoryMigration } from '../services/expenseMigration';
 import { normalizeExpense } from '../services/expenseService';
 import { promoteStaged } from '../services/foundItemService';
 import { checkAndDeliverLetters } from '../services/letterService';
+import { syncAdminOperations } from '../services/adminOpsService';
 import { checkForPlacement } from '../services/roomPresenceService';
 import { computeTimeArrivals, enqueueArrivals, seedKeptForMigration, isFreshInstall } from '../services/discoveryService';
 import { useDiscoveryStore } from '../store/discoveryStore';
@@ -205,6 +206,7 @@ export function useAppInit(): boolean {
         const today = getLocalDateString(new Date());
         void storageService.save(STORAGE_KEYS.LAST_VISIT_DATE, today);
         await checkAndDeliverLetters(recomputedDays);
+        await syncAdminOperations();
 
         const emotion: SobagiEmotion =
           lastEmotionRaw != null && VALID_EMOTIONS.includes(lastEmotionRaw as SobagiEmotion)

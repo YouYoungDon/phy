@@ -39,6 +39,7 @@ export const CATEGORIES: readonly ExpenseCategoryMeta[] = [
   { key: 'refund',              label: '환급',      emoji: '🧾',   inPicker: true,  kind: 'income',   memoSuggestions: [] },
   { key: 'received_gift',       label: '선물 받음', emoji: '💝',   inPicker: true,  kind: 'income',   memoSuggestions: [] },
   { key: 'received_allowance',  label: '용돈 받음', emoji: '🤲',   inPicker: true,  kind: 'income',   memoSuggestions: [] },
+  { key: 'investment_income',   label: '투자수익',  emoji: '🪙',   inPicker: true,  kind: 'income',   memoSuggestions: [] },
 ] as const;
 
 export const CATEGORY_BY_TOKEN: Record<ExpenseCategory, ExpenseCategoryMeta> =

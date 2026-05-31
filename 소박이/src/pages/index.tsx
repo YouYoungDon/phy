@@ -24,11 +24,12 @@ import { DiscoverableItem } from '../components/room/DiscoverableItem';
 import { RestPrompt } from '../components/room/RestPrompt';
 import { useRestedAd } from '../hooks/useRestedAd';
 import { useAndroidBack } from '../hooks/useAndroidBack';
-import { getEffectiveRestsToday, grantRest } from '../services/restService';
+import { getEffectiveRestsToday, grantRest, isSuppressedForToday, REST_DAILY_CAP } from '../services/restService';
 import { getPrevVisitDate } from '../hooks/useAppInit';
 import { selectAmbientLine, AmbientContext, AmbientSession } from '../services/ambientDialogueService';
 import { keepsakeLineFor, pickupLineFor, trinketCounts } from '../services/discoveryService';
 import { splitMailbox, syncRemoteLetters } from '../services/letterService';
+import { syncAdminOperations } from '../services/adminOpsService';
 import { useDiscoveryStore } from '../store/discoveryStore';
 import { RECENT_RING_SIZE } from '../constants/ambientDialogue';
 
@@ -103,6 +104,10 @@ function HomeScreen() {
   const [deliveredLetterIds, setDeliveredLetterIds] = useState<string[]>([]);
   const [remoteLetters, setRemoteLetters] = useState<RemoteLetter[]>([]);
   const [foundItemIds, setFoundItemIds] = useState<string[]>([]);
+  // TV reward popup — "don't show today" opt-out and reward/limit popup state.
+  // Date-scoped via isSuppressedForToday; stale dates auto-expire (no reset).
+  const [suppressRestPopupDate, setSuppressRestPopupDate] = useState<string | null>(null);
+  const [restSheetState, setRestSheetState] = useState<'reward' | 'daily-limit-reached'>('reward');
   // Letters the user has explicitly toggled away from their default fold state: a new
   // letter (expanded by default) toggles to folded; a read letter (folded by default)
   // toggles to expanded. Render-only; resets when the sheet closes.
@@ -148,15 +153,29 @@ function HomeScreen() {
       storageService.load<string>(STORAGE_KEYS.PENDING_NEW_ITEM_ID),
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
       storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters]) => {
+      storageService.load<string>(STORAGE_KEYS.SUPPRESS_REST_POPUP_DATE),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters, suppressDate]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) pendingRef.current = pending;
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
       if (storedRemoteLetters) setRemoteLetters(storedRemoteLetters);
-      syncRemoteLetters().then(({ letters, deliveredIds: syncedDeliveredIds }) => {
-        setRemoteLetters(letters);
-        setDeliveredLetterIds(syncedDeliveredIds);
+      if (suppressDate) setSuppressRestPopupDate(suppressDate);
+      syncAdminOperations().then(() => {
+        Promise.all([
+          storageService.load<string[]>(STORAGE_KEYS.MAILBOX_READ_IDS),
+          storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
+          storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS),
+        ]).then(([nextReadIds, nextDeliveredIds, nextRemoteLetters]) => {
+          if (nextReadIds) setReadIds(new Set(nextReadIds));
+          if (nextDeliveredIds) setDeliveredLetterIds(nextDeliveredIds);
+          if (nextRemoteLetters) setRemoteLetters(nextRemoteLetters);
+        });
+      }).then(() => {
+        syncRemoteLetters().then(({ letters, deliveredIds: syncedDeliveredIds }) => {
+          setRemoteLetters(letters);
+          setDeliveredLetterIds(syncedDeliveredIds);
+        });
       });
     });
   }, []);
@@ -384,13 +403,8 @@ function HomeScreen() {
                 <Pressable
                   style={styles.utilityBtn}
                   onPress={() => {
-                    if (effectiveRestsToday >= 2) {
-                      setBubbleMessage('오늘은 충분히 쉬었어요 🌿');
-                      setBubbleVisible(true);
-                      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-                      hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
-                      return;
-                    }
+                    // Infrastructure short-circuits run first — always notify
+                    // even if the user suppressed the popup for today.
                     if (adState.status === 'unsupported') {
                       setBubbleMessage('아직 준비 중이에요 🌿');
                       setBubbleVisible(true);
@@ -405,6 +419,18 @@ function HomeScreen() {
                       hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 3000);
                       return;
                     }
+                    // Daily limit takes precedence — informational popup,
+                    // overrides the suppress flag.
+                    if (effectiveRestsToday >= REST_DAILY_CAP) {
+                      setRestSheetState('daily-limit-reached');
+                      openSheet('rest');
+                      return;
+                    }
+                    // User opted out for today → silent no-op.
+                    if (isSuppressedForToday(suppressRestPopupDate, todayStr)) {
+                      return;
+                    }
+                    setRestSheetState('reward');
                     openSheet('rest');
                   }}
                 >
@@ -535,8 +561,18 @@ function HomeScreen() {
         )}
         {activeSheet === 'rest' && (
           <RestPrompt
+            state={restSheetState}
             adStatus={adState.status}
-            onConfirm={() => {
+            watchesToday={effectiveRestsToday}
+            dailyCap={REST_DAILY_CAP}
+            onConfirm={(suppressToday) => {
+              // Persist suppress preference BEFORE firing the ad — if the user
+              // closes the sheet during ad load, the choice still sticks.
+              if (suppressToday) {
+                const today = getLocalDateString(new Date());
+                setSuppressRestPopupDate(today);
+                void storageService.save(STORAGE_KEYS.SUPPRESS_REST_POPUP_DATE, today);
+              }
               closeSheet();
               adState.show(() => {
                 // grantRest reads/writes the store and persists to storage;
@@ -544,12 +580,10 @@ function HomeScreen() {
                 // user watched an ad and got nothing. Log instead of dropping.
                 grantRest()
                   .then(() => {
-                    // Quiet post-watch line. Shared bubble surface with Sobagi
-                    // tap and the daily-done message; just update text. Pebbles
-                    // still accrue inside grantRest (toward the future rare-item
-                    // reward), but the count is no longer surfaced — the jar that
-                    // displayed it was removed, and a bare "+N" reads as a reward
-                    // tally, which this space deliberately avoids.
+                    // Quiet post-watch line. Pebble accrual is exactly 1 per
+                    // watch now (matches the popup's "조약돌 1개" promise);
+                    // the count itself stays unsurfaced — the popup's X/3 line
+                    // is the only place daily progress appears.
                     setBubbleMessage('소박이가 한 숨 돌렸어요 🌿');
                     setBubbleVisible(true);
                     if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
@@ -560,7 +594,15 @@ function HomeScreen() {
                   });
               });
             }}
-            onCancel={closeSheet}
+            onCancel={(suppressToday) => {
+              if (suppressToday) {
+                const today = getLocalDateString(new Date());
+                setSuppressRestPopupDate(today);
+                void storageService.save(STORAGE_KEYS.SUPPRESS_REST_POPUP_DATE, today);
+              }
+              closeSheet();
+            }}
+            onDismiss={closeSheet}
           />
         )}
         {activeSheet === 'bag' && (

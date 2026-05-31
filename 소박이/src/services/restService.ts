@@ -10,14 +10,18 @@ import { STORAGE_KEYS } from '../constants/storage';
 import { REST_LETTERS, RestLetter } from '../constants/restLetters';
 import { getLocalDateString } from '../utils/date';
 
-export const PEBBLE_MIN = 5;
-export const PEBBLE_MAX = 20;
-export const REST_DAILY_CAP = 2;
+// Reward magnitude is intentionally fixed at 1: the TV reward popup
+// advertises "조약돌 1개" and the user-facing promise must match. Old
+// random range (5–20) was kept invisible from the UI; with the popup
+// surfacing the amount, predictability beats variance. Rest-letter
+// thresholds (REST_LETTERS) are unchanged — delivery rate slows
+// accordingly (see the 2026-05-31 TV reward popup spec for the
+// deliberate trade-off).
+export const PEBBLE_PER_REST = 1;
+export const REST_DAILY_CAP = 3;
 
-/** Inclusive integer in [PEBBLE_MIN, PEBBLE_MAX]. */
 export function computePebbleDelta(): number {
-  const range = PEBBLE_MAX - PEBBLE_MIN + 1;
-  return PEBBLE_MIN + Math.floor(Math.random() * range);
+  return PEBBLE_PER_REST;
 }
 
 /**
@@ -57,6 +61,19 @@ export function canRest(
   todayStr: string,
 ): boolean {
   return getEffectiveRestsToday(storedRestsToday, lastRestDate, todayStr) < REST_DAILY_CAP;
+}
+
+/**
+ * Mirrors getEffectiveRestsToday's daily-reset shape. Returns true only
+ * when the user has explicitly opted out of the rest reward popup for
+ * the current local date. Past-date suppress flags are treated as not
+ * suppressed (auto-expire — no explicit reset is required).
+ */
+export function isSuppressedForToday(
+  suppressDate: string | null,
+  todayStr: string,
+): boolean {
+  return suppressDate !== null && suppressDate === todayStr;
 }
 
 export interface RestGrant {

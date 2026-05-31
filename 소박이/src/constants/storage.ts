@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
   MAILBOX_DELIVERED_IDS: 'sobagi-mailbox-delivered-ids',
   MAILBOX_REMOTE_LETTERS: 'sobagi-mailbox-remote-letters',
   ADMIN_USER_ID: 'sobagi-admin-user-id',
+  ADMIN_APPLIED_OP_IDS: 'sobagi-admin-applied-op-ids',
   ROOM_PLACEMENTS: 'sobagi-room-placements',
   PENDING_PLACEMENT: 'sobagi-pending-placement',
   CATEGORY_MIGRATION_DONE: 'sobagi-category-migration-done',
@@ -22,4 +23,5 @@ export const STORAGE_KEYS = {
   KEPT_ITEM_IDS: 'sobagi-kept-item-ids',
   DISCOVERY_QUEUE: 'sobagi-discovery-queue',
   DISCOVERY_MIGRATION_DONE: 'sobagi-discovery-migration-done',
+  SUPPRESS_REST_POPUP_DATE: 'sobagi-suppress-rest-popup-date',
 } as const;

@@ -3,26 +3,17 @@ import {
   findCrossedLetterThresholds,
   getEffectiveRestsToday,
   canRest,
-  PEBBLE_MIN,
-  PEBBLE_MAX,
+  isSuppressedForToday,
+  PEBBLE_PER_REST,
   REST_DAILY_CAP,
 } from '../src/services/restService';
 
 type ThresholdItem = { id: string; triggerPebbles: number };
 
 describe('computePebbleDelta', () => {
-  it('returns a value within [PEBBLE_MIN, PEBBLE_MAX]', () => {
-    for (let i = 0; i < 200; i++) {
-      const v = computePebbleDelta();
-      expect(v).toBeGreaterThanOrEqual(PEBBLE_MIN);
-      expect(v).toBeLessThanOrEqual(PEBBLE_MAX);
-      expect(Number.isInteger(v)).toBe(true);
-    }
-  });
-
-  it('PEBBLE_MIN is 5 and PEBBLE_MAX is 20', () => {
-    expect(PEBBLE_MIN).toBe(5);
-    expect(PEBBLE_MAX).toBe(20);
+  it('returns the fixed PEBBLE_PER_REST value (1)', () => {
+    expect(computePebbleDelta()).toBe(1);
+    expect(PEBBLE_PER_REST).toBe(1);
   });
 });
 
@@ -77,21 +68,37 @@ describe('getEffectiveRestsToday', () => {
 });
 
 describe('canRest', () => {
-  it('allows rest on a fresh day even when storedRestsToday is 2', () => {
+  it('allows rest on a fresh day even when storedRestsToday is at the old cap (2)', () => {
     expect(canRest(2, '2026-05-20', '2026-05-21')).toBe(true);
   });
 
   it('allows rest when restsToday < REST_DAILY_CAP', () => {
     expect(canRest(0, '2026-05-21', '2026-05-21')).toBe(true);
     expect(canRest(1, '2026-05-21', '2026-05-21')).toBe(true);
+    expect(canRest(2, '2026-05-21', '2026-05-21')).toBe(true);
   });
 
   it('blocks rest when restsToday >= REST_DAILY_CAP', () => {
-    expect(canRest(2, '2026-05-21', '2026-05-21')).toBe(false);
+    expect(canRest(3, '2026-05-21', '2026-05-21')).toBe(false);
+    expect(canRest(4, '2026-05-21', '2026-05-21')).toBe(false);
   });
 
-  it('REST_DAILY_CAP is 2', () => {
-    expect(REST_DAILY_CAP).toBe(2);
+  it('REST_DAILY_CAP is 3', () => {
+    expect(REST_DAILY_CAP).toBe(3);
+  });
+});
+
+describe('isSuppressedForToday', () => {
+  it('returns false when suppressDate is null', () => {
+    expect(isSuppressedForToday(null, '2026-05-31')).toBe(false);
+  });
+
+  it('returns false when suppressDate is from a past day', () => {
+    expect(isSuppressedForToday('2026-05-30', '2026-05-31')).toBe(false);
+  });
+
+  it('returns true when suppressDate matches today', () => {
+    expect(isSuppressedForToday('2026-05-31', '2026-05-31')).toBe(true);
   });
 });
 
@@ -123,11 +130,10 @@ describe('grantRest', () => {
     });
   });
 
-  it('grants 5–20 pebbles within the documented range', async () => {
+  it('grants exactly 1 pebble per watch', async () => {
     await grantRest();
     const after = useUserStore.getState().pebbleCount;
-    expect(after).toBeGreaterThanOrEqual(5);
-    expect(after).toBeLessThanOrEqual(20);
+    expect(after).toBe(1);
   });
 
   it('increments restsToday and sets lastRestDate / lastRestAt', async () => {
@@ -159,9 +165,9 @@ describe('grantRest', () => {
   });
 
   it('delivers a letter when its pebble threshold is crossed', async () => {
-    // Starting at 25 with delta in [5, 20] gives newCount in [30, 45].
-    // Threshold 30 is always crossed — deterministic regardless of RNG.
-    useUserStore.setState({ pebbleCount: 25 });
+    // Starting at 29 with delta fixed at 1 gives newCount=30 — exactly
+    // crosses rest1's threshold. Deterministic.
+    useUserStore.setState({ pebbleCount: 29 });
     (storageService.load as jest.Mock).mockResolvedValueOnce(null);
     const result = await grantRest();
     expect(result.lettersDelivered.map((l) => l.id)).toContain('rest1');
@@ -173,7 +179,7 @@ describe('grantRest', () => {
 
   it('does not re-deliver a letter the mailbox already has', async () => {
     // Same setup as above (always crosses 30), but rest1 already delivered.
-    useUserStore.setState({ pebbleCount: 25 });
+    useUserStore.setState({ pebbleCount: 29 });
     (storageService.load as jest.Mock).mockResolvedValueOnce(['rest1']);
     const result = await grantRest();
     expect(result.lettersDelivered.map((l) => l.id)).not.toContain('rest1');

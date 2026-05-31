@@ -29,7 +29,8 @@ export type ExpenseCategory =
   | 'bonus'
   | 'refund'
   | 'received_gift'
-  | 'received_allowance';
+  | 'received_allowance'
+  | 'investment_income';
 
 export interface Expense {
   id: string;
