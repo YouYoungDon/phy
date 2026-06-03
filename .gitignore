@@ -26,3 +26,16 @@ admin.git.backup/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Secrets — never commit private keys or certificates. The mTLS
+# certificate issued for AppsInToss server-to-server APIs (Toss
+# 로그인 / 토스 페이 / IAP / 푸시 / 프로모션 — needed for v2
+# cash reward) lives outside the repo by design. These patterns
+# are a safety net in case a cert ever gets dragged in by accident.
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+mTLS_인증서*/
+secrets/
