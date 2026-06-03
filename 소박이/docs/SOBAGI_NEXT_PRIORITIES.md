@@ -1,9 +1,15 @@
 # Sobagi — Next Priorities
 
-**Last updated:** 2026-05-25 (Engineering — bag "Discover & Keep" stages 1–4 landed; dogfooding before stage-5 polish)
+**Last updated:** 2026-06-03 (release-v1 shipped — TV reward popup live with prod rewarded ad; v2 cash-reward commitment recorded)
 **Branch:** apps-in-toss-clean
 
 This is the ordered work queue. Keep it short. Strike through completed items. Move done work to SOBAGI_CURRENT_STATE.md.
+
+---
+
+## v2 commitments (recorded — for v2 brainstorming cycle)
+
+- [ ] **🟧 v2 — TV 광고 보상을 토스 포인트(짤짤이 캐시)로 확장** — 2026-06-03 사용자 합의 ("이거 꼭 하자"). v1은 in-app 조약돌 1개 적립 모델로 출시; v2에서 실제 캐시 등가 보상으로 확장. **단순 코드 변경이 아닌 제품 정체성 결정** — 토스 로그인 연동 / 서버측 검증 / 정산 인프라 / AppsInToss 별도 승인이 동시에 필요. v1 가드레일 (cozy 톤, "보상 획득!" 류 게임 언어 금지, popup 톤 유지)은 v2에서도 그대로. 캐시는 TV reward popup이라는 scoped surface에만 등장 — 가방/우편함/통계/홈은 절대 캐시 표현 X. **메모리 기록: `project_sobagi_v2_cash_reward`**. 관련 docs: [apps-in-toss-docs.txt:32902,32945,62845](../../apps-in-toss-docs.txt) (`grantPromotionRewardForGame` 등).
 
 ---
 
@@ -37,7 +43,7 @@ Full surface × scenario matrix run after the monthly-settlement landing (spendi
 
 - [ ] **Tier 2/3 income dialogue copy review** — code-quality review of sub-spec C Task 3 flagged tier progression weakness: tier 2 line 1 reads flat, tier 3 recycles "든든" from tier 1. Three lines per tier are tonally too close; needs product copy pass. Affected: `src/constants/dialogue.ts:INCOME_REACTION_POOLS`.
 - [x] ~~**`amount` prop deprecation on `PhotocardView`**~~ — removed 2026-05-24. Prop + JSDoc dropped from `PhotocardView`; dead `todayTotal` calc removed from `reaction.tsx`; unused prop pass removed from `stats.tsx`. Typecheck clean, 285 tests pass.
-- [ ] **Rest-TV: swap dev ad group ID for production** — `src/constants/ads.ts` exports `REST_AD_GROUP_ID = 'ait.dev.43daa14da3ae487b'` (the AppsInToss dev test ID). Before release, replace with the production rewarded ad group ID issued in the AppsInToss console. One-line change.
+- [x] ~~**Rest-TV: swap dev ad group ID for production**~~ — landed 2026-06-03 as part of release-v1. `ads.ts` now splits DEV/PROD via `__DEV__` gate; `PROD_REST_AD_GROUP_ID = 'ait.v2.live.efe1744acc8343eb'` (console-registered rewarded ad group). dev id is dead-code-eliminated from prod bundles (verified via dist/ grep).
 - [ ] **Rest-TV: rare ambient item delivery at 500/1500/3000 pebbles** — hook exists in `restService.grantRest` as a TODO marker; item pool and delivery shape need a separate spec. Out of scope of the initial rest-TV landing.
 - [ ] **Rest-TV: on-device visual QA on small phones** — verify TV+mailbox cluster, jar fill stages, and post-watch bubble all read calmly on iPhone SE-class widths. Code-level dimensional QA passed; live-device check pending.
 - [ ] **Photocard: add time-of-day label at card top** — date (top-left) + time-of-day icon (아침☀️ / 낮🌤 / 저녁🌅 / 밤🌙, top-right); derives from `currentHour` already available in `reaction.tsx`; adds "snapshot of a moment" specificity

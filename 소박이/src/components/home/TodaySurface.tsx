@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { formatKoreanMonthDay } from '../../utils/date';
+import { formatKoreanYearMonthDay } from '../../utils/date';
 
 interface TodaySurfaceProps {
   todayDate: Date;
@@ -17,8 +17,8 @@ interface TodaySurfaceProps {
 // mirrors the level card on the left (top: 48). No card, no border, no CTA: cream-tone
 // text with a soft drop shadow so it survives all four time-of-day backgrounds
 // (morning / afternoon / evening / latenight). Quiet about zero — when today has no
-// records, only the date + the "오늘의 기록" label render; the amount line follows
-// DailySummary's spendingCount > 0 rule so no ₩0 is ever displayed.
+// records, the label reads "오늘은 무지출이에요" instead of "오늘의 기록"; the amount
+// line follows DailySummary's spendingCount > 0 rule so no ₩0 is ever displayed.
 export function TodaySurface({
   todayDate,
   totalAmount,
@@ -28,6 +28,7 @@ export function TodaySurface({
 }: TodaySurfaceProps) {
   const showAmount = spendingCount > 0;
   const showCount = recordCount > 0;
+  const isEmpty = recordCount === 0;
   return (
     <Pressable
       style={({ pressed }) => [styles.todaySurface, pressed && styles.todaySurfacePressed]}
@@ -38,10 +39,10 @@ export function TodaySurface({
       hitSlop={{ top: 8, right: 8, bottom: 12, left: 16 }}
     >
       <Text style={styles.todayDate} numberOfLines={1} ellipsizeMode="tail">
-        {formatKoreanMonthDay(todayDate)}
+        {formatKoreanYearMonthDay(todayDate)}
       </Text>
       <Text style={styles.todayLabel} numberOfLines={1} ellipsizeMode="tail">
-        오늘의 기록
+        {isEmpty ? '오늘은 무지출이에요 🌿' : '오늘의 기록'}
       </Text>
       {showAmount && (
         <Text style={styles.todayAmount} numberOfLines={1} ellipsizeMode="tail">
