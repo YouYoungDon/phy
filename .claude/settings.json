@@ -1,8 +1,38 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/Users/toodo/workspace/phy diff --stat)",
+      "Bash(git -C /c/Users/toodo/workspace/phy add 소박이/src/constants/ads.ts 소박이/src/hooks/useRestedAd.ts 소박이/pockeksobak.ait)",
+      "Bash(git -C /c/Users/toodo/workspace/phy commit -m ' *)",
+      "Bash(git -C /c/Users/toodo/workspace/phy tag -f -a release-v1 -m ' *)",
+      "Bash(git -C /c/Users/toodo/workspace/phy push origin release-v1 --force)",
+      "Bash(git -C /c/Users/toodo/workspace/phy log -1 --format='  %s' 0ff2146)",
+      "Bash(git -C /c/Users/toodo/workspace/phy show release-v1:소박이/src/constants/ads.ts)",
+      "Bash(git -C /c/Users/toodo/workspace/phy ls-remote --tags origin release-v1)",
+      "Bash(node node_modules/jest/bin/jest.js --testPathPattern=restService)",
+      "Bash(git -C /c/Users/toodo/workspace/phy add 소박이/src/services/restService.ts 소박이/__tests__/restService.test.ts 소박이/docs/superpowers/specs/2026-05-31-tv-reward-popup-design.md 소박이/docs/superpowers/plans/2026-05-31-tv-reward-popup.md)",
+      "Bash(git -C /c/Users/toodo/workspace/phy add 소박이/src/constants/storage.ts)",
+      "Bash(git -C /c/Users/toodo/workspace/phy add 소박이/src/components/room/RestPrompt.tsx 소박이/src/pages/index.tsx)",
+      "Bash(git -C /c/Users/toodo/workspace/phy diff --stat 소박이/pockeksobak.ait)",
+      "Bash(node -e ' *)",
+      "Bash(git -C /c/Users/toodo/workspace/phy log -1 --format='  %s' 1f18694)",
+      "Bash(git -C /c/Users/toodo/workspace/phy show release-v1:소박이/src/services/restService.ts)",
+      "Bash(git -C /c/Users/toodo/workspace/phy show release-v1:소박이/src/components/room/RestPrompt.tsx)",
+      "Bash(git -C /c/Users/toodo/workspace/phy diff --stat 소박이/src/constants/ads.ts 소박이/pockeksobak.ait)",
+      "Bash(git -C /c/Users/toodo/workspace/phy add 소박이/src/constants/ads.ts 소박이/pockeksobak.ait)",
+      "Bash(xxd)",
+      "Bash(git -C /c/Users/toodo/workspace/phy log --oneline origin/apps-in-toss-clean..HEAD)",
+      "Bash(git -C /c/Users/toodo/workspace/phy diff .claude/settings.json)",
+      "Bash(git -C /c/Users/toodo/workspace/phy add .claude/settings.json)"
+    ]
+  },
   "mcpServers": {
     "appsintos": {
       "command": "ax",
-      "args": ["mcp", "start"]
+      "args": [
+        "mcp",
+        "start"
+      ]
     }
   }
 }
