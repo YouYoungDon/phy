@@ -1,8 +1,8 @@
-import { Expense, ExpenseCategory, UserState, RecordKind } from '../types';
+import { Expense, ExpenseCategory, RecordKind } from '../types';
 import * as storageService from './storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { useExpenseStore } from '../store/expenseStore';
-import { useUserStore } from '../store/userStore';
+import { useUserStore, buildUserSnapshot } from '../store/userStore';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
 import { checkForFoundItem } from './foundItemService';
 import { kindForCategory } from '../constants/categories';
@@ -93,22 +93,6 @@ export async function recordNoSpend(createdAt: string): Promise<boolean> {
     localDate: getLocalDateString(new Date(createdAt)),
   };
   return saveExpense(expense);
-}
-
-// Build the persisted UserState snapshot from the live user store.
-function buildUserSnapshot(): UserState {
-  const s = useUserStore.getState();
-  return {
-    level: s.level,
-    streak: s.streak,
-    totalRecordCount: s.totalRecordCount,
-    recordedDaysCount: s.recordedDaysCount,
-    roomStage: s.roomStage,
-    pebbleCount: s.pebbleCount,
-    restsToday: s.restsToday,
-    lastRestDate: s.lastRestDate,
-    lastRestAt: s.lastRestAt,
-  };
 }
 
 // In-memory removal + derived-state recompute (recordedDays / streak / total).
