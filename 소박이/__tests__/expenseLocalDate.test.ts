@@ -1,4 +1,4 @@
-import { expenseLocalDate, getLocalDateString, formatKoreanMonthDay } from '../src/utils/date';
+import { expenseLocalDate, getLocalDateString, formatKoreanYearMonthDay } from '../src/utils/date';
 
 describe('expenseLocalDate', () => {
   it('prefers the stored localDate when present', () => {
@@ -38,18 +38,18 @@ describe('expenseLocalDate', () => {
   });
 });
 
-describe('formatKoreanMonthDay', () => {
+describe('formatKoreanYearMonthDay', () => {
   it('formats a mid-month date', () => {
     // Date months are 0-indexed: month 4 = May.
-    expect(formatKoreanMonthDay(new Date(2026, 4, 26))).toBe('5월 26일');
+    expect(formatKoreanYearMonthDay(new Date(2026, 4, 26))).toBe('2026년 5월 26일');
   });
   it('formats day 1', () => {
-    expect(formatKoreanMonthDay(new Date(2026, 4, 1))).toBe('5월 1일');
+    expect(formatKoreanYearMonthDay(new Date(2026, 4, 1))).toBe('2026년 5월 1일');
   });
   it('formats the last day of a 31-day month', () => {
-    expect(formatKoreanMonthDay(new Date(2026, 6, 31))).toBe('7월 31일');
+    expect(formatKoreanYearMonthDay(new Date(2026, 6, 31))).toBe('2026년 7월 31일');
   });
   it('formats January (single-digit month)', () => {
-    expect(formatKoreanMonthDay(new Date(2026, 0, 5))).toBe('1월 5일');
+    expect(formatKoreanYearMonthDay(new Date(2026, 0, 5))).toBe('2026년 1월 5일');
   });
 });

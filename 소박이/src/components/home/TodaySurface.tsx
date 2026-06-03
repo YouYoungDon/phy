@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
-import { formatKoreanMonthDay } from '../../utils/date';
+import { formatKoreanYearMonthDay } from '../../utils/date';
 
 interface TodaySurfaceProps {
   todayDate: Date;
@@ -39,10 +39,10 @@ export function TodaySurface({
       hitSlop={{ top: 8, right: 8, bottom: 12, left: 16 }}
     >
       <Text style={styles.todayDate} numberOfLines={1} ellipsizeMode="tail">
-        {formatKoreanMonthDay(todayDate)}
+        {formatKoreanYearMonthDay(todayDate)}
       </Text>
       <Text style={styles.todayLabel} numberOfLines={1} ellipsizeMode="tail">
-        {isEmpty ? '오늘은 무지출이에요' : '오늘의 기록'}
+        {isEmpty ? '오늘은 무지출이에요 🌿' : '오늘의 기록'}
       </Text>
       {showAmount && (
         <Text style={styles.todayAmount} numberOfLines={1} ellipsizeMode="tail">
