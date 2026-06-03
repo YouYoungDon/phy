@@ -18,11 +18,11 @@ declare const __DEV__: boolean;
 // here, and never reuse the production id during dev/QA.
 const DEV_REST_AD_GROUP_ID = 'ait.dev.43daa14da3ae487b';
 
-// Fill this with the production rewarded ad group id from the AppsInToss
-// developer console (광고 → 광고 그룹 → 보상형) before submitting a build
-// that exposes the rest/TV feature. Empty string = subsystem intentionally
-// dormant in this build.
-const PROD_REST_AD_GROUP_ID = '';
+// Production rewarded ad group id, registered in the AppsInToss
+// developer console (광고 → 광고 그룹 → 보상형). Used by the TV/rest
+// reward popup in production builds. The "ait.v2.live." prefix marks
+// this as a console-issued live id, distinct from dev/test ids.
+const PROD_REST_AD_GROUP_ID = 'ait.v2.live.efe1744acc8343eb';
 
 export const REST_AD_GROUP_ID: string = __DEV__
   ? DEV_REST_AD_GROUP_ID
