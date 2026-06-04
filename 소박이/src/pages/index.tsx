@@ -50,6 +50,11 @@ function buildLetterLookup(): Map<string, MailboxLetter> {
 
 const LETTER_LOOKUP = buildLetterLookup();
 
+// Sobagi's first line — shown once, automatically, on the very first app open
+// (persisted via FIRST_GREETING_SHOWN). Sobagi is otherwise silent until tapped;
+// this is the single auto-shown greeting.
+const FIRST_GREETING = '소박이와 가계부 쓰고 부자되세요';
+
 
 // Whole calendar days between two YYYY-MM-DD strings (noon-anchored, DST-safe).
 function calendarDaysBetween(laterYmd: string, earlierYmd: string): number {
@@ -158,13 +163,23 @@ function HomeScreen() {
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
       storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS),
       storageService.load<string>(STORAGE_KEYS.SUPPRESS_REST_POPUP_DATE),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters, suppressDate]) => {
+      storageService.load<boolean>(STORAGE_KEYS.FIRST_GREETING_SHOWN),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters, suppressDate, greetingShown]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) pendingRef.current = pending;
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
       if (storedRemoteLetters) setRemoteLetters(storedRemoteLetters);
       if (suppressDate) setSuppressRestPopupDate(suppressDate);
+      // First-ever open: auto-show the welcome line once, then persist the flag
+      // so it never shows again. The only line Sobagi says without a tap.
+      if (!greetingShown) {
+        setBubbleMessage(FIRST_GREETING);
+        setBubbleVisible(true);
+        if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 5000);
+        void storageService.save(STORAGE_KEYS.FIRST_GREETING_SHOWN, true);
+      }
       syncAdminOperations().then(() => {
         Promise.all([
           storageService.load<string[]>(STORAGE_KEYS.MAILBOX_READ_IDS),
