@@ -68,6 +68,7 @@ function HomeScreen() {
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
   const restsToday = useUserStore((s) => s.restsToday);
+  const pebbleCount = useUserStore((s) => s.pebbleCount);
   const lastRestDate = useUserStore((s) => s.lastRestDate);
   const lastRestAt = useUserStore((s) => s.lastRestAt);
   const adState = useRestedAd();
@@ -609,6 +610,15 @@ function HomeScreen() {
           <View>
             <Text style={styles.sheetTitle}>소박이의 가방</Text>
 
+            {/* Pebble count — the running total earned from TV rests. The bag is
+                where the reward lives now (the room jar was removed); shown here
+                even when the keepsake grid is empty so the reward always has a
+                visible home. */}
+            <View style={styles.bagPebbleRow}>
+              <Text style={styles.bagPebbleLabel}>조약돌</Text>
+              <Text style={styles.bagPebbleCount}>{pebbleCount}개</Text>
+            </View>
+
             {/* Keepsake grid — only the things you've discovered & kept. */}
             {displayedKeptIds.length === 0 ? (
               <View style={styles.bagEmptyState}>
@@ -788,6 +798,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 16,
+  },
+  bagPebbleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  bagPebbleLabel: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
+  bagPebbleCount: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   bagEmptyState: {
     height: 180,
