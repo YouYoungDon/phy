@@ -92,13 +92,13 @@ function DayAmountSlot({
     case 'leaf':
       return (
         <View style={slotStyle}>
-          <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]} numberOfLines={1}>🌿</Text>
+          <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]} numberOfLines={1} allowFontScaling={false}>🌿</Text>
         </View>
       );
     case 'amount':
       return (
         <View style={slotStyle}>
-          <Text style={[styles.dayAmount, flowStyle(cell.flow)]} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={[styles.dayAmount, flowStyle(cell.flow)]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
             {cell.flow === 'income' ? '+' : '−'}
             {formatCalendarAmount(cell.amount)}
           </Text>
@@ -108,12 +108,12 @@ function DayAmountSlot({
       return (
         <View style={slotStyle}>
           {cell.income > 0 && (
-            <Text style={[styles.dayAmount, flowStyle('income')]} numberOfLines={1} ellipsizeMode="tail">
+            <Text style={[styles.dayAmount, flowStyle('income')]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
               +{formatCalendarAmount(cell.income)}
             </Text>
           )}
           {cell.spending > 0 && (
-            <Text style={[styles.dayAmount, flowStyle('spending')]} numberOfLines={1} ellipsizeMode="tail">
+            <Text style={[styles.dayAmount, flowStyle('spending')]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
               −{formatCalendarAmount(cell.spending)}
             </Text>
           )}
@@ -303,25 +303,6 @@ function StatsScreen() {
     }
     return { spending, income };
   }, [expenses, viewYear, viewMonth]);
-
-  // Average figures shown in place of the old 결산/observation block.
-  // - daily averages divide this month's totals by days elapsed (current month)
-  //   or the month's full length (past months).
-  // - 월 평균 지출 is the typical month: all-time spending ÷ months with any
-  //   record, so it reads as a stable cross-month baseline, not this month.
-  const monthlyAverages = useMemo(() => {
-    const daysSoFar = isCurrentMonth ? Number(todayStr.slice(8, 10)) : daysInMonth;
-    const dailySpending = daysSoFar > 0 ? Math.round(monthSettlement.spending / daysSoFar) : 0;
-    const dailyIncome = daysSoFar > 0 ? Math.round(monthSettlement.income / daysSoFar) : 0;
-    const months = new Set<string>();
-    let allSpending = 0;
-    for (const e of expenses) {
-      months.add(expenseLocalDate(e).slice(0, 7)); // YYYY-MM
-      if (e.kind !== 'income') allSpending += e.amount;
-    }
-    const monthlySpending = months.size > 0 ? Math.round(allSpending / months.size) : 0;
-    return { dailySpending, dailyIncome, monthlySpending };
-  }, [expenses, monthSettlement, isCurrentMonth, daysInMonth, todayStr]);
 
   // Photocard data — derived from the selected day's spending records only.
   // A no-spend-only day has no spending feeling to surface.
@@ -609,21 +590,15 @@ function StatsScreen() {
           </Pressable>
         )}
 
-        {/* Monthly averages — replaces the 결산/observation block. */}
-        <View style={styles.settlementSection}>
+        {/* Quiet monthly reflection — a record-archive tone, NOT a settlement /
+            average / finance block. Just how many days were kept this month. */}
+        <View style={styles.reflectionSection}>
           {monthVisitDays === 0 ? (
-            <Text style={styles.observationLine}>이번 달은 아직 비어있어요 🌿</Text>
+            <Text style={styles.reflectionLine}>이번 달은 아직 비어있어요 🌿</Text>
           ) : (
             <>
-              <Text style={styles.avgLine}>
-                이번 달 하루 평균 지출은 <Text style={styles.avgAmount}>{monthlyAverages.dailySpending.toLocaleString()}원</Text>이에요
-              </Text>
-              <Text style={styles.avgLine}>
-                하루 평균 소득은 <Text style={styles.avgAmount}>{monthlyAverages.dailyIncome.toLocaleString()}원</Text>이에요
-              </Text>
-              <Text style={styles.avgLine}>
-                월 평균 지출은 <Text style={styles.avgAmount}>{monthlyAverages.monthlySpending.toLocaleString()}원</Text>이에요
-              </Text>
+              <Text style={styles.reflectionLine}>이번 달은 {monthVisitDays}일 기록했어요 🌿</Text>
+              <Text style={styles.reflectionSub}>하루하루 작은 흔적이 남아있어요</Text>
             </>
           )}
         </View>
@@ -1046,29 +1021,26 @@ const styles = StyleSheet.create({
   },
 
   // Settlement
-  settlementSection: {
+  reflectionSection: {
     backgroundColor: COLORS.warmWhite,
     borderRadius: 14,
     padding: 18,
-    gap: 12,
+    gap: 6,
     shadowColor: COLORS.wood,
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 1,
   },
-  avgLine: {
+  reflectionLine: {
     fontSize: 14,
     color: COLORS.text,
+    fontWeight: '500',
     lineHeight: 20,
   },
-  avgAmount: {
-    fontWeight: '700',
-    color: COLORS.oliveDark,
-  },
-  observationLine: {
+  reflectionSub: {
     fontSize: 13,
     color: COLORS.textMuted,
-    marginTop: 10,
+    lineHeight: 18,
   },
 
   // Photocard modal
