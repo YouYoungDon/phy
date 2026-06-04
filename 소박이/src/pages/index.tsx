@@ -50,6 +50,11 @@ function buildLetterLookup(): Map<string, MailboxLetter> {
 
 const LETTER_LOOKUP = buildLetterLookup();
 
+// Sobagi's first line — shown once, automatically, on the very first app open
+// (persisted via FIRST_GREETING_SHOWN). Sobagi is otherwise silent until tapped;
+// this is the single auto-shown greeting.
+const FIRST_GREETING = '소박이와 가계부 쓰고 부자되세요';
+
 
 // Whole calendar days between two YYYY-MM-DD strings (noon-anchored, DST-safe).
 function calendarDaysBetween(laterYmd: string, earlierYmd: string): number {
@@ -68,6 +73,7 @@ function HomeScreen() {
   const nextThreshold = getNextThreshold(recordedDaysCount);
   const expenses = useExpenseStore((s) => s.expenses);
   const restsToday = useUserStore((s) => s.restsToday);
+  const pebbleCount = useUserStore((s) => s.pebbleCount);
   const lastRestDate = useUserStore((s) => s.lastRestDate);
   const lastRestAt = useUserStore((s) => s.lastRestAt);
   const adState = useRestedAd();
@@ -88,6 +94,9 @@ function HomeScreen() {
     (e) => e.kind !== 'income' && e.category !== 'no_spend',
   );
   const todayTotal = todaySpendingRecords.reduce((sum, e) => sum + e.amount, 0);
+  const todayIncomeTotal = todayExpenses
+    .filter((e) => e.kind === 'income')
+    .reduce((sum, e) => sum + e.amount, 0);
 
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleMessage, setBubbleMessage] = useState('');
@@ -154,13 +163,23 @@ function HomeScreen() {
       storageService.load<string[]>(STORAGE_KEYS.MAILBOX_DELIVERED_IDS),
       storageService.load<RemoteLetter[]>(STORAGE_KEYS.MAILBOX_REMOTE_LETTERS),
       storageService.load<string>(STORAGE_KEYS.SUPPRESS_REST_POPUP_DATE),
-    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters, suppressDate]) => {
+      storageService.load<boolean>(STORAGE_KEYS.FIRST_GREETING_SHOWN),
+    ]).then(([readIdsRaw, foundIds, pending, deliveredIds, storedRemoteLetters, suppressDate, greetingShown]) => {
       if (readIdsRaw) setReadIds(new Set(readIdsRaw));
       if (foundIds) setFoundItemIds(foundIds);
       if (pending != null) pendingRef.current = pending;
       if (deliveredIds) setDeliveredLetterIds(deliveredIds);
       if (storedRemoteLetters) setRemoteLetters(storedRemoteLetters);
       if (suppressDate) setSuppressRestPopupDate(suppressDate);
+      // First-ever open: auto-show the welcome line once, then persist the flag
+      // so it never shows again. The only line Sobagi says without a tap.
+      if (!greetingShown) {
+        setBubbleMessage(FIRST_GREETING);
+        setBubbleVisible(true);
+        if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = setTimeout(() => setBubbleVisible(false), 5000);
+        void storageService.save(STORAGE_KEYS.FIRST_GREETING_SHOWN, true);
+      }
       syncAdminOperations().then(() => {
         Promise.all([
           storageService.load<string[]>(STORAGE_KEYS.MAILBOX_READ_IDS),
@@ -354,9 +373,8 @@ function HomeScreen() {
 
             <TodaySurface
               todayDate={new Date()}
-              totalAmount={todayTotal}
-              recordCount={todayExpenses.length}
-              spendingCount={todaySpendingRecords.length}
+              spendingTotal={todayTotal}
+              incomeTotal={todayIncomeTotal}
               onPress={() => navigation.navigate('/record')}
             />
 
@@ -445,6 +463,23 @@ function HomeScreen() {
                   )}
                 </Pressable>
                 <Text style={styles.utilityLabel}>티비</Text>
+                {/* Reward hint bubble to the right of the TV icon — points at it
+                    with a left tail. Shown only while a reward is actually
+                    available today (under the daily cap, not opted-out for today,
+                    ad env supported); hidden otherwise so it never invites a tap
+                    that can't pay out. Informational (pointerEvents none) — the
+                    TV icon itself is the tap target. */}
+                {effectiveRestsToday < REST_DAILY_CAP &&
+                  !isSuppressedForToday(suppressRestPopupDate, todayStr) &&
+                  adState.status !== 'unsupported' &&
+                  adState.status !== 'error' && (
+                    <View style={styles.tvHintBubble} pointerEvents="none">
+                      <View style={styles.tvHintTail} />
+                      <Text style={styles.tvHintText} numberOfLines={1}>
+                        티비 보고 리워드 받기
+                      </Text>
+                    </View>
+                  )}
               </View>
             </View>
             {(() => {
@@ -608,6 +643,15 @@ function HomeScreen() {
         {activeSheet === 'bag' && (
           <View>
             <Text style={styles.sheetTitle}>소박이의 가방</Text>
+
+            {/* Pebble count — the running total earned from TV rests. The bag is
+                where the reward lives now (the room jar was removed); shown here
+                even when the keepsake grid is empty so the reward always has a
+                visible home. */}
+            <View style={styles.bagPebbleRow}>
+              <Text style={styles.bagPebbleLabel}>조약돌</Text>
+              <Text style={styles.bagPebbleCount}>{pebbleCount}개</Text>
+            </View>
 
             {/* Keepsake grid — only the things you've discovered & kept. */}
             {displayedKeptIds.length === 0 ? (
@@ -789,6 +833,25 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 16,
   },
+  bagPebbleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  bagPebbleLabel: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
+  bagPebbleCount: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
   bagEmptyState: {
     height: 180,
     alignItems: 'center',
@@ -923,6 +986,38 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: '#FF3B30',
+  },
+  // Reward hint bubble — sits just right of the 60px TV icon, vertically near
+  // its middle. Warm translucent brown to match the level card / TodaySurface
+  // tone (a gentle hint, not a loud CTA).
+  tvHintBubble: {
+    position: 'absolute',
+    left: 64,
+    top: 18,
+    backgroundColor: 'rgba(61,48,32,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  tvHintText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,253,248,0.95)',
+  },
+  // Small left-pointing tail toward the TV icon.
+  tvHintTail: {
+    position: 'absolute',
+    left: -5,
+    top: '50%',
+    marginTop: -4,
+    width: 0,
+    height: 0,
+    borderTopWidth: 4,
+    borderBottomWidth: 4,
+    borderRightWidth: 5,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderRightColor: 'rgba(61,48,32,0.55)',
   },
   foundSection: {
     marginTop: 14,

@@ -9,7 +9,7 @@ export default defineConfig({
     router(),
     appsInToss({
       brand: {
-        displayName: '소박이',
+        displayName: '소박이키우기',
         primaryColor: '#6B7C4A',
         icon: 'https://static.toss.im/appsintoss/33565/c393e5d1-4648-47cd-8b44-41b43102f890.png',
       },

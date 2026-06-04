@@ -22,14 +22,16 @@ import { STORAGE_KEYS } from '../constants/storage';
 import { useEmotionStore } from '../store/emotionStore';
 import { useExpenseStore } from '../store/expenseStore';
 import { useUserStore } from '../store/userStore';
-import { ExpenseCategory, EmotionContext, RecordKind } from '../types';
+import { Expense, ExpenseCategory, EmotionContext, RecordKind } from '../types';
 import { COLORS } from '../constants/colors';
 import {
   GENERAL_SPENDING_CATEGORIES,
   INCOME_CATEGORIES,
   kindForCategory,
+  formatCategoryWithEmoji,
 } from '../constants/categories';
 import { BottomTabs } from '../components/common/BottomTabs';
+import { ExpenseEditSheet } from '../components/expense/ExpenseEditSheet';
 import { getLocalDateString, localDateToISOString, expenseLocalDate } from '../utils/date';
 import { generateExpenseId } from '../utils/id';
 import { parseAmountInput, formatAmountInput } from '../utils/amount';
@@ -83,6 +85,8 @@ function RecordScreen() {
   const [saveError, setSaveError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Tapping a row in the in-card recap opens the shared edit/delete sheet.
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   const handleToggleKind = (nextKind: RecordKind) => {
     if (nextKind === recordKind) return;
@@ -193,6 +197,19 @@ function RecordScreen() {
     !hasRecordOnSelectedDate &&
     !isSaving &&
     selectedDate <= todayStr;
+
+  // Records already saved on the selected day, newest first — shown inside the
+  // amount card as a quiet running list so the day's entries stay visible while
+  // adding more. Defaults to today (selectedDate starts as today).
+  const selectedDateRecords = useMemo(
+    () =>
+      expenses
+        .filter((e) => expenseLocalDate(e) === selectedDate)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    [expenses, selectedDate],
+  );
+  const selectedDateLabel =
+    dateOptions.find((o) => o.dateStr === selectedDate)?.label ?? '오늘';
 
   const handleNoSpend = async () => {
     if (!canNoSpend) return;
@@ -379,7 +396,7 @@ function RecordScreen() {
             yet (and isn't a future date). Copy adapts to today vs past. */}
         {canNoSpend && (
           <Pressable
-            style={styles.noSpendBtn}
+            style={({ pressed }) => [styles.noSpendBtn, pressed && styles.noSpendBtnPressed]}
             onPress={handleNoSpend}
             disabled={!canNoSpend}
           >
@@ -391,22 +408,64 @@ function RecordScreen() {
           </Pressable>
         )}
 
-        {/* Amount hero */}
+        {/* Amount hero — a single field: the big number IS the input. Tap
+            anywhere on the card to focus; "원" hugs the number once entered. */}
         <Pressable style={styles.amountCard} onPress={() => amountInputRef.current?.focus()}>
-          <Text style={styles.amountDisplay}>
-            {amount > 0 ? `${amount.toLocaleString()}원` : '0원'}
-          </Text>
-          <TextInput
-            ref={amountInputRef}
-            style={styles.amountInput}
-            value={amountText}
-            onChangeText={(t) => setAmountText(formatAmountInput(t))}
-            placeholder={recordKind === 'income' ? '금액 (선택)' : '금액을 입력해요'}
-            placeholderTextColor={COLORS.textLight}
-            keyboardType="numeric"
-            maxLength={13}
-            onFocus={() => { focusedFieldRef.current = 'amount'; }}
-          />
+          <View style={styles.amountRow}>
+            <TextInput
+              ref={amountInputRef}
+              style={styles.amountInput}
+              value={amountText}
+              onChangeText={(t) => setAmountText(formatAmountInput(t))}
+              placeholder="0"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numeric"
+              maxLength={13}
+              onFocus={() => { focusedFieldRef.current = 'amount'; }}
+            />
+            {amount > 0 && <Text style={styles.amountUnit}>원</Text>}
+          </View>
+
+          {/* The selected day's already-saved records, kept inside the card so
+              the day's entries stay visible while adding more. Capped at the 3
+              most recent so the input stays scannable when a day fills up; the
+              rest are reachable + editable on the stats calendar. */}
+          {selectedDateRecords.length > 0 && (
+            <View style={styles.recapBox}>
+              <Text style={styles.recapHeading}>{selectedDateLabel} 기록</Text>
+              {selectedDateRecords.slice(0, 3).map((e) => {
+                const isIncome = (e.kind ?? kindForCategory(e.category)) === 'income';
+                const isNoSpend = e.category === 'no_spend';
+                return (
+                  <Pressable
+                    key={e.id}
+                    style={({ pressed }) => [styles.recapRow, pressed && styles.recapRowPressed]}
+                    onPress={() => setEditingExpense(e)}
+                  >
+                    <View style={styles.recapLeft}>
+                      <Text style={styles.recapCategory} numberOfLines={1}>
+                        {formatCategoryWithEmoji(e.category)}
+                      </Text>
+                      {e.memo ? (
+                        <Text style={styles.recapMemo} numberOfLines={1}>
+                          {e.memo}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {!isNoSpend && e.amount > 0 && (
+                      <Text style={[styles.recapAmount, isIncome && styles.recapAmountIncome]}>
+                        {isIncome ? '+' : ''}
+                        {e.amount.toLocaleString()}원
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+              {selectedDateRecords.length > 3 && (
+                <Text style={styles.recapMore}>{selectedDateRecords.length - 3}개 더 있어요</Text>
+              )}
+            </View>
+          )}
         </Pressable>
 
         {/* Category */}
@@ -487,6 +546,9 @@ function RecordScreen() {
       </KeyboardAvoidingView>
 
       <BottomTabs activeRoute="/record" />
+
+      {/* Edit / delete sheet — shared with the stats screen. */}
+      <ExpenseEditSheet expense={editingExpense} onClose={() => setEditingExpense(null)} />
     </View>
   );
 }
@@ -601,12 +663,19 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   noSpendBtn: {
-    backgroundColor: 'transparent',
+    // Soft bordered chip so it reads as a tappable button, matching the
+    // amountCard's subtle 1px border treatment.
+    backgroundColor: COLORS.warmWhite,
     borderRadius: 16,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 11,
     paddingHorizontal: 16,
     alignItems: 'center',
     marginBottom: 12,
+  },
+  noSpendBtnPressed: {
+    backgroundColor: COLORS.surface,
   },
   noSpendLabel: {
     fontSize: 13,
@@ -614,21 +683,77 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.2,
   },
-  amountDisplay: {
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  amountInput: {
     fontSize: 44,
     fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 12,
-  },
-  amountInput: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    minWidth: 160,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    minWidth: 40,
     textAlign: 'center',
+  },
+  amountUnit: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginLeft: 4,
+    marginBottom: 3,
+  },
+  recapBox: {
+    width: '100%',
+    marginTop: 18,
+  },
+  recapHeading: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textLight,
+    marginBottom: 2,
+  },
+  recapRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  recapRowPressed: {
+    opacity: 0.55,
+  },
+  recapMore: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  recapLeft: {
+    flex: 1,
+    paddingRight: 12,
+    alignItems: 'flex-start',
+  },
+  recapCategory: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  recapMemo: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  recapAmount: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  recapAmountIncome: {
+    color: COLORS.oliveGreen,
   },
   section: {
     marginBottom: 24,

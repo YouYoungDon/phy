@@ -31,6 +31,9 @@ export const CATEGORIES: readonly ExpenseCategoryMeta[] = [
   { key: 'health',              label: '병원',      emoji: '💊',   inPicker: true,  kind: 'spending', memoSuggestions: ['약', '진료', '검진', '영양제', '치료'] },
   { key: 'event',               label: '경조사',    emoji: '💌',   inPicker: true,  kind: 'spending', memoSuggestions: ['축의금', '부의금', '답례', '모임', '가족행사'] },
   { key: 'allowance',           label: '용돈',      emoji: '🫶',   inPicker: true,  kind: 'spending', memoSuggestions: ['부모님', '아이', '조카', '용돈', '챙김'] },
+  // Catch-all for spending that doesn't fit a life scene — kept last in the
+  // picker so the named scenes lead. No memo suggestions (it has no scene).
+  { key: 'etc',                 label: '기타',      emoji: '📦',   inPicker: true,  kind: 'spending', memoSuggestions: [] },
   { key: 'no_spend',            label: '무지출',    emoji: '🌿',   inPicker: false, kind: 'spending', memoSuggestions: [] },
 
   // ─── Income (incoming) — new in sub-spec A ──────────────────────────────

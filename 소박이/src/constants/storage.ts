@@ -24,4 +24,5 @@ export const STORAGE_KEYS = {
   DISCOVERY_QUEUE: 'sobagi-discovery-queue',
   DISCOVERY_MIGRATION_DONE: 'sobagi-discovery-migration-done',
   SUPPRESS_REST_POPUP_DATE: 'sobagi-suppress-rest-popup-date',
+  FIRST_GREETING_SHOWN: 'sobagi-first-greeting-shown',
 } as const;

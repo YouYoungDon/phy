@@ -80,3 +80,24 @@ export const useUserStore = create<UserStore>((set) => ({
   setLastRestAt: (lastRestAt) => set({ lastRestAt }),
   hydrate: (state) => set(state),
 }));
+
+// Canonical persisted snapshot of user state. Both record save/delete
+// (expenseService) and the ad-reward grant (restService) write THIS to
+// STORAGE_KEYS.USER — the single blob useAppInit hydrates from on launch.
+// One shared builder keeps the write paths from drifting: previously the rest
+// reward wrote only standalone keys (PEBBLE_COUNT / RESTS_TODAY / …) that init
+// never read, so ad-earned pebbles vanished on relaunch.
+export function buildUserSnapshot(): UserState {
+  const s = useUserStore.getState();
+  return {
+    level: s.level,
+    streak: s.streak,
+    totalRecordCount: s.totalRecordCount,
+    recordedDaysCount: s.recordedDaysCount,
+    roomStage: s.roomStage,
+    pebbleCount: s.pebbleCount,
+    restsToday: s.restsToday,
+    lastRestDate: s.lastRestDate,
+    lastRestAt: s.lastRestAt,
+  };
+}

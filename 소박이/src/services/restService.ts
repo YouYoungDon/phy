@@ -4,7 +4,7 @@
 // ever called from the `userEarnedReward` callback path (see the boundary
 // comment on grantRest itself).
 
-import { useUserStore } from '../store/userStore';
+import { useUserStore, buildUserSnapshot } from '../store/userStore';
 import * as storageService from './storageService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { REST_LETTERS, RestLetter } from '../constants/restLetters';
@@ -125,6 +125,15 @@ export async function grantRest(): Promise<RestGrant> {
   store.setLastRestDate(todayStr);
   store.setLastRestAt(nowISO);
 
+  // Persist the canonical USER blob — this is the single snapshot useAppInit
+  // hydrates pebbleCount/restsToday/lastRest* from on launch. Without it the
+  // reward updated only the in-memory store + the standalone keys below (which
+  // init never reads), so an app relaunch reverted the reward. Awaited because
+  // it's now the durability-critical write for the reward.
+  await storageService.save(STORAGE_KEYS.USER, buildUserSnapshot());
+
+  // Standalone keys kept for back-compat; init does not read them, so they are
+  // not the source of truth (the USER blob above is). Fire-and-forget.
   void storageService.save(STORAGE_KEYS.PEBBLE_COUNT, newCount);
   void storageService.save(STORAGE_KEYS.RESTS_TODAY, newRestsToday);
   void storageService.save(STORAGE_KEYS.LAST_REST_DATE, todayStr);

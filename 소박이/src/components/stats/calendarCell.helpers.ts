@@ -1,32 +1,52 @@
 // Pure helper for the Stats calendar cell amount/marker slot. Maps the active
 // view mode + a day's spending/income shape to a render descriptor. No React,
-// no SDK — unit-testable. The 'spending' branch reproduces the pre-toggle
-// behavior byte-for-byte (income-only & no-spend days → 🌿).
+// no SDK — unit-testable.
+//
+// Flow is carried on each value so the cell can colour + sign it: income is red
+// with a leading '+', spending is blue with a leading '−' (a deliberate
+// finance-app direction). 함께 보기 shows the two SEPARATELY (a +income line and
+// a −spending line) rather than a combined sum, so the day's two flows stay
+// distinguishable.
 export type CalendarViewMode = 'spending' | 'income' | 'both';
+
+export type CellFlow = 'spending' | 'income';
 
 export type CellDisplay =
   | { kind: 'blank' }
-  | { kind: 'leaf' }                 // 🌿 quiet / no-spend day
-  | { kind: 'amount'; amount: number };  // spending (쓴 기록), income (들어온 기록), or combined movement (함께) — all full comma
+  | { kind: 'leaf' }                                       // 🌿 quiet / no-spend day
+  | { kind: 'amount'; amount: number; flow: CellFlow }     // one signed/coloured value
+  | { kind: 'both'; spending: number; income: number };    // both flows; a 0 side is omitted in render
+
+// Compact amount for the tiny calendar cell ONLY — keeps large income / mixed
+// days from clipping on small screens. Under 만 (10,000) the full comma number
+// reads fine; at or above it we switch to 만 units with at most one decimal
+// (34,000 → "3.4만", 1,200,000 → "120만"), trailing ".0" trimmed. No sign and no
+// "원" — the cell prepends the +/− itself. Exact won values stay full-precision
+// in the selected-day card, edit sheet, and record list.
+export function formatCalendarAmount(amount: number): string {
+  const n = Math.abs(amount);
+  if (n < 10000) return n.toLocaleString('ko-KR');
+  const man = n / 10000;
+  return `${man.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만`;
+}
 
 export function selectCalendarCellContent(
   mode: CalendarViewMode,
   d: { spendingTotal: number; incomeTotal: number; hasRecord: boolean },
 ): CellDisplay {
   if (mode === 'income') {
-    // 들어온 기록 — income total as a full comma-formatted number (same as the
-    // spending and 함께 views). Days with no income → blank.
-    return d.incomeTotal > 0 ? { kind: 'amount', amount: d.incomeTotal } : { kind: 'blank' };
+    // 들어온 기록 — income total only. Days with no income → blank.
+    return d.incomeTotal > 0 ? { kind: 'amount', amount: d.incomeTotal, flow: 'income' } : { kind: 'blank' };
   }
   if (mode === 'both') {
-    // 함께 보기 — one calm combined-movement number (spending + income, full
-    // comma). NOT net/balance: the absolute sum of "how much moved today".
-    // No-spend-only (combined 0) stays 🌿; no record stays blank.
+    // 함께 보기 — show the day's income (+, red) and spending (−, blue) as two
+    // separate values, not a combined sum. No record → blank; a day with no
+    // money movement (no-spend only) → 🌿.
     if (!d.hasRecord) return { kind: 'blank' };
-    const combined = d.spendingTotal + d.incomeTotal;
-    return combined > 0 ? { kind: 'amount', amount: combined } : { kind: 'leaf' };
+    if (d.spendingTotal === 0 && d.incomeTotal === 0) return { kind: 'leaf' };
+    return { kind: 'both', spending: d.spendingTotal, income: d.incomeTotal };
   }
-  // 'spending' (default) — byte-identical to current behavior
+  // 'spending' (default) — spending total; income-only & no-spend days → 🌿.
   if (!d.hasRecord) return { kind: 'blank' };
-  return d.spendingTotal === 0 ? { kind: 'leaf' } : { kind: 'amount', amount: d.spendingTotal };
+  return d.spendingTotal === 0 ? { kind: 'leaf' } : { kind: 'amount', amount: d.spendingTotal, flow: 'spending' };
 }

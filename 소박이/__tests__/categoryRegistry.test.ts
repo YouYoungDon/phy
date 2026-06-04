@@ -28,16 +28,19 @@ describe('kindForCategory', () => {
 });
 
 describe('category registry partitions', () => {
-  it('SPENDING_CATEGORIES contains all 13 spending tokens including no_spend', () => {
-    expect(SPENDING_CATEGORIES.length).toBe(13);
+  it('SPENDING_CATEGORIES contains all 14 spending tokens including no_spend and etc', () => {
+    expect(SPENDING_CATEGORIES.length).toBe(14);
     expect(SPENDING_CATEGORIES.every(c => c.kind === 'spending')).toBe(true);
     expect(SPENDING_CATEGORIES.some(c => c.key === 'no_spend')).toBe(true);
+    expect(SPENDING_CATEGORIES.some(c => c.key === 'etc')).toBe(true);
   });
 
-  it('GENERAL_SPENDING_CATEGORIES excludes no_spend', () => {
-    expect(GENERAL_SPENDING_CATEGORIES.length).toBe(12);
+  it('GENERAL_SPENDING_CATEGORIES excludes no_spend and keeps 기타 (etc) last', () => {
+    expect(GENERAL_SPENDING_CATEGORIES.length).toBe(13);
     expect(GENERAL_SPENDING_CATEGORIES.every(c => c.kind === 'spending')).toBe(true);
     expect(GENERAL_SPENDING_CATEGORIES.some(c => c.key === 'no_spend')).toBe(false);
+    // The catch-all is the last picker item so the named life scenes lead.
+    expect(GENERAL_SPENDING_CATEGORIES[GENERAL_SPENDING_CATEGORIES.length - 1]?.key).toBe('etc');
   });
 
   it('INCOME_CATEGORIES contains exactly 6 income tokens', () => {

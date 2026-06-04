@@ -1,22 +1,17 @@
-import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Animated, TextInput, Keyboard, Platform } from 'react-native';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated } from 'react-native';
 import { createRoute } from '@granite-js/react-native';
 import { useExpenseStore } from '../store/expenseStore';
-import { useUserStore } from '../store/userStore';
 import { Expense, ExpenseCategory } from '../types';
 import { COLORS } from '../constants/colors';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
-import { parseAmountInput, formatAmountInput } from '../utils/amount';
-import { amountValidForKind } from '../utils/recordValidation';
 import { BottomTabs } from '../components/common/BottomTabs';
 import { PhotocardView, PhotocardRecord, CARD_WIDTH } from '../components/photocard/PhotocardView';
+import { ExpenseEditSheet } from '../components/expense/ExpenseEditSheet';
 import { getDayFeeling } from '../services/dayFeelingService';
-import { updateExpense as persistUpdateExpense, deleteExpense as persistDeleteExpense } from '../services/expenseService';
 import { useAndroidBack } from '../hooks/useAndroidBack';
-import { GENERAL_SPENDING_CATEGORIES, INCOME_CATEGORIES, kindForCategory, formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
-import { selectStatsObservation } from '../services/statsObservationService';
-import { MonthAmountChart } from '../components/stats/MonthAmountChart';
-import { selectCalendarCellContent, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
+import { formatCategoryWithEmoji, formatCategoryLabel, CATEGORY_BY_TOKEN } from '../constants/categories';
+import { selectCalendarCellContent, formatCalendarAmount, CalendarViewMode, CellDisplay } from '../components/stats/calendarCell.helpers';
 
 export const Route = createRoute('/stats', {
   validateParams: (params) => params,
@@ -70,18 +65,59 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
 
 // Renders the calendar cell's amount/marker slot from a CellDisplay descriptor.
 // Module-level (uses module `styles`); kept here so the grid map stays readable.
-function DayAmountSlot({ cell, isSelected }: { cell: CellDisplay; isSelected: boolean }) {
-  const textStyle = [styles.dayAmount, isSelected && styles.dayAmountSelected];
+// Income is red with a leading '+', spending blue with a leading '−'. When the
+// day is selected (olive cell) the value flips to white for contrast — the sign
+// still distinguishes the flow. `twoLine` reserves a taller slot in 함께 보기 so
+// every cell keeps the same height even when a day has only one flow.
+function DayAmountSlot({
+  cell,
+  isSelected,
+  twoLine,
+}: {
+  cell: CellDisplay;
+  isSelected: boolean;
+  twoLine: boolean;
+}) {
+  const slotStyle = [styles.daySlot, twoLine && styles.daySlotTall];
+  const flowStyle = (flow: 'spending' | 'income') =>
+    isSelected
+      ? styles.dayAmountSelected
+      : flow === 'income'
+        ? styles.dayAmountIncome
+        : styles.dayAmountSpending;
+
   switch (cell.kind) {
     case 'blank':
-      return <View style={styles.dayAmountPlaceholder} />;
+      return <View style={slotStyle} />;
     case 'leaf':
-      return <Text style={textStyle} numberOfLines={1}>🌿</Text>;
+      return (
+        <View style={slotStyle}>
+          <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]} numberOfLines={1} allowFontScaling={false}>🌿</Text>
+        </View>
+      );
     case 'amount':
       return (
-        <Text style={textStyle} numberOfLines={1} ellipsizeMode="tail">
-          {cell.amount.toLocaleString('ko-KR')}
-        </Text>
+        <View style={slotStyle}>
+          <Text style={[styles.dayAmount, flowStyle(cell.flow)]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
+            {cell.flow === 'income' ? '+' : '−'}
+            {formatCalendarAmount(cell.amount)}
+          </Text>
+        </View>
+      );
+    case 'both':
+      return (
+        <View style={slotStyle}>
+          {cell.income > 0 && (
+            <Text style={[styles.dayAmount, flowStyle('income')]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
+              +{formatCalendarAmount(cell.income)}
+            </Text>
+          )}
+          {cell.spending > 0 && (
+            <Text style={[styles.dayAmount, flowStyle('spending')]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
+              −{formatCalendarAmount(cell.spending)}
+            </Text>
+          )}
+        </View>
       );
   }
 }
@@ -107,8 +143,6 @@ const INCOME_PHOTOCARD_QUOTES = [
 
 function StatsScreen() {
   const expenses = useExpenseStore((s) => s.expenses);
-  const streak = useUserStore((s) => s.streak);
-
   const today = new Date();
   const todayStr = getLocalDateString(today);
 
@@ -243,37 +277,6 @@ function StatsScreen() {
   const selectedDt = new Date(selectedDay + 'T00:00:00');
   const selectedLabel = `${selectedDt.getMonth() + 1}월 ${selectedDt.getDate()}일`;
 
-  const topCategoryThisMonth = useMemo(() => {
-    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
-    const counts: Partial<Record<ExpenseCategory, number>> = {};
-    for (const e of expenses) {
-      if (e.category === 'no_spend') continue;
-      if (e.kind === 'income') continue;
-      if (!expenseLocalDate(e).startsWith(prefix)) continue;
-      counts[e.category] = (counts[e.category] ?? 0) + 1;
-    }
-    return (Object.entries(counts) as [ExpenseCategory, number][])
-      .sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
-  }, [expenses, viewYear, viewMonth]);
-
-  // Distinct local-date days with ANY record (spending OR no-spend) in the
-  // current calendar week (Sun–Sat) anchored on `today`.
-  const weekVisitDays = useMemo(() => {
-    const t = new Date(todayStr + 'T12:00:00');
-    const weekStart = new Date(t);
-    weekStart.setDate(t.getDate() - t.getDay()); // Sunday
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6); // Saturday
-    const startStr = getLocalDateString(weekStart);
-    const endStr = getLocalDateString(weekEnd);
-    const days = new Set<string>();
-    for (const e of expenses) {
-      const d = expenseLocalDate(e);
-      if (d >= startStr && d <= endStr) days.add(d);
-    }
-    return days.size;
-  }, [expenses, todayStr]);
-
   // Distinct local-date days with ANY record in the current view month.
   const monthVisitDays = useMemo(() => {
     const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
@@ -300,27 +303,6 @@ function StatsScreen() {
     }
     return { spending, income };
   }, [expenses, viewYear, viewMonth]);
-
-  const cadenceLines: string[] = useMemo(() => {
-    if (monthVisitDays === 0) {
-      return ['이번 달은 아직 비어있어요 🌿'];
-    }
-    if (weekVisitDays === 0) {
-      return [
-        '이번 주는 아직 비어있어요 🌿',
-        `이번 달은 ${monthVisitDays}일 다녀갔어요`,
-      ];
-    }
-    return [
-      `이번 주엔 ${weekVisitDays}번 들렀어요`,
-      `이번 달은 ${monthVisitDays}일 다녀갔어요`,
-    ];
-  }, [weekVisitDays, monthVisitDays]);
-
-  const observation = useMemo(
-    () => selectStatsObservation(expenses, streak, todayStr),
-    [expenses, streak, todayStr],
-  );
 
   // Photocard data — derived from the selected day's spending records only.
   // A no-spend-only day has no spending feeling to surface.
@@ -408,126 +390,24 @@ function StatsScreen() {
     setShowDayPhotocard(false);
   }, []);
 
-  // ─── Edit sheet state ────────────────────────────────────────────────────────
-
+  // ─── Edit sheet ──────────────────────────────────────────────────────────────
+  // The edit/delete UI lives in the shared <ExpenseEditSheet>; this screen only
+  // tracks which record is open. The sheet owns its own slide-out animation and
+  // clears this via onClose, so we never null it independently.
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [editAmount, setEditAmount] = useState('');
-  const [editCategory, setEditCategory] = useState<ExpenseCategory>('cafe');
-  const [editMemo, setEditMemo] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [editSheetBottom, setEditSheetBottom] = useState(0);
-  // In-flight + failure state for edit/delete persistence. `editSaving` guards
-  // against double-taps; `editError` keeps the sheet open with a message when a
-  // write fails (and was rolled back) so the UI never shows a false success.
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState(false);
-  const editSheetAnim = useRef(new Animated.Value(500)).current;
-
-  const editingExpensePool = useMemo(() => {
-    if (!editingExpense) return GENERAL_SPENDING_CATEGORIES;
-    return editingExpense.kind === 'income' ? INCOME_CATEGORIES : GENERAL_SPENDING_CATEGORIES;
-  }, [editingExpense]);
-
-  useEffect(() => {
-    if (editingExpense === null) return;
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvt, (e) => setEditSheetBottom(e.endCoordinates.height));
-    const hide = Keyboard.addListener(hideEvt, () => setEditSheetBottom(0));
-    return () => { show.remove(); hide.remove(); };
-  }, [editingExpense]);
-
   const openEdit = useCallback((expense: Expense) => {
     setEditingExpense(expense);
-    setEditAmount(formatAmountInput(String(expense.amount)));
-    setEditCategory(expense.category);
-    setEditMemo(expense.memo ?? '');
-    setDeleteConfirm(false);
-    setEditError(false);
-    setEditSaving(false);
-    Animated.spring(editSheetAnim, { toValue: 0, useNativeDriver: true, tension: 60, friction: 11 }).start();
-  }, [editSheetAnim]);
-
-  const closeEdit = useCallback(() => {
-    Keyboard.dismiss();
-    Animated.timing(editSheetAnim, { toValue: 500, duration: 210, useNativeDriver: true }).start(() => {
-      setEditingExpense(null);
-      setDeleteConfirm(false);
-      setEditSheetBottom(0);
-      setEditError(false);
-      setEditSaving(false);
-    });
-  }, [editSheetAnim]);
-
-  // Single guarded dismiss for every user-initiated close path (backdrop tap,
-  // 취소 button, Android back). While a save/delete is in flight the sheet is
-  // locked, so it can't disappear mid-operation and read as success. The
-  // programmatic closeEdit used by the success paths stays unguarded.
-  const dismissEdit = useCallback(() => {
-    if (editSaving) return;
-    closeEdit();
-  }, [editSaving, closeEdit]);
-
-  const commitEdit = useCallback(async () => {
-    if (!editingExpense || editSaving) return;
-    // Shared parse + validity rule with the create flow (record.tsx):
-    // `parseAmountInput` normalizes blanks/junk to 0; income may be 0 (amount
-    // optional), spending must be positive.
-    const parsed = parseAmountInput(editAmount);
-    const nextKind = kindForCategory(editCategory);
-    if (!amountValidForKind(nextKind, parsed)) return;
-    setEditSaving(true);
-    setEditError(false);
-    const ok = await persistUpdateExpense(editingExpense.id, {
-      amount: parsed,
-      category: editCategory,
-      memo: editMemo.trim() || undefined,
-      kind: nextKind,
-    });
-    setEditSaving(false);
-    if (!ok) {
-      // Write failed and the in-memory edit was rolled back. Keep the sheet open
-      // with an error so the user sees it didn't save and can retry.
-      setEditError(true);
-      return;
-    }
-    closeEdit();
-  }, [editingExpense, editSaving, editAmount, editCategory, editMemo, closeEdit]);
-
-  // Mirror of commitEdit's validity gate, for the save button's enabled state
-  // and the inline hint — so a blocked spending edit shows visible feedback
-  // instead of a silent no-op.
-  const editKind = kindForCategory(editCategory);
-  const editCanSave = amountValidForKind(editKind, parseAmountInput(editAmount));
-
-  // No-spend records have nothing meaningful to edit (amount 0, fixed category).
-  // The edit sheet collapses to a quiet label + delete-only affordance for them.
-  const editingNoSpend = editingExpense?.category === 'no_spend';
-
-  const commitDelete = useCallback(async () => {
-    if (!editingExpense || editSaving) return;
-    setEditSaving(true);
-    setEditError(false);
-    const ok = await persistDeleteExpense(editingExpense.id);
-    setEditSaving(false);
-    if (!ok) {
-      // Delete didn't persist (rolled back in memory). Keep the sheet + confirm
-      // open with an error so the record visibly remains and can be retried.
-      setEditError(true);
-      return;
-    }
-    closeEdit();
-  }, [editingExpense, editSaving, closeEdit]);
+  }, []);
 
   // Android hardware back closes the topmost open stats overlay before route
-  // back: photocard modal → month picker → edit sheet.
+  // back: photocard modal → month picker. (The edit sheet handles its own back
+  // internally while it is open.)
   const handleAndroidBack = useCallback(() => {
     if (showDayPhotocard) { closeDayPhotocard(); return; }
     if (showMonthPicker) { closeMonthPicker(); return; }
-    if (editingExpense !== null) { dismissEdit(); return; }
-  }, [showDayPhotocard, showMonthPicker, editingExpense, closeDayPhotocard, closeMonthPicker, dismissEdit]);
+  }, [showDayPhotocard, showMonthPicker, closeDayPhotocard, closeMonthPicker]);
   useAndroidBack(
-    showDayPhotocard || showMonthPicker || editingExpense !== null,
+    showDayPhotocard || showMonthPicker,
     handleAndroidBack,
   );
 
@@ -621,6 +501,7 @@ function StatsScreen() {
                           hasRecord: !!data,
                         })}
                         isSelected={isSelected}
+                        twoLine={calendarViewMode === 'both'}
                       />
                     </Pressable>
                   );
@@ -709,142 +590,25 @@ function StatsScreen() {
           </Pressable>
         )}
 
-        {/* Observation block — replaces 결산. No title; three groups flow. */}
-        <View style={styles.settlementSection}>
-          {cadenceLines.map((line) => (
-            <Text key={line} style={styles.cadenceLine}>{line}</Text>
-          ))}
-
-          {monthVisitDays > 0 && topCategoryThisMonth && (
-            <View style={styles.settlementChip}>
-              <Text style={styles.settlementChipText}>
-                {formatCategoryWithEmoji(topCategoryThisMonth)} · 가장 자주 기록한 장면
-              </Text>
-            </View>
-          )}
-
-          {monthVisitDays > 0 && (
-            <Text style={styles.observationLine}>{observation}</Text>
+        {/* Quiet monthly reflection — a record-archive tone, NOT a settlement /
+            average / finance block. Just how many days were kept this month. */}
+        <View style={styles.reflectionSection}>
+          {monthVisitDays === 0 ? (
+            <Text style={styles.reflectionLine}>이번 달은 아직 비어있어요 🌿</Text>
+          ) : (
+            <>
+              <Text style={styles.reflectionLine}>이번 달은 {monthVisitDays}일 기록했어요 🌿</Text>
+              <Text style={styles.reflectionSub}>하루하루 작은 흔적이 남아있어요</Text>
+            </>
           )}
         </View>
-
-        {/* Month amount chart — bar trace of spending across this month */}
-        <MonthAmountChart
-          viewYear={viewYear}
-          viewMonth={viewMonth}
-          daysInMonth={daysInMonth}
-          expensesByDate={expensesByDate}
-          todayStr={todayStr}
-          selectedDay={selectedDay}
-          onSelectDay={setSelectedDay}
-        />
 
       </ScrollView>
 
       <BottomTabs activeRoute="/stats" />
 
-      {/* Edit backdrop */}
-      {editingExpense !== null && (
-        <Pressable style={styles.editBackdrop} onPress={dismissEdit} />
-      )}
-
-      {/* Edit sheet */}
-      <Animated.View
-        style={[styles.editSheet, { transform: [{ translateY: editSheetAnim }], bottom: editSheetBottom }]}
-        pointerEvents={editingExpense !== null ? 'auto' : 'none'}
-      >
-        <Text style={styles.editSheetTitle}>
-          {editingNoSpend ? '무지출 기록' : '기록을 조금 고칠게요'}
-        </Text>
-
-        {editingNoSpend ? (
-          <Text style={styles.noSpendEditHint}>이 날은 무지출로 기록했어요 🌿</Text>
-        ) : (
-          <>
-        <Text style={styles.editFieldLabel}>금액</Text>
-        <TextInput
-          style={styles.editAmountInput}
-          value={editAmount}
-          onChangeText={(t) => setEditAmount(formatAmountInput(t))}
-          keyboardType="number-pad"
-          placeholder="0"
-          placeholderTextColor={COLORS.textLight}
-          returnKeyType="done"
-          onSubmitEditing={Keyboard.dismiss}
-        />
-
-        <Text style={styles.editFieldLabel}>분류</Text>
-        <View style={styles.editCategoryRow}>
-          {editingExpensePool.map((c) => (
-            <Pressable
-              key={c.key}
-              style={[styles.editCatPill, editCategory === c.key && styles.editCatPillActive]}
-              onPress={() => setEditCategory(c.key)}
-            >
-              <Text style={[styles.editCatPillText, editCategory === c.key && styles.editCatPillTextActive]}>
-                {c.label} {c.emoji}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.editFieldLabel}>메모 (선택)</Text>
-        <TextInput
-          style={styles.editMemoInput}
-          value={editMemo}
-          onChangeText={setEditMemo}
-          placeholder="없으면 비워두세요"
-          placeholderTextColor={COLORS.textLight}
-          returnKeyType="done"
-          onSubmitEditing={Keyboard.dismiss}
-          maxLength={60}
-        />
-
-        {editingExpense !== null && !editCanSave && (
-          <Text style={styles.editHint}>금액을 입력해 주세요</Text>
-        )}
-
-        <View style={styles.editActionRow}>
-          <Pressable
-            style={[styles.editSaveBtn, (!editCanSave || editSaving) && styles.editSaveBtnDisabled]}
-            onPress={commitEdit}
-            disabled={!editCanSave || editSaving}
-          >
-            <Text style={styles.editSaveBtnText}>고쳐두기</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.editCancelBtn, editSaving && styles.editCancelBtnDisabled]}
-            onPress={dismissEdit}
-            disabled={editSaving}
-          >
-            <Text style={styles.editCancelBtnText}>취소</Text>
-          </Pressable>
-        </View>
-          </>
-        )}
-
-        {editError && (
-          <Text style={styles.editErrorText}>처리하지 못했어요. 잠시 후 다시 시도해 주세요</Text>
-        )}
-
-        <View style={styles.editDeleteArea}>
-          {!deleteConfirm ? (
-            <Pressable onPress={() => setDeleteConfirm(true)}>
-              <Text style={styles.editDeleteTriggerText}>삭제</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.editDeleteConfirmRow}>
-              <Text style={styles.editDeleteConfirmLabel}>이 기록을 지울까요?</Text>
-              <Pressable onPress={commitDelete} disabled={editSaving}>
-                <Text style={styles.editDeleteYesText}>지우기</Text>
-              </Pressable>
-              <Pressable onPress={() => setDeleteConfirm(false)}>
-                <Text style={styles.editDeleteNoText}>아니요</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-      </Animated.View>
+      {/* Edit / delete sheet — shared with the record screen. */}
+      <ExpenseEditSheet expense={editingExpense} onClose={() => setEditingExpense(null)} />
 
       {/* Photocard modal — full-screen dark overlay. Backdrop and card are
           separated: only the backdrop closes; the card absorbs its own presses
@@ -1120,9 +884,14 @@ const styles = StyleSheet.create({
   dayNumFuture: { color: COLORS.textLight },
   daySun: { color: '#C47B7B' },
   daySat: { color: '#7B9BC4' },
-  dayAmount: { fontSize: 9, color: COLORS.textMuted, marginTop: 1, height: 12, lineHeight: 12 },
-  dayAmountSelected: { color: 'rgba(255,255,255,0.85)' },
-  dayAmountPlaceholder: { height: 12 },
+  dayAmount: { fontSize: 9, color: COLORS.textMuted, height: 12, lineHeight: 12 },
+  dayAmountIncome: { color: COLORS.incomeRed, fontWeight: '600' },
+  dayAmountSpending: { color: COLORS.spendBlue, fontWeight: '600' },
+  dayAmountSelected: { color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
+  // Amount/marker slot. Single-flow modes need one line; 함께 보기 reserves two
+  // so rows stay aligned whether a day has one flow or both.
+  daySlot: { height: 13, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  daySlotTall: { height: 25 },
 
   // Day card
   dayCard: {
@@ -1252,34 +1021,26 @@ const styles = StyleSheet.create({
   },
 
   // Settlement
-  settlementSection: {
+  reflectionSection: {
     backgroundColor: COLORS.warmWhite,
     borderRadius: 14,
     padding: 18,
-    gap: 12,
+    gap: 6,
     shadowColor: COLORS.wood,
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 1,
   },
-  settlementChip: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    alignSelf: 'flex-start',
-  },
-  settlementChipText: { fontSize: 12, color: COLORS.textMuted, lineHeight: 16 },
-  cadenceLine: {
+  reflectionLine: {
     fontSize: 14,
     color: COLORS.text,
     fontWeight: '500',
-    marginBottom: 2,
+    lineHeight: 20,
   },
-  observationLine: {
+  reflectionSub: {
     fontSize: 13,
     color: COLORS.textMuted,
-    marginTop: 10,
+    lineHeight: 18,
   },
 
   // Photocard modal
@@ -1323,157 +1084,5 @@ const styles = StyleSheet.create({
   closeHintText: {
     fontSize: 15,
     color: 'rgba(255, 255, 255, 0.6)',
-  },
-
-  // Edit sheet
-  editBackdrop: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-  },
-  editSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 10,
-  },
-  editSheetTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  editFieldLabel: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: '500',
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  editAmountInput: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  editCategoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
-  },
-  editCatPill: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-  },
-  editCatPillActive: {
-    backgroundColor: COLORS.oliveGreen,
-  },
-  editCatPillText: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  editCatPillTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  editMemoInput: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 13,
-    color: COLORS.text,
-  },
-  editActionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 20,
-  },
-  editSaveBtn: {
-    flex: 1,
-    backgroundColor: COLORS.oliveGreen,
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  editSaveBtnDisabled: {
-    opacity: 0.4,
-  },
-  editSaveBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  editHint: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    marginTop: 12,
-  },
-  noSpendEditHint: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  editErrorText: {
-    fontSize: 12,
-    color: '#B5705A',
-    marginTop: 10,
-  },
-  editCancelBtn: {
-    paddingVertical: 13,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    alignItems: 'center',
-  },
-  editCancelBtnDisabled: {
-    opacity: 0.4,
-  },
-  editCancelBtnText: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-  },
-  editDeleteArea: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  editDeleteTriggerText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  editDeleteConfirmRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  editDeleteConfirmLabel: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  editDeleteYesText: {
-    fontSize: 12,
-    color: '#C96A45',
-    fontWeight: '600',
-  },
-  editDeleteNoText: {
-    fontSize: 12,
-    color: COLORS.textLight,
   },
 });

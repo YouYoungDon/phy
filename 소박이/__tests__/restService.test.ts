@@ -194,4 +194,17 @@ describe('grantRest', () => {
     const dd = String(before.getDate()).padStart(2, '0');
     expect(stored).toBe(`${yyyy}-${mm}-${dd}`);
   });
+
+  // Regression: ad-earned pebbles/rest count were lost on restart because
+  // grantRest persisted only to standalone keys (PEBBLE_COUNT / RESTS_TODAY /
+  // …), while useAppInit hydrates these fields from the USER blob — which
+  // grantRest never updated. grantRest must write the USER blob so the reward
+  // survives an app relaunch.
+  it('persists the reward into the USER blob (the snapshot useAppInit reads on restart)', async () => {
+    await grantRest();
+    expect(storageService.save).toHaveBeenCalledWith(
+      STORAGE_KEYS.USER,
+      expect.objectContaining({ pebbleCount: 1, restsToday: 1 }),
+    );
+  });
 });
