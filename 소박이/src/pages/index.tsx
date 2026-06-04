@@ -89,6 +89,9 @@ function HomeScreen() {
     (e) => e.kind !== 'income' && e.category !== 'no_spend',
   );
   const todayTotal = todaySpendingRecords.reduce((sum, e) => sum + e.amount, 0);
+  const todayIncomeTotal = todayExpenses
+    .filter((e) => e.kind === 'income')
+    .reduce((sum, e) => sum + e.amount, 0);
 
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [bubbleMessage, setBubbleMessage] = useState('');
@@ -355,9 +358,8 @@ function HomeScreen() {
 
             <TodaySurface
               todayDate={new Date()}
-              totalAmount={todayTotal}
-              recordCount={todayExpenses.length}
-              spendingCount={todaySpendingRecords.length}
+              spendingTotal={todayTotal}
+              incomeTotal={todayIncomeTotal}
               onPress={() => navigation.navigate('/record')}
             />
 
