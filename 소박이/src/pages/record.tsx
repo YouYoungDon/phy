@@ -421,9 +421,10 @@ function RecordScreen() {
               placeholderTextColor={COLORS.textLight}
               keyboardType="numeric"
               maxLength={13}
+              allowFontScaling={false}
               onFocus={() => { focusedFieldRef.current = 'amount'; }}
             />
-            {amount > 0 && <Text style={styles.amountUnit}>원</Text>}
+            <Text style={styles.amountUnit} allowFontScaling={false}>원</Text>
           </View>
 
           {/* The selected day's already-saved records, kept inside the card so
@@ -454,7 +455,7 @@ function RecordScreen() {
                     </View>
                     {!isNoSpend && e.amount > 0 && (
                       <Text style={[styles.recapAmount, isIncome && styles.recapAmountIncome]}>
-                        {isIncome ? '+' : ''}
+                        {isIncome ? '+' : '−'}
                         {e.amount.toLocaleString()}원
                       </Text>
                     )}
@@ -685,24 +686,29 @@ const styles = StyleSheet.create({
   },
   amountRow: {
     flexDirection: 'row',
+    width: '100%',
     alignItems: 'flex-end',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
   },
   amountInput: {
-    fontSize: 44,
+    // Fixed-width box (fills the row) so the input never resizes as digits are
+    // typed — that box-resize was the source of the jank + the native
+    // horizontal-scroll "clip" animation. Right-aligned text grows leftward
+    // inside the stable box; the card is wide enough for the 13-digit max.
+    flex: 1,
+    fontSize: 30,
     fontWeight: '700',
     color: COLORS.text,
     paddingVertical: 0,
     paddingHorizontal: 0,
-    minWidth: 40,
-    textAlign: 'center',
+    textAlign: 'right',
   },
   amountUnit: {
-    fontSize: 30,
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
-    marginLeft: 4,
-    marginBottom: 3,
+    marginLeft: 3,
+    marginBottom: 2,
   },
   recapBox: {
     width: '100%',
