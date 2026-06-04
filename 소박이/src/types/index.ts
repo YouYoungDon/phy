@@ -23,6 +23,7 @@ export type ExpenseCategory =
   | 'health'
   | 'event'
   | 'allowance'
+  | 'etc'
   | 'no_spend'
   // incoming scenes (new in sub-spec A)
   | 'salary'
