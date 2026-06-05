@@ -27,13 +27,17 @@ export function BottomTabs({ activeRoute }: BottomTabsProps) {
             style={[styles.tab, isActive && styles.tabActive]}
             onPress={() => {
               if (isActive) return;
-              // Tabs SWITCH, they don't stack. On a native-stack router,
-              // navigate() pushes any route not already in the stack, so
-              // hopping between tabs would accumulate screens and let
-              // hardware-back walk the history. Collapse to the home base
-              // first, then push the target once (or just land on home).
-              navigation.popToTop();
-              if (tab.route !== '/') navigation.navigate(tab.route);
+              // Tabs SWITCH, never stack. Reset the stack with a single atomic
+              // action (reset is the one navigation primitive this router
+              // handles reliably — popToTop threw "not handled" and
+              // navigate()-collapsing still accumulated). Hardware-back is then
+              // predictable: a sub-tab sits above home (back → home); home is
+              // the root (back → exit).
+              navigation.reset(
+                tab.route === '/'
+                  ? { index: 0, routes: [{ name: '/' }] }
+                  : { index: 1, routes: [{ name: '/' }, { name: tab.route }] },
+              );
             }}
           >
             <Text style={styles.icon}>{tab.icon}</Text>

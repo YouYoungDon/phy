@@ -463,18 +463,17 @@ function HomeScreen() {
                   )}
                 </Pressable>
                 <Text style={styles.utilityLabel}>티비</Text>
-                {/* Reward hint bubble to the right of the TV icon — points at it
-                    with a left tail. Shown only while a reward is actually
-                    available today (under the daily cap, not opted-out for today,
-                    ad env supported); hidden otherwise so it never invites a tap
-                    that can't pay out. Informational (pointerEvents none) — the
-                    TV icon itself is the tap target. */}
+                {/* Reward hint — a small pill tucked just below the TV label.
+                    Shown only while a reward is actually available today (under
+                    the daily cap, not opted-out for today, ad env supported);
+                    hidden otherwise so it never invites a tap that can't pay
+                    out. Informational (pointerEvents none) — the TV icon itself
+                    is the tap target. */}
                 {effectiveRestsToday < REST_DAILY_CAP &&
                   !isSuppressedForToday(suppressRestPopupDate, todayStr) &&
                   adState.status !== 'unsupported' &&
                   adState.status !== 'error' && (
                     <View style={styles.tvHintBubble} pointerEvents="none">
-                      <View style={styles.tvHintTail} />
                       <Text style={styles.tvHintText} numberOfLines={1}>
                         티비 보고 리워드 받기
                       </Text>
@@ -987,37 +986,23 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#FF3B30',
   },
-  // Reward hint bubble — sits just right of the 60px TV icon, vertically near
-  // its middle. Warm translucent brown to match the level card / TodaySurface
-  // tone (a gentle hint, not a loud CTA).
+  // Reward hint — a small pill tucked just below the 60px TV icon's label.
+  // Left-aligned with the icon and extending right into the open room so the
+  // full text never clips against the left screen edge. Warm translucent brown
+  // to match the level card / TodaySurface tone (a gentle hint, not a CTA).
   tvHintBubble: {
     position: 'absolute',
-    left: 64,
-    top: 18,
+    top: 70,
+    left: 0,
     backgroundColor: 'rgba(61,48,32,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   tvHintText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
     color: 'rgba(255,253,248,0.95)',
-  },
-  // Small left-pointing tail toward the TV icon.
-  tvHintTail: {
-    position: 'absolute',
-    left: -5,
-    top: '50%',
-    marginTop: -4,
-    width: 0,
-    height: 0,
-    borderTopWidth: 4,
-    borderBottomWidth: 4,
-    borderRightWidth: 5,
-    borderTopColor: 'transparent',
-    borderBottomColor: 'transparent',
-    borderRightColor: 'rgba(61,48,32,0.55)',
   },
   foundSection: {
     marginTop: 14,
