@@ -65,58 +65,31 @@ function ExpenseList({ expenses, onPress }: { expenses: Expense[]; onPress?: (ex
 
 // Renders the calendar cell's amount/marker slot from a CellDisplay descriptor.
 // Module-level (uses module `styles`); kept here so the grid map stays readable.
-// Income is red with a leading '+', spending blue with a leading '−'. When the
-// day is selected (olive cell) the value flips to white for contrast — the sign
-// still distinguishes the flow. `twoLine` reserves a taller slot in 함께 보기 so
-// every cell keeps the same height even when a day has only one flow.
+// Amounts stay visually quiet: no +/- and no red/blue ledger colouring.
 function DayAmountSlot({
   cell,
   isSelected,
-  twoLine,
 }: {
   cell: CellDisplay;
   isSelected: boolean;
-  twoLine: boolean;
 }) {
-  const slotStyle = [styles.daySlot, twoLine && styles.daySlotTall];
-  const flowStyle = (flow: 'spending' | 'income') =>
-    isSelected
-      ? styles.dayAmountSelected
-      : flow === 'income'
-        ? styles.dayAmountIncome
-        : styles.dayAmountSpending;
+  const amountStyle = isSelected ? styles.dayAmountSelected : styles.dayAmountFlow;
 
   switch (cell.kind) {
     case 'blank':
-      return <View style={slotStyle} />;
+      return <View style={styles.daySlot} />;
     case 'leaf':
       return (
-        <View style={slotStyle}>
+        <View style={styles.daySlot}>
           <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]} numberOfLines={1} allowFontScaling={false}>🌿</Text>
         </View>
       );
     case 'amount':
       return (
-        <View style={slotStyle}>
-          <Text style={[styles.dayAmount, flowStyle(cell.flow)]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
-            {cell.flow === 'income' ? '+' : '−'}
+        <View style={styles.daySlot}>
+          <Text style={[styles.dayAmount, amountStyle]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
             {formatCalendarAmount(cell.amount)}
           </Text>
-        </View>
-      );
-    case 'both':
-      return (
-        <View style={slotStyle}>
-          {cell.income > 0 && (
-            <Text style={[styles.dayAmount, flowStyle('income')]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
-              +{formatCalendarAmount(cell.income)}
-            </Text>
-          )}
-          {cell.spending > 0 && (
-            <Text style={[styles.dayAmount, flowStyle('spending')]} numberOfLines={1} ellipsizeMode="tail" allowFontScaling={false}>
-              −{formatCalendarAmount(cell.spending)}
-            </Text>
-          )}
         </View>
       );
   }
@@ -416,7 +389,7 @@ function StatsScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View style={styles.headerTitleCol}>
-            <Text style={styles.headerTitle}>소소한 기록</Text>
+            <Text style={styles.headerTitle}>기록 달력</Text>
             <Text style={styles.headerSub}>이번 달을 조용히 돌아봐요</Text>
           </View>
           <View style={styles.viewToggle}>
@@ -501,7 +474,6 @@ function StatsScreen() {
                           hasRecord: !!data,
                         })}
                         isSelected={isSelected}
-                        twoLine={calendarViewMode === 'both'}
                       />
                     </Pressable>
                   );
@@ -885,13 +857,11 @@ const styles = StyleSheet.create({
   daySun: { color: '#C47B7B' },
   daySat: { color: '#7B9BC4' },
   dayAmount: { fontSize: 9, color: COLORS.textMuted, height: 12, lineHeight: 12 },
-  dayAmountIncome: { color: COLORS.incomeRed, fontWeight: '600' },
-  dayAmountSpending: { color: COLORS.spendBlue, fontWeight: '600' },
+  dayAmountFlow: { color: COLORS.textMuted, fontWeight: '600' },
   dayAmountSelected: { color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
-  // Amount/marker slot. Single-flow modes need one line; 함께 보기 reserves two
-  // so rows stay aligned whether a day has one flow or both.
+  // Amount/marker slot. Fixed height keeps calendar rows aligned while the
+  // active view changes.
   daySlot: { height: 13, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  daySlotTall: { height: 25 },
 
   // Day card
   dayCard: {

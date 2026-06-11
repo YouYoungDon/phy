@@ -2,20 +2,17 @@
 // view mode + a day's spending/income shape to a render descriptor. No React,
 // no SDK — unit-testable.
 //
-// Flow is carried on each value so the cell can colour + sign it: income is red
-// with a leading '+', spending is blue with a leading '−' (a deliberate
-// finance-app direction). 함께 보기 shows the two SEPARATELY (a +income line and
-// a −spending line) rather than a combined sum, so the day's two flows stay
-// distinguishable.
+// Flow is carried on each value so the selected view can keep its meaning, but
+// cells deliberately avoid +/- and red/blue ledger language. 함께 보기 shows one
+// calm movement number (income + spending), not net/balance.
 export type CalendarViewMode = 'spending' | 'income' | 'both';
 
-export type CellFlow = 'spending' | 'income';
+export type CellFlow = 'spending' | 'income' | 'movement';
 
 export type CellDisplay =
   | { kind: 'blank' }
   | { kind: 'leaf' }                                       // 🌿 quiet / no-spend day
-  | { kind: 'amount'; amount: number; flow: CellFlow }     // one signed/coloured value
-  | { kind: 'both'; spending: number; income: number };    // both flows; a 0 side is omitted in render
+  | { kind: 'amount'; amount: number; flow: CellFlow };    // one quiet value, view-scoped
 
 // Compact amount for the tiny calendar cell ONLY — keeps large income / mixed
 // days from clipping on small screens. Under 만 (10,000) the full comma number
@@ -39,12 +36,12 @@ export function selectCalendarCellContent(
     return d.incomeTotal > 0 ? { kind: 'amount', amount: d.incomeTotal, flow: 'income' } : { kind: 'blank' };
   }
   if (mode === 'both') {
-    // 함께 보기 — show the day's income (+, red) and spending (−, blue) as two
-    // separate values, not a combined sum. No record → blank; a day with no
-    // money movement (no-spend only) → 🌿.
+    // 함께 보기 — show the day's money movement as a single absolute sum. It is
+    // NOT net/balance: income and spending are added only to show that the day
+    // had movement. No record → blank; no-spend only → 🌿.
     if (!d.hasRecord) return { kind: 'blank' };
     if (d.spendingTotal === 0 && d.incomeTotal === 0) return { kind: 'leaf' };
-    return { kind: 'both', spending: d.spendingTotal, income: d.incomeTotal };
+    return { kind: 'amount', amount: d.spendingTotal + d.incomeTotal, flow: 'movement' };
   }
   // 'spending' (default) — spending total; income-only & no-spend days → 🌿.
   if (!d.hasRecord) return { kind: 'blank' };

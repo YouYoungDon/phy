@@ -12,7 +12,4 @@ export const COLORS = {
   surface: '#F2EBE0',
   card: '#FFFCF5',
   border: '#E8DDD0',
-  // Calendar money flow — income red (+), spending blue (−).
-  incomeRed: '#D14B3D',
-  spendBlue: '#3B6FB0',
 } as const;
