@@ -15,9 +15,14 @@ interface TodaySurfaceProps {
 // mirrors the level card on the left (top: 48). No card, no border: cream-tone text with
 // a soft drop shadow so it survives all four time-of-day backgrounds.
 //
-// Shows today's money quietly, without net/balance framing. When today has no
-// money movement (no records, or a no-spend-only day), it stays quiet with
-// "오늘은 무지출이에요 🌿" instead.
+// Shows today's money at a glance: 들어온 돈 (+), 쓴 돈 (−), a divider, then 합계 (net =
+// income − spending, signed). When today has no money movement (no records, or a
+// no-spend-only day), it stays quiet with "오늘은 무지출이에요 🌿" instead.
+//
+// NOTE: this surfaces a daily NET total on the home screen — a deliberate product
+// decision (2026-06-04) to make the home a quick money glance, overriding the earlier
+// "no net/balance outside Stats" + "TodaySurface shows no income amount" rules. Don't
+// silently revert it.
 export function TodaySurface({
   todayDate,
   spendingTotal,
@@ -25,6 +30,13 @@ export function TodaySurface({
   onPress,
 }: TodaySurfaceProps) {
   const hasMoney = spendingTotal > 0 || incomeTotal > 0;
+  const net = incomeTotal - spendingTotal;
+
+  // 0 renders as a bare "0" (no sign); non-zero carries its sign.
+  const signed = (n: number, sign: '+' | '−'): string =>
+    n === 0 ? '0' : `${sign}${n.toLocaleString()}`;
+  const netStr =
+    net === 0 ? '0' : net > 0 ? `+${net.toLocaleString()}` : `−${Math.abs(net).toLocaleString()}`;
 
   return (
     <Pressable
@@ -43,18 +55,19 @@ export function TodaySurface({
         </Text>
       ) : (
         <View style={styles.ledger}>
-          {incomeTotal > 0 && (
-            <View style={styles.ledgerRow}>
-              <Text style={styles.ledgerLabel}>들어온 기록</Text>
-              <Text style={styles.ledgerValue} numberOfLines={1}>{incomeTotal.toLocaleString()}원</Text>
-            </View>
-          )}
-          {spendingTotal > 0 && (
-            <View style={styles.ledgerRow}>
-              <Text style={styles.ledgerLabel}>쓴 기록</Text>
-              <Text style={styles.ledgerValue} numberOfLines={1}>{spendingTotal.toLocaleString()}원</Text>
-            </View>
-          )}
+          <View style={styles.ledgerRow}>
+            <Text style={styles.ledgerLabel}>들어온 돈</Text>
+            <Text style={styles.ledgerValue} numberOfLines={1}>{signed(incomeTotal, '+')}</Text>
+          </View>
+          <View style={styles.ledgerRow}>
+            <Text style={styles.ledgerLabel}>쓴 돈</Text>
+            <Text style={styles.ledgerValue} numberOfLines={1}>{signed(spendingTotal, '−')}</Text>
+          </View>
+          <View style={styles.ledgerDivider} />
+          <View style={styles.ledgerRow}>
+            <Text style={styles.ledgerLabelStrong}>합계</Text>
+            <Text style={styles.ledgerNet} numberOfLines={1}>{netStr}</Text>
+          </View>
         </View>
       )}
     </Pressable>
@@ -109,8 +122,25 @@ const styles = StyleSheet.create({
     color: CREAM_SOFT,
     ...textShadow,
   },
+  ledgerLabelStrong: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: CREAM,
+    ...textShadow,
+  },
   ledgerValue: {
     fontSize: 13,
+    color: CREAM,
+    ...textShadow,
+  },
+  ledgerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,253,248,0.35)',
+    marginVertical: 4,
+  },
+  ledgerNet: {
+    fontSize: 14,
+    fontWeight: '700',
     color: CREAM,
     ...textShadow,
   },

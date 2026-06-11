@@ -7,7 +7,7 @@ interface DailySummaryProps {
   recordCount: number;
   // Count of spending records only (excludes income + no-spend). When 0, the
   // amount row is hidden so income-only / no-spend-only days read as a quiet
-  // "left a record" note rather than a 0원 spending summary.
+  // "left a record" note rather than a ₩0 spending summary.
   spendingCount: number;
 }
 
@@ -23,7 +23,7 @@ export function DailySummary({ totalAmount, recordCount, spendingCount }: DailyS
   return (
     <View style={styles.container}>
       <View style={styles.row}>
-        <Text style={styles.label}>오늘 남긴 기록</Text>
+        <Text style={styles.label}>소소한 기록</Text>
         <Text style={styles.value}>{recordCount}건</Text>
       </View>
       {spendingCount > 0 && (

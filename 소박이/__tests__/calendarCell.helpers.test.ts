@@ -27,13 +27,13 @@ describe('formatCalendarAmount — compact cell number', () => {
   it('adds a comma to large 만 values', () => {
     expect(formatCalendarAmount(123000000)).toBe('12,300만');
   });
-  it('formats the magnitude regardless of sign', () => {
+  it('formats the magnitude regardless of sign (cell prepends +/−)', () => {
     expect(formatCalendarAmount(-34000)).toBe('3.4만');
   });
 });
 
 describe('selectCalendarCellContent — 쓴 기록 (spending, default)', () => {
-  it('spending day → amount(spending)', () => {
+  it('spending day → amount(spending, blue −)', () => {
     expect(selectCalendarCellContent('spending', spend)).toEqual({ kind: 'amount', amount: 3200, flow: 'spending' });
   });
   it('income-only day → leaf (unchanged 🌿)', () => {
@@ -51,7 +51,7 @@ describe('selectCalendarCellContent — 쓴 기록 (spending, default)', () => {
 });
 
 describe('selectCalendarCellContent — 들어온 기록 (income)', () => {
-  it('income day → amount(income)', () => {
+  it('income day → amount(income, red +)', () => {
     expect(selectCalendarCellContent('income', incomeOnly)).toEqual({ kind: 'amount', amount: 1200000, flow: 'income' });
   });
   it('spend+income day → amount(income, full number)', () => {
@@ -68,18 +68,18 @@ describe('selectCalendarCellContent — 들어온 기록 (income)', () => {
   });
 });
 
-describe('selectCalendarCellContent — 함께 보기 (both, one calm movement number)', () => {
-  it('spend-only → amount(movement)', () => {
-    expect(selectCalendarCellContent('both', spend)).toEqual({ kind: 'amount', amount: 3200, flow: 'movement' });
+describe('selectCalendarCellContent — 함께 보기 (both, separate +income / −spending)', () => {
+  it('spend-only → both with income 0 (spending side only renders)', () => {
+    expect(selectCalendarCellContent('both', spend)).toEqual({ kind: 'both', spending: 3200, income: 0 });
   });
-  it('income-only → amount(movement)', () => {
-    expect(selectCalendarCellContent('both', incomeOnly)).toEqual({ kind: 'amount', amount: 1200000, flow: 'movement' });
+  it('income-only → both with spending 0', () => {
+    expect(selectCalendarCellContent('both', incomeOnly)).toEqual({ kind: 'both', spending: 0, income: 1200000 });
   });
-  it('spend+income → amount(movement, NOT net)', () => {
-    expect(selectCalendarCellContent('both', both)).toEqual({ kind: 'amount', amount: 1203200, flow: 'movement' });
+  it('spend+income → both with each value kept separate (NOT summed)', () => {
+    expect(selectCalendarCellContent('both', both)).toEqual({ kind: 'both', spending: 3200, income: 1200000 });
   });
-  it('income+no-spend → amount(movement)', () => {
-    expect(selectCalendarCellContent('both', incomeNoSpend)).toEqual({ kind: 'amount', amount: 1200000, flow: 'movement' });
+  it('income+no-spend → both (spending 0, income shown)', () => {
+    expect(selectCalendarCellContent('both', incomeNoSpend)).toEqual({ kind: 'both', spending: 0, income: 1200000 });
   });
   it('no-spend → leaf (no money movement)', () => {
     expect(selectCalendarCellContent('both', noSpend)).toEqual({ kind: 'leaf' });
