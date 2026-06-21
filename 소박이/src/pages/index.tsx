@@ -53,7 +53,7 @@ const LETTER_LOOKUP = buildLetterLookup();
 // Sobagi's first line — shown once, automatically, on the very first app open
 // (persisted via FIRST_GREETING_SHOWN). Sobagi is otherwise silent until tapped;
 // this is the single auto-shown greeting.
-const FIRST_GREETING = '소박이와 가계부 쓰고 부자되세요';
+const FIRST_GREETING = '오늘부터 소박이와 천천히 기록해봐요 🌿';
 
 
 // Whole calendar days between two YYYY-MM-DD strings (noon-anchored, DST-safe).

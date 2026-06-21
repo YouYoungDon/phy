@@ -264,7 +264,9 @@ const styles = StyleSheet.create({
   editBackdrop: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    // Dim a touch more than the original 0.08 so the busy record-screen form
+    // behind the sheet recedes; still light enough for the calm stats calendar.
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   // The card chrome (bg, rounded top, shadow) stays on the Animated.View so the
   // slide animation and shadow are unchanged. Padding moved to the inner

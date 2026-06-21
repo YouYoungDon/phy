@@ -9,7 +9,7 @@ import { COLORS } from '../constants/colors';
 import { SOBAGI_DEFAULT_URI, SOBAGI_IMAGE_URIS } from '../constants/assets';
 import { SobagiEmotion } from '../types';
 import { useUserStore } from '../store/userStore';
-import { getDialogueTier } from '../services/dialogueService';
+import { getDialogueTier, reactionHearts } from '../services/dialogueService';
 import { formatCategoryLabel } from '../constants/categories';
 import { RecordKind } from '../types';
 import { getLocalDateString, expenseLocalDate } from '../utils/date';
@@ -244,9 +244,9 @@ function SobagiReactionScreen() {
         <Text style={styles.title}>{getReactionTitle(currentEmotion, tier, latestKind)}</Text>
 
         <View style={styles.heartsRow}>
-          <FloatingHeart emoji="❤️" delay={0} offset={0} />
-          <FloatingHeart emoji="🧡" delay={220} offset={0} />
-          <FloatingHeart emoji="💛" delay={440} offset={0} />
+          {reactionHearts(tier).map((h, i) => (
+            <FloatingHeart key={i} emoji={h.emoji} delay={h.delay} offset={0} />
+          ))}
         </View>
 
         <SobagiReaction

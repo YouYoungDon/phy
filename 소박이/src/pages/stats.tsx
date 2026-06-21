@@ -95,6 +95,19 @@ function DayAmountSlot({
           <Text style={[styles.dayAmount, isSelected && styles.dayAmountSelected]} numberOfLines={1} allowFontScaling={false}>🌿</Text>
         </View>
       );
+    case 'incomeMark':
+      // Income-only day in the spending view — a small + so it isn't an empty 🌿.
+      return (
+        <View style={slotStyle}>
+          <Text
+            style={[styles.dayAmount, isSelected ? styles.dayAmountSelected : styles.dayAmountIncome]}
+            numberOfLines={1}
+            allowFontScaling={false}
+          >
+            +
+          </Text>
+        </View>
+      );
     case 'amount':
       return (
         <View style={slotStyle}>

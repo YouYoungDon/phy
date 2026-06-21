@@ -12,6 +12,20 @@ export function getDialogueTier(recordedDaysCount: number): DialogueTier {
   return 1;
 }
 
+// Reaction hearts taper with familiarity: a newcomer gets the full burst, it
+// thins by tier 2, and goes quiet at tier 3 (≈30+ recorded days) so the moment
+// stays calm once recording is routine — charming on record #1, not noise by
+// #30 ("comfort that survives repetition").
+export function reactionHearts(tier: DialogueTier): { emoji: string; delay: number }[] {
+  if (tier >= 3) return [];
+  if (tier === 2) return [{ emoji: '❤️', delay: 0 }];
+  return [
+    { emoji: '❤️', delay: 0 },
+    { emoji: '🧡', delay: 220 },
+    { emoji: '💛', delay: 440 },
+  ];
+}
+
 export function selectReactionMessage(
   emotion: SobagiEmotion,
   tier: DialogueTier,

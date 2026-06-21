@@ -36,8 +36,8 @@ describe('selectCalendarCellContent — 쓴 기록 (spending, default)', () => {
   it('spending day → amount(spending, blue −)', () => {
     expect(selectCalendarCellContent('spending', spend)).toEqual({ kind: 'amount', amount: 3200, flow: 'spending' });
   });
-  it('income-only day → leaf (unchanged 🌿)', () => {
-    expect(selectCalendarCellContent('spending', incomeOnly)).toEqual({ kind: 'leaf' });
+  it('income-only day → incomeMark (a + so a salary day is not an empty 🌿)', () => {
+    expect(selectCalendarCellContent('spending', incomeOnly)).toEqual({ kind: 'incomeMark' });
   });
   it('spend+income day → amount(spending)', () => {
     expect(selectCalendarCellContent('spending', both)).toEqual({ kind: 'amount', amount: 3200, flow: 'spending' });

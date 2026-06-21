@@ -14,6 +14,7 @@ export type CellFlow = 'spending' | 'income';
 export type CellDisplay =
   | { kind: 'blank' }
   | { kind: 'leaf' }                                       // 🌿 quiet / no-spend day
+  | { kind: 'incomeMark' }                                 // spending view, income-only day → a small + (not an empty 🌿)
   | { kind: 'amount'; amount: number; flow: CellFlow }     // one signed/coloured value
   | { kind: 'both'; spending: number; income: number };    // both flows; a 0 side is omitted in render
 
@@ -46,7 +47,11 @@ export function selectCalendarCellContent(
     if (d.spendingTotal === 0 && d.incomeTotal === 0) return { kind: 'leaf' };
     return { kind: 'both', spending: d.spendingTotal, income: d.incomeTotal };
   }
-  // 'spending' (default) — spending total; income-only & no-spend days → 🌿.
+  // 'spending' (default) — spending total. A day with no spending but some
+  // income shows a small + (incomeMark) so a salary day reads as "money came
+  // in," not as an empty 🌿; a truly quiet / no-spend day stays 🌿.
   if (!d.hasRecord) return { kind: 'blank' };
-  return d.spendingTotal === 0 ? { kind: 'leaf' } : { kind: 'amount', amount: d.spendingTotal, flow: 'spending' };
+  if (d.spendingTotal > 0) return { kind: 'amount', amount: d.spendingTotal, flow: 'spending' };
+  if (d.incomeTotal > 0) return { kind: 'incomeMark' };
+  return { kind: 'leaf' };
 }
